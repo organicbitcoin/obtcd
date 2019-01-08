@@ -647,7 +647,7 @@ func (b *BlockChain) FetchUtxoView(tx *btcutil.Tx) (*UtxoViewpoint, error) {
 //
 // This function is safe for concurrent access however the returned entry (if
 // any) is NOT.
-func (b *BlockChain) FetchUtxoEntry(outpoint wire.OutPoint) (*UtxoEntry, error) {
+func (b *BlockChain) FetchUtxoEntry(outpoint *wire.OutPoint) (*UtxoEntry, error) {
 	b.chainLock.RLock()
 	defer b.chainLock.RUnlock()
 
