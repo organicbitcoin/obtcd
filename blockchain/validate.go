@@ -1177,6 +1177,14 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 		return ruleError(ErrBadCoinbaseValue, str)
 	}
 
+	// Validate tax transactions if the block contain any tax transactions
+	if block.HasTaxTransactions() {
+		taxTxErr := b.validateTaxTransactions(block, view)
+		if taxTxErr != nil {
+			return taxTxErr
+		}
+	}
+
 	// Don't run scripts if this node is before the latest known good
 	// checkpoint since the validity is verified via the checkpoints (all
 	// transactions are included in the merkle root hash and any changes
@@ -1312,6 +1320,7 @@ func (b *BlockChain) CheckConnectBlockTemplate(block *btcutil.Block) error {
 	view.SetBestHash(&tip.hash)
 	newNode := newBlockNode(&header, tip)
 	return b.checkConnectBlock(newNode, block, view, nil)
+
 }
 
 // checkTaxTransactionInputsAmount verifies:
@@ -1433,7 +1442,7 @@ func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView
 // If prev block doesn't contain any expired utxos, recursively retrieve further blocks
 // The height result returned from this function helps to validate expired utxos in the current
 // block should start from this height.
-func (b *BlockChain) fetchPreviousExpiredHeight(block *btcutil.Block, utxoView *UtxoViewpoint, chainParams *chaincfg.Params) (int32, error) {
+func (b *BlockChain) fetchPreviousExpiredHeight(block *btcutil.Block, utxoView *UtxoViewpoint) (int32, error) {
 	// Fetch prev block that contains tax transactions
 	var prevBlock *btcutil.Block
 	for h := prevBlock.Height() - 1; h > 0; h-- {
@@ -1530,9 +1539,9 @@ func (b *BlockChain) fetchUtxosByHeight(height int32) (map[wire.OutPoint]*UtxoEn
 // Please note this function is used in these scenarios:
 // 1. add a new block to the blockchain, triggered by checkConnectBlock
 // 2. mining
-func (b *BlockChain) validateTaxTransactions(block *btcutil.Block, utxoView *UtxoViewpoint, chainParams *chaincfg.Params) error {
+func (b *BlockChain) validateTaxTransactions(block *btcutil.Block, utxoView *UtxoViewpoint) error {
 	// block height must larger than hark forked height, otherwise skip (check this outside this function)
-	if block.Height() <= chainParams.TaxationBeginHeight {
+	if block.Height() <= b.chainParams.TaxationBeginHeight {
 		return ruleError(ErrImmatureHeightForTaxTx, "Too early to have tax transactions in this block height")
 	}
 
@@ -1559,7 +1568,7 @@ func (b *BlockChain) validateTaxTransactions(block *btcutil.Block, utxoView *Utx
 			return err
 		}
 		// Fetch the largest height of expired utxos from previous block
-		fromExpiredUtxoHeight, err := b.fetchPreviousExpiredHeight(block, utxoView, chainParams)
+		fromExpiredUtxoHeight, err := b.fetchPreviousExpiredHeight(block, utxoView)
 
 		expectedExpiredUtxos, err := b.FetchUtxosInRange(fromExpiredUtxoHeight, toExpiredUtxoHeight)
 
