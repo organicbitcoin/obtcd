@@ -1377,7 +1377,7 @@ func checkTxTaxAmount(tx *btcutil.Tx, utxoView *UtxoViewpoint, chainParams *chai
 	}
 
 	// The rest in the input map should all be dust
-	for inKey, inValue := range outputMap {
+	for _, inValue := range outputMap {
 		if inValue > int64(chainParams.DustSatoshiAmount) {
 			return errAmount, ruleError(ErrWrongTaxAmount, "Incorrect tax amount")
 		}
@@ -1512,15 +1512,15 @@ func (b *BlockChain) fetchUtxosByHeight(height int32) (map[wire.OutPoint]*UtxoEn
 	// Retrieve all txOut from utxoBucket (single dn bucket) via FetchUtxoEntry
 	utxos := make(map[wire.OutPoint]*UtxoEntry)
 	for _, tx := range block.Transactions() {
-		for i, txOut := range tx.MsgTx().TxOut {
+		for i := range tx.MsgTx().TxOut {
 			// Fetch utxo from utxoBucket, it won't return error if it cannot find entry
-			outPoint := wire.NewOutPoint(tx.Hash(), uint32(i))
+			outPoint := *wire.NewOutPoint(tx.Hash(), uint32(i))
 			entry, err := b.FetchUtxoEntry(outPoint)
 			if err != nil {
 				return nil, err
 			}
 			if entry != nil {
-				utxos[*outPoint] = entry
+				utxos[outPoint] = entry
 			}
 		}
 	}
@@ -1573,7 +1573,7 @@ func (b *BlockChain) validateTaxTransactions(block *btcutil.Block, utxoView *Utx
 		expectedExpiredUtxos, err := b.FetchUtxosInRange(fromExpiredUtxoHeight, toExpiredUtxoHeight)
 
 		// 4. Tax transactions refers to expired utxos in sequence
-		for k, v := range expiredUtxos {
+		for k := range expiredUtxos {
 			if expectedExpiredUtxos[k] != nil {
 				delete(expectedExpiredUtxos, k)
 			} else {

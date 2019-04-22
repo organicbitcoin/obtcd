@@ -747,7 +747,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *btcutil.Tx, isNew, rateLimit, rejec
 	// All input utxos must be active
 	for _, input := range tx.MsgTx().TxIn {
 		entry := utxoView.LookupEntry(input.PreviousOutPoint)
-		if entry == nil || entry.BlockHeight + mp.cfg.ChainParams.ValidChainLength < mp.cfg.BestHeight() {
+		if entry == nil || entry.BlockHeight()+int32(mp.cfg.ChainParams.ValidChainLength) < mp.cfg.BestHeight() {
 			return nil, nil, txRuleError(wire.RejectExpiredUtxo, "input utxo has expired")
 		}
 	}
@@ -761,7 +761,7 @@ func (mp *TxPool) maybeAcceptTransaction(tx *btcutil.Tx, isNew, rateLimit, rejec
 		if entry != nil && !entry.IsSpent() {
 			return nil, nil, txRuleError(wire.RejectDuplicate,
 				"transaction already exists")
-		
+		}
 		utxoView.RemoveEntry(prevOut)
 	}
 
