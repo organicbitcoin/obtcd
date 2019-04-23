@@ -747,7 +747,10 @@ func (mp *TxPool) maybeAcceptTransaction(tx *btcutil.Tx, isNew, rateLimit, rejec
 	// All input utxos must be active
 	for _, input := range tx.MsgTx().TxIn {
 		entry := utxoView.LookupEntry(input.PreviousOutPoint)
-		if entry == nil || entry.BlockHeight()+int32(mp.cfg.ChainParams.ValidChainLength) < mp.cfg.BestHeight() {
+		// it's orphan if entry is nil
+		if entry != nil && mp.cfg.ChainParams.TaxationBeginHeight <= mp.cfg.BestHeight() &&
+			(mp.cfg.BestHeight()-entry.BlockHeight()) > int32(mp.cfg.ChainParams.ValidChainLength) {
+			// Taxation needs to be activated for this check
 			return nil, nil, txRuleError(wire.RejectExpiredUtxo, "input utxo has expired")
 		}
 	}
