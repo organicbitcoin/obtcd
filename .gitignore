@@ -35,3 +35,6 @@ _testmain.go
 
 # Editor
 .vscode/
+
+# Mac
+.DS_Store

@@ -1501,7 +1501,7 @@ func (b *BlockChain) FetchUtxosInRange(fromHeight int32, toHeight int32) (map[wi
 }
 
 // fetchExpiredUtxosByHeight returns an hash map that contains utxos from a given block height
-// It does not guarantee to return utxos must be expired
+// It does not guarantee to return expired utxos
 // The expiration should be controlled by the height
 func (b *BlockChain) fetchUtxosByHeight(height int32) (map[wire.OutPoint]*UtxoEntry, error) {
 	block, err := b.BlockByHeight(height)
