@@ -35,8 +35,8 @@ func loadBlkFileToChain(filename string, chain *BlockChain, skipGenesis bool) (i
 	return len(chain.bestChain.nodes), len(chain.orphans), nil
 }
 
+// Download the blk00000.dat from bitcoin official site before testing this
 func TestFetchUtxosByHeight(t *testing.T) {
-
 	// Create a new database and chain instance to run tests against.
 	// The chain has already contained the genisis block.
 	chain, teardownFunc, err := chainSetup("FetchUtxosByHeight", &chaincfg.MainNetParams)

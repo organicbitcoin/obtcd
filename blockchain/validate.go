@@ -1438,38 +1438,42 @@ func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView
 	return expiredUtxos, height, nil
 }
 
-// fetchPreviousExpiredHeight returns the largest height from expired utxos in the prev block
+// FetchPrevBlockHasTaxTxs returns the latest previous block that contain tax transactions.
 // If prev block doesn't contain any expired utxos, recursively retrieve further blocks
-// The height result returned from this function helps to validate expired utxos in the current
-// block should start from this height.
-func (b *BlockChain) fetchPreviousExpiredHeight(block *btcutil.Block, utxoView *UtxoViewpoint) (int32, error) {
-	// Fetch prev block that contains tax transactions
+// This function serves a block for the function "fetchHighestTaxTxInputHeight"
+// Warning: if there's no tax transactions on the chain, it will recusively reach to the genesis
+func FetchPrevBlockHasTaxTxs(b Interface, block *btcutil.Block) (*btcutil.Block, error) {
 	var prevBlock *btcutil.Block
-	for h := prevBlock.Height() - 1; h > 0; h-- {
+	var err error
+
+	for h := block.Height() - 1; h > 0; h-- {
+		prevBlock, err = b.BlockByHeight(h)
+		if err != nil {
+			return nil, err
+		}
 		if prevBlock.HasTaxTransactions() {
-			prevBlock, _ = b.BlockByHeight(h)
-			break
+			return prevBlock, nil
 		}
 	}
+	return nil, nil
+}
 
-	// fetch all tax txs from prevBlock
-	prevTaxTxs := fetchTaxTransactions(prevBlock)
+// fetchHighestTaxTxInputHeight returns the highest height of tax transaction input block.
+// The block given in the parameter must contain tax transactions
+func (b *BlockChain) fetchHighestTaxTxInputHeight(block *btcutil.Block, utxoView *UtxoViewpoint) int32 {
+	// fetch all tax txs from the prevBlock
+	taxTxs := fetchTaxTransactions(block)
 	// Loop all transactions, save the max height from expired utxos
-	maxHeight := int32(0)
-	for _, tx := range prevTaxTxs {
+	maxHeight := int32(-1)
+	for _, tx := range taxTxs {
 		for _, txInput := range tx.MsgTx().TxIn {
 			utxo := utxoView.LookupEntry(txInput.PreviousOutPoint)
-			// all utxos must be expired
-			if utxo == nil || utxo.IsSpent() || utxo.IsCoinBase() || !utxo.IsExpired() {
-				return int32(0), ruleError(ErrUnexpiredTaxUTXO, "utxos in tax transactions must be expired")
-			}
 			if maxHeight < utxo.BlockHeight() {
 				maxHeight = utxo.BlockHeight()
 			}
 		}
 	}
-
-	return maxHeight, nil
+	return maxHeight
 }
 
 // FetchUtxosInRange returns an array that contains utxos from a given range of blocks
@@ -1567,12 +1571,32 @@ func (b *BlockChain) validateTaxTransactions(block *btcutil.Block, utxoView *Utx
 		if err != nil {
 			return err
 		}
+		// Fetch the lastest previous block that contain tax transactions
+		prev, err := FetchPrevBlockHasTaxTxs(b, block)
+		if err != nil {
+			return err
+		}
+		if prev == nil {
+			// Can not find tax transactions, skip this validation
+			return nil
+		}
 		// Fetch the largest height of expired utxos from previous block
-		fromExpiredUtxoHeight, err := b.fetchPreviousExpiredHeight(block, utxoView)
-
+		fromExpiredUtxoHeight := b.fetchHighestTaxTxInputHeight(block, utxoView)
+		if fromExpiredUtxoHeight == -1 {
+			return nil
+		}
+		// Fetch expired utxos that should be included in this block
 		expectedExpiredUtxos, err := b.FetchUtxosInRange(fromExpiredUtxoHeight, toExpiredUtxoHeight)
-
-		// 4. Tax transactions refers to expired utxos in sequence
+		if err != nil {
+			return err
+		}
+		// All these utxos must be expired
+		for _, utxo := range expectedExpiredUtxos {
+			if utxo == nil || utxo.IsSpent() || utxo.IsCoinBase() || !utxo.IsExpired() {
+				return ruleError(ErrUnexpiredTaxUTXO, "utxos in tax transactions must be expired")
+			}
+		}
+		// Tax transactions refers to expired utxos in sequence
 		for k := range expiredUtxos {
 			if expectedExpiredUtxos[k] != nil {
 				delete(expectedExpiredUtxos, k)

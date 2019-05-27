@@ -4,9 +4,12 @@ import (
 	"testing"
 	"time"
 
+	mock_blockchain "github.com/btcsuite/btcd/blockchain/mock"
+
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/golang/mock/gomock"
 )
 
 // Block100000 defines a block that contain tax transactions.  It is used to test tax txs operations.
@@ -278,5 +281,25 @@ func TestFetchTaxTransactions(t *testing.T) {
 	// taxTxsArray1 should be empty
 	if len(taxTxsArray2) != 0 {
 		t.Fatalf("taxTxsArray2 should return empty result: %v\n", taxTxsArray2)
+	}
+}
+
+func TestFetchPrevBlockHasTaxTxs(t *testing.T) {
+	block100000 := btcutil.NewBlock(&Block100000)
+	block100000.SetHeight(int32(100000))
+	blockWithTaxTxs := btcutil.NewBlock(&BlockWithTaxTxs)
+	blockWithTaxTxs.SetHeight(int32(99999))
+
+	ctl := gomock.NewController(t)
+	mockedBlockchain := mock_blockchain.NewMockInterface(ctl)
+	mockedBlockchain.EXPECT().BlockByHeight(int32(99999)).Return(blockWithTaxTxs, nil)
+	defer ctl.Finish()
+
+	resultBlock, err := FetchPrevBlockHasTaxTxs(mockedBlockchain, block100000)
+	if err != nil {
+		t.Fatalf("Error in FetchPrevBlockHasTaxTxs")
+	}
+	if resultBlock != blockWithTaxTxs {
+		t.Fatalf("FetchPrevBlockHasTaxTxs returns wrong result")
 	}
 }
