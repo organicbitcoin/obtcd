@@ -15,6 +15,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/utxo"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 )
@@ -412,7 +413,7 @@ func CountP2SHSigOps(tx *btcutil.Tx, isCoinBaseTx bool, utxoView *UtxoViewpoint)
 
 		// We're only interested in pay-to-script-hash types, so skip
 		// this input if it's not one.
-		pkScript := utxo.PkScript()
+		pkScript := utxo.PkScript
 		if !txscript.IsPayToScriptHash(pkScript) {
 			continue
 		}
@@ -869,7 +870,7 @@ func (b *BlockChain) checkBIP0030(node *blockNode, block *btcutil.Block, view *U
 		if utxo != nil && !utxo.IsSpent() {
 			str := fmt.Sprintf("tried to overwrite transaction %v "+
 				"at block height %d that is not fully spent",
-				outpoint.Hash, utxo.BlockHeight())
+				outpoint.Hash, utxo.BlockHeight)
 			return ruleError(ErrOverwriteTx, str)
 		}
 	}
@@ -910,7 +911,7 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 		// Ensure the transaction is not spending coins which have not
 		// yet reached the required coinbase maturity.
 		if utxo.IsCoinBase() {
-			originHeight := utxo.BlockHeight()
+			originHeight := utxo.BlockHeight
 			blocksSincePrev := txHeight - originHeight
 			coinbaseMaturity := int32(chainParams.CoinbaseMaturity)
 			if blocksSincePrev < coinbaseMaturity {
@@ -941,7 +942,7 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 		// a transaction are in a unit value known as a satoshi.  One
 		// bitcoin is a quantity of satoshi as defined by the
 		// SatoshiPerBitcoin constant.
-		originTxSatoshi := utxo.Amount()
+		originTxSatoshi := utxo.Amount
 		if originTxSatoshi < 0 {
 			str := fmt.Sprintf("transaction output has negative "+
 				"value of %v", btcutil.Amount(originTxSatoshi))
@@ -1341,12 +1342,12 @@ func checkTxTaxAmount(tx *btcutil.Tx, utxoView *UtxoViewpoint, chainParams *chai
 		if utxo == nil {
 			return errAmount, ruleError(ErrMissingTxOut, "tax input is not an utxo")
 		}
-		addresses, err := concatAddressesFromPkScript(utxo.PkScript(), chainParams)
+		addresses, err := concatAddressesFromPkScript(utxo.PkScript, chainParams)
 		if err != nil {
 			return errAmount, ruleError(ErrBadAddress, "Invalid output address")
 		}
-		inputMap[addresses] = utxo.Amount()
-		totalTaxAmount += utxo.Amount()
+		inputMap[addresses] = utxo.Amount
+		totalTaxAmount += utxo.Amount
 	}
 
 	// Put output address and amount to the outputHash
@@ -1399,8 +1400,8 @@ func concatAddressesFromPkScript(pkScript []byte, chainParams *chaincfg.Params) 
 	return buffer.String(), nil
 }
 
-// fetchTaxTransactions returns all tax txs from a given block
-func fetchTaxTransactions(block *btcutil.Block) []*btcutil.Tx {
+// FetchTaxTransactions returns all tax txs from a given block
+func FetchTaxTransactions(block *btcutil.Block) []*btcutil.Tx {
 	// fetch all tax transactions from block
 	var taxTxs []*btcutil.Tx
 	for _, tx := range block.Transactions() {
@@ -1412,8 +1413,8 @@ func fetchTaxTransactions(block *btcutil.Block) []*btcutil.Tx {
 }
 
 // fetchLargestExpiredHeight returns the highest block height from a given block
-func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView *UtxoViewpoint) (map[wire.OutPoint]*UtxoEntry, int32, error) {
-	expiredUtxos := make(map[wire.OutPoint]*UtxoEntry)
+func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView *UtxoViewpoint) (map[wire.OutPoint]*utxo.UtxoEntry, int32, error) {
+	expiredUtxos := make(map[wire.OutPoint]*utxo.UtxoEntry)
 	height := int32(0)
 
 	for _, tx := range taxTxs {
@@ -1425,8 +1426,8 @@ func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView
 			}
 			if expiredUtxos[txInput.PreviousOutPoint] == nil {
 				expiredUtxos[txInput.PreviousOutPoint] = utxo
-				if height < utxo.BlockHeight() {
-					height = utxo.BlockHeight()
+				if height < utxo.BlockHeight {
+					height = utxo.BlockHeight
 				}
 			} else {
 				// double spend
@@ -1460,16 +1461,16 @@ func FetchPrevBlockHasTaxTxs(b Interface, block *btcutil.Block) (*btcutil.Block,
 
 // fetchHighestTaxTxInputHeight returns the highest height of tax transaction input block.
 // The block given in the parameter must contain tax transactions
-func (b *BlockChain) fetchHighestTaxTxInputHeight(block *btcutil.Block, utxoView *UtxoViewpoint) int32 {
+func (b *BlockChain) fetchHighestTaxTxInputHeight(block *btcutil.Block, utxoView UtxoViewpointInterface) int32 {
 	// fetch all tax txs from the prevBlock
-	taxTxs := fetchTaxTransactions(block)
+	taxTxs := FetchTaxTransactions(block)
 	// Loop all transactions, save the max height from expired utxos
 	maxHeight := int32(-1)
 	for _, tx := range taxTxs {
 		for _, txInput := range tx.MsgTx().TxIn {
 			utxo := utxoView.LookupEntry(txInput.PreviousOutPoint)
-			if maxHeight < utxo.BlockHeight() {
-				maxHeight = utxo.BlockHeight()
+			if maxHeight < utxo.BlockHeight {
+				maxHeight = utxo.BlockHeight
 			}
 		}
 	}
@@ -1479,9 +1480,9 @@ func (b *BlockChain) fetchHighestTaxTxInputHeight(block *btcutil.Block, utxoView
 // FetchUtxosInRange returns an array that contains utxos from a given range of blocks
 // It does not guarantee to return expired utxos
 // The expiration should be controlled by fromHeight and toHeight
-func (b *BlockChain) FetchUtxosInRange(fromHeight int32, toHeight int32) (map[wire.OutPoint]*UtxoEntry, error) {
+func (b *BlockChain) FetchUtxosInRange(fromHeight int32, toHeight int32) (map[wire.OutPoint]*utxo.UtxoEntry, error) {
 	// Hash map to keep utoxs
-	allUtxos := make(map[wire.OutPoint]*UtxoEntry)
+	allUtxos := make(map[wire.OutPoint]*utxo.UtxoEntry)
 
 	// Validate heights
 	if toHeight > fromHeight {
@@ -1507,14 +1508,14 @@ func (b *BlockChain) FetchUtxosInRange(fromHeight int32, toHeight int32) (map[wi
 // fetchExpiredUtxosByHeight returns an hash map that contains utxos from a given block height
 // It does not guarantee to return expired utxos
 // The expiration should be controlled by the height
-func (b *BlockChain) fetchUtxosByHeight(height int32) (map[wire.OutPoint]*UtxoEntry, error) {
+func (b *BlockChain) fetchUtxosByHeight(height int32) (map[wire.OutPoint]*utxo.UtxoEntry, error) {
 	block, err := b.BlockByHeight(height)
 	if err != nil {
 		return nil, err
 	}
 
 	// Retrieve all txOut from utxoBucket (single dn bucket) via FetchUtxoEntry
-	utxos := make(map[wire.OutPoint]*UtxoEntry)
+	utxos := make(map[wire.OutPoint]*utxo.UtxoEntry)
 	for _, tx := range block.Transactions() {
 		for i := range tx.MsgTx().TxOut {
 			// Fetch utxo from utxoBucket, it won't return error if it cannot find entry
@@ -1550,7 +1551,7 @@ func (b *BlockChain) validateTaxTransactions(block *btcutil.Block, utxoView *Utx
 	}
 
 	// Get all tax transactions
-	taxTxs := fetchTaxTransactions(block)
+	taxTxs := FetchTaxTransactions(block)
 
 	if taxTxs != nil && len(taxTxs) > 0 {
 		// 1. Weigh no more than 25% of the block size

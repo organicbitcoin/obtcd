@@ -5,14 +5,15 @@ import (
 	"time"
 
 	mock_blockchain "github.com/btcsuite/btcd/blockchain/mock"
-
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/utxo"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/golang/mock/gomock"
 )
 
-// Block100000 defines a block that contain tax transactions.  It is used to test tax txs operations.
+// BlockWithTaxTxs defines a block that contain tax transactions.  It is used to test tax txs operations.
 // This block is
 var BlockWithTaxTxs = wire.MsgBlock{
 	Header: wire.BlockHeader{
@@ -270,14 +271,14 @@ var BlockWithTaxTxs = wire.MsgBlock{
 
 func TestFetchTaxTransactions(t *testing.T) {
 	blockWithTaxTxs := btcutil.NewBlock(&BlockWithTaxTxs)
-	taxTxsArray1 := fetchTaxTransactions(blockWithTaxTxs)
+	taxTxsArray1 := FetchTaxTransactions(blockWithTaxTxs)
 	// taxTxsArray1 should contain two elements
 	if len(taxTxsArray1) != 2 {
 		t.Fatalf("taxTxsArray1 should contain two elements: %v\n", taxTxsArray1)
 	}
 
 	block100000 := btcutil.NewBlock(&Block100000)
-	taxTxsArray2 := fetchTaxTransactions(block100000)
+	taxTxsArray2 := FetchTaxTransactions(block100000)
 	// taxTxsArray1 should be empty
 	if len(taxTxsArray2) != 0 {
 		t.Fatalf("taxTxsArray2 should return empty result: %v\n", taxTxsArray2)
@@ -302,4 +303,35 @@ func TestFetchPrevBlockHasTaxTxs(t *testing.T) {
 	if resultBlock != blockWithTaxTxs {
 		t.Fatalf("FetchPrevBlockHasTaxTxs returns wrong result")
 	}
+}
+
+func TestFetchHighestTaxTxInputHeight(t *testing.T) {
+	chain, teardownFunc, err := chainSetup("FetchHighestTaxTxInputHeight", &chaincfg.MainNetParams)
+	if err != nil {
+		t.Errorf("Failed to setup chain instance: %v", err)
+		return
+	}
+	defer teardownFunc()
+
+	ctl := gomock.NewController(t)
+	mockedUtxoViewPoint := mock_blockchain.NewMockUtxoViewpointInterface(ctl)
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{Hash: chainhash.Hash{},
+			Index: 0xffffffff,
+		},
+	).Return(&utxo.UtxoEntry{BlockHeight: int32(90)})
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{Hash: chainhash.Hash([32]byte{
+			0x0b, 0x60, 0x72, 0xb3, 0x86, 0xd4, 0xa7, 0x73,
+			0x23, 0x52, 0x37, 0xf6, 0x4c, 0x11, 0x26, 0xac,
+			0x3b, 0x24, 0x0c, 0x84, 0xb9, 0x17, 0xa3, 0x90,
+			0x9b, 0xa1, 0xc4, 0x3d, 0xed, 0x5f, 0x51, 0xf4,
+		}),
+			Index: 0,
+		},
+	).Return(&utxo.UtxoEntry{BlockHeight: int32(100)})
+
+	blockWithTaxTxs := btcutil.NewBlock(&BlockWithTaxTxs)
+
+	chain.fetchHighestTaxTxInputHeight(blockWithTaxTxs, mockedUtxoViewPoint)
 }
