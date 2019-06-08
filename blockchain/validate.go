@@ -1327,7 +1327,7 @@ func (b *BlockChain) CheckConnectBlockTemplate(block *btcutil.Block) error {
 // checkTaxTransactionInputsAmount verifies:
 // 1. all input transfer certain amount to coinbase address if the input utxo is larger than dust satoshi amount.
 // 2. all input transfer all amount to coinbase address if the input utxo is lower or equal than dust satoshi amount.
-func checkTxTaxAmount(tx *btcutil.Tx, utxoView *UtxoViewpoint, chainParams *chaincfg.Params) (int64, error) {
+func checkTxTaxAmount(tx *btcutil.Tx, utxoView UtxoViewpointInterface, chainParams *chaincfg.Params) (int64, error) {
 	// Build input hash and output hash
 	// [key, value] -> [addressArray, amount]
 	// tax = inputAmount-outputAmount
@@ -1368,19 +1368,20 @@ func checkTxTaxAmount(tx *btcutil.Tx, utxoView *UtxoViewpoint, chainParams *chai
 			// can not find input by the output
 			return errAmount, ruleError(ErrBadTxInput, "Miss matched input and output")
 		}
-		if math.Ceil(float64(inValue*int64(chainParams.TaxRate)/100)) >= float64(inValue-outValue) {
+		// the tax amount should lower or equal than 30% after rounding to the floor
+		if int64(float64(inValue*int64(chainParams.TaxRate)/100)) >= inValue-outValue {
 			// the tax amount is correct
 			delete(inputMap, outKey)
 		} else {
 			// Too much tax
-			return errAmount, ruleError(ErrWrongTaxAmount, "Incorrect tax amount")
+			return errAmount, ruleError(ErrWrongTaxAmount, "Incorrect tax amount: too much tax")
 		}
 	}
 
 	// The rest in the input map should all be dust
-	for _, inValue := range outputMap {
+	for _, inValue := range inputMap {
 		if inValue > int64(chainParams.DustSatoshiAmount) {
-			return errAmount, ruleError(ErrWrongTaxAmount, "Incorrect tax amount")
+			return errAmount, ruleError(ErrWrongTaxAmount, "Incorrect tax amount: the rest inputs should all be dust")
 		}
 	}
 

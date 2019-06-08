@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -334,4 +335,108 @@ func TestFetchHighestTaxTxInputHeight(t *testing.T) {
 	blockWithTaxTxs := btcutil.NewBlock(&BlockWithTaxTxs)
 
 	chain.fetchHighestTaxTxInputHeight(blockWithTaxTxs, mockedUtxoViewPoint)
+}
+
+func TestCheckTxTaxAmount(t *testing.T) {
+	ctl := gomock.NewController(t)
+	mockedUtxoViewPoint := mock_blockchain.NewMockUtxoViewpointInterface(ctl)
+
+	// PK1 contains addr: 12hnbu1xVuYF4VhaXYFyw6Pq2eudj3CG4g
+	pk1, _ := hex.DecodeString("76a91412aed4a2fed565f0f473b3688e60246576710f2a88ac")
+	// Normal amount: 10 times dust
+	inputAmount1 := int64(chaincfg.MainNetParams.DustSatoshiAmount) * int64(10)
+	// PK2 contains addr: 1ECRPUBJECFWcB73R6ydUQNJ6Ane8qYPr2
+	pk2, _ := hex.DecodeString("76a91490c2917e7a89f3ec8a1bb82db92661dcab14fcc488ac")
+	// Dust utxo
+	inputAmount2 := int64(chaincfg.MainNetParams.DustSatoshiAmount)
+	// PK3 contains multiple address
+	// addr1: 020fa7bed1b89df218a2ed2c94ebbf872a7bda0f48d231eb8cb6f16b87d9bb5211
+	// addr2: 02d7e287092457f2bea226cd7537c5ee99af50cca923795a2ea65cf249f783c5d1
+	// addr3: 02e8b48f3c0a7c452792fa96cdcf2fc6a23298f4d6512bd8aa9a25210b66a1d450
+	pk3, _ := hex.DecodeString("5221020fa7bed1b89df218a2ed2c94ebbf872a7bda0f48d231eb8cb6f16b87d9bb52112102d7e287092457f2bea226cd7537c5ee99af50cca923795a2ea65cf249f783c5d12102e8b48f3c0a7c452792fa96cdcf2fc6a23298f4d6512bd8aa9a25210b66a1d45053ae")
+	inputAmount3 := int64(chaincfg.MainNetParams.DustSatoshiAmount) * int64(30)
+
+	utxo1 := &utxo.UtxoEntry{
+		Amount:      inputAmount1,
+		BlockHeight: 6000,
+		PkScript:    pk1,
+	}
+	utxo2 := &utxo.UtxoEntry{
+		Amount:      inputAmount2,
+		BlockHeight: 6000,
+		PkScript:    pk2,
+	}
+	utxo3 := &utxo.UtxoEntry{
+		Amount:      inputAmount3,
+		BlockHeight: 6000,
+		PkScript:    pk3,
+	}
+
+	// Tax transaction
+	taxTx := wire.NewMsgTx(int32(1))
+	taxTx.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x01}),
+				Index: 1,
+			},
+		},
+	)
+	taxTx.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x02}),
+				Index: 2,
+			},
+		},
+	)
+	taxTx.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x03}),
+				Index: 3,
+			},
+		},
+	)
+	taxTx.AddTxOut(
+		&wire.TxOut{
+			Value:    inputAmount1 - int64(float64(inputAmount1*int64(chaincfg.MainNetParams.TaxRate)/100)),
+			PkScript: pk1,
+		},
+	)
+	taxTx.AddTxOut(
+		&wire.TxOut{
+			Value:    inputAmount3 - int64(float64(inputAmount3*int64(chaincfg.MainNetParams.TaxRate)/100)),
+			PkScript: pk3,
+		},
+	)
+	tx := btcutil.NewTx(taxTx)
+
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x01}),
+			Index: 1,
+		},
+	).Return(utxo1)
+
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x02}),
+			Index: 2,
+		},
+	).Return(utxo2)
+
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x03}),
+			Index: 3,
+		},
+	).Return(utxo3)
+
+	totalTaxAmount, err := checkTxTaxAmount(tx, mockedUtxoViewPoint, &chaincfg.MainNetParams)
+	if err != nil {
+		t.Errorf("something went wrong: %v", err)
+	} else {
+		t.Logf("totalTaxAmount: %d", totalTaxAmount)
+	}
 }
