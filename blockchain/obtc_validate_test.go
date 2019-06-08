@@ -440,3 +440,111 @@ func TestCheckTxTaxAmount(t *testing.T) {
 		t.Logf("totalTaxAmount: %d", totalTaxAmount)
 	}
 }
+
+func TestFetchAndValidateExpiredUtxosAndLargestHeight(t *testing.T) {
+	ctl := gomock.NewController(t)
+	mockedUtxoViewPoint := mock_blockchain.NewMockUtxoViewpointInterface(ctl)
+	utxo11 := &utxo.UtxoEntry{
+		Amount:      12345678,
+		BlockHeight: 5000,
+		PackedFlags: utxo.TfExpired,
+	}
+	utxo12 := &utxo.UtxoEntry{
+		Amount:      12345678,
+		BlockHeight: 6000,
+		PackedFlags: utxo.TfExpired,
+	}
+	utxo21 := &utxo.UtxoEntry{
+		Amount:      12345678,
+		BlockHeight: 7000,
+		PackedFlags: utxo.TfExpired,
+	}
+	utxo22 := &utxo.UtxoEntry{
+		Amount:      12345678,
+		BlockHeight: 8000,
+		PackedFlags: utxo.TfExpired,
+	}
+
+	// Tax transaction
+	taxTx1 := wire.NewMsgTx(int32(1))
+	taxTx1.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x11}),
+				Index: 1,
+			},
+		},
+	)
+	taxTx1.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x12}),
+				Index: 2,
+			},
+		},
+	)
+
+	taxTx2 := wire.NewMsgTx(int32(1))
+	taxTx2.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x21}),
+				Index: 1,
+			},
+		},
+	)
+	taxTx2.AddTxIn(
+		&wire.TxIn{
+			PreviousOutPoint: wire.OutPoint{
+				Hash:  chainhash.Hash([32]byte{0x22}),
+				Index: 2,
+			},
+		},
+	)
+	tx1 := btcutil.NewTx(taxTx1)
+	tx2 := btcutil.NewTx(taxTx2)
+
+	// Build taxTxs input
+	taxTxs := make([]*btcutil.Tx, 2)
+	taxTxs[0] = tx1
+	taxTxs[1] = tx2
+
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x11}),
+			Index: 1,
+		},
+	).Return(utxo11)
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x12}),
+			Index: 2,
+		},
+	).Return(utxo12)
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x21}),
+			Index: 1,
+		},
+	).Return(utxo21)
+	mockedUtxoViewPoint.EXPECT().LookupEntry(
+		wire.OutPoint{
+			Hash:  chainhash.Hash([32]byte{0x22}),
+			Index: 2,
+		},
+	).Return(utxo22)
+
+	expectedUtxos, expectedHeight, error := fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs, mockedUtxoViewPoint)
+
+	if error != nil {
+		t.Errorf("something went wrong when testing FetchAndValidateExpiredUtxosAndLargestHeight %v", error)
+	}
+
+	if len(expectedUtxos) != 4 {
+		t.Errorf("Expired UTXOs are not correct: %v", expectedUtxos)
+	}
+
+	if expectedHeight != 8000 {
+		t.Errorf("Expired largest height is incorrect: %v", expectedHeight)
+	}
+}

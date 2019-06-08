@@ -221,7 +221,7 @@ type Params struct {
 	HDCoinType uint32
 
 	// Valid blockchain length
-	ValidChainLength uint32
+	ValidChainLength int32
 
 	// obtc hardfork start from this height
 	TaxationBeginHeight int32
@@ -265,7 +265,7 @@ var MainNetParams = Params{
 	MinDiffReductionTime:     0,
 	GenerateSupported:        false,
 	ValidChainLength:         368208, // = (7y x 365d x 24h + 2d x 24h) x 6
-	TaxationBeginHeight:      568500, // approx 2019-03-24
+	TaxationBeginHeight:      600000, // approx from 2019-10-01
 	TaxTxCommonWeight:        20,     // 20% by default
 	TaxTxUrgentWeight:        50,     // 50% by default
 	TaxRate:                  30,     // 30% by default
@@ -373,7 +373,7 @@ var RegressionNetParams = Params{
 	MinDiffReductionTime:       time.Minute * 20, // TargetTimePerBlock * 2
 	GenerateSupported:          true,
 	ValidChainLength:           368208, // = (7y x 365d x 24h + 2d x 24h) x 6
-	TaxationBeginHeight:        568500, // approx 2019-03-24, This value may be changed for regression test
+	TaxationBeginHeight:        600000, // approx from 2019-10-01
 	TaxTxCommonWeight:          20,     // 20% by default
 	TaxTxUrgentWeight:          50,     // 50% by default
 	TaxRate:                    30,     // 30% by default
@@ -459,7 +459,7 @@ var TestNet3Params = Params{
 	MinDiffReductionTime:       time.Minute * 20, // TargetTimePerBlock * 2
 	GenerateSupported:          false,
 	ValidChainLength:           368208, // = (7y x 365d x 24h + 2d x 24h) x 6
-	TaxationBeginHeight:        568500, // approx 2019-03-24
+	TaxationBeginHeight:        600000, // approx from 2019-10-01
 	TaxTxCommonWeight:          20,     // 20% by default
 	TaxTxUrgentWeight:          50,     // 50% by default
 	TaxRate:                    30,     // 30% by default
@@ -561,7 +561,7 @@ var SimNetParams = Params{
 	MinDiffReductionTime:       time.Minute * 20, // TargetTimePerBlock * 2
 	GenerateSupported:          true,
 	ValidChainLength:           368208, // = (7y x 365d x 24h + 2d x 24h) x 6
-	TaxationBeginHeight:        568500, // approx 2019-03-24, This value may be changed for regression test
+	TaxationBeginHeight:        600000, // approx from 2019-10-01
 	TaxTxCommonWeight:          20,     // 20% by default
 	TaxTxUrgentWeight:          50,     // 50% by default
 	TaxRate:                    30,     // 30% by default

@@ -925,12 +925,16 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 			}
 		}
 
-		// After eko activated, tax tx must use expired utxo, reguar tx must not
+		// After obtc activated, tax tx must use expired utxo, reguar tx must not
 		if txHeight > chainParams.TaxationBeginHeight {
+			// Must set the TfExpired value to check if utxo has been expired
+			utxo.CheckExpired(txHeight)
+
 			if tx.IsTaxTx() && !utxo.IsExpired() {
 				// unexpired tax utxo
 				return 0, ruleError(ErrUnexpiredTaxUTXO, "tax utxo must be expired")
 			}
+
 			if !tx.IsTaxTx() && utxo.IsExpired() {
 				return 0, ruleError(ErrExpiredRegularUTXO, "regular input utxo has expired")
 			}
@@ -1413,8 +1417,9 @@ func FetchTaxTransactions(block *btcutil.Block) []*btcutil.Tx {
 	return taxTxs
 }
 
-// fetchLargestExpiredHeight returns the highest block height from a given block
-func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView *UtxoViewpoint) (map[wire.OutPoint]*utxo.UtxoEntry, int32, error) {
+// fetchAndValidateExpiredUtxosAndLargestHeight returns the highest block height from a given block
+// taxTxs is an array of all tax transactions from a given block
+func fetchAndValidateExpiredUtxosAndLargestHeight(taxTxs []*btcutil.Tx, utxoView UtxoViewpointInterface) (map[wire.OutPoint]*utxo.UtxoEntry, int32, error) {
 	expiredUtxos := make(map[wire.OutPoint]*utxo.UtxoEntry)
 	height := int32(0)
 

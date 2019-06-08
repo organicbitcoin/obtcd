@@ -1,6 +1,10 @@
 package utxo
 
-// txoFlags is a bitmask defining additional information and state for a
+import (
+	"github.com/btcsuite/btcd/chaincfg"
+)
+
+// TxoFlags is a bitmask defining additional information and state for a
 // transaction output in a utxo view.
 type TxoFlags uint8
 
@@ -65,7 +69,11 @@ func (entry *UtxoEntry) IsSpent() bool {
 // Active blockchain keeps the latest 368208 blocks.
 // 368208 = (7y x 365d x 24h + 2d x 24h) x 6
 func (entry *UtxoEntry) CheckExpired(txHeight int32) bool {
-	return txHeight-entry.BlockHeight > 368208 // TODO: CHANGE IT
+	if txHeight-entry.BlockHeight > chaincfg.MainNetParams.ValidChainLength {
+		entry.Expired()
+		return true
+	}
+	return false
 }
 
 // IsExpired returns if utxo has expired from the packedFlags information.
