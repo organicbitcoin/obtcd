@@ -15,6 +15,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/utxo"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 )
@@ -88,6 +89,7 @@ func newBestState(node *blockNode, blockSize, blockWeight, numTxns,
 // Interface is the interface of BlockChain
 type Interface interface {
 	BlockByHeight(height int32) (*btcutil.Block, error)
+	FetchUtxosByHeight(height int32) (map[wire.OutPoint]*utxo.UtxoEntry, error)
 }
 
 // BlockChain provides functions for working with the bitcoin block chain.

@@ -5,6 +5,8 @@
 package mock_blockchain
 
 import (
+	utxo "github.com/btcsuite/btcd/utxo"
+	wire "github.com/btcsuite/btcd/wire"
 	btcutil "github.com/btcsuite/btcutil"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
@@ -46,4 +48,19 @@ func (m *MockInterface) BlockByHeight(height int32) (*btcutil.Block, error) {
 func (mr *MockInterfaceMockRecorder) BlockByHeight(height interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockByHeight", reflect.TypeOf((*MockInterface)(nil).BlockByHeight), height)
+}
+
+// FetchUtxosByHeight mocks base method
+func (m *MockInterface) FetchUtxosByHeight(height int32) (map[wire.OutPoint]*utxo.UtxoEntry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchUtxosByHeight", height)
+	ret0, _ := ret[0].(map[wire.OutPoint]*utxo.UtxoEntry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchUtxosByHeight indicates an expected call of FetchUtxosByHeight
+func (mr *MockInterfaceMockRecorder) FetchUtxosByHeight(height interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchUtxosByHeight", reflect.TypeOf((*MockInterface)(nil).FetchUtxosByHeight), height)
 }

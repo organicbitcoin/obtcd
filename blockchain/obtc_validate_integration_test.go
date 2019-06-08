@@ -69,7 +69,7 @@ func TestFetchUtxosByHeight(t *testing.T) {
 
 	// File blk00000.dat contains 119878 blocks
 	for i := 1; i < 119878; i++ {
-		utxos, err := chain.fetchUtxosByHeight(int32(i))
+		utxos, err := chain.FetchUtxosByHeight(int32(i))
 		if err != nil {
 			t.Errorf("Cannot fetch utxos by block height, reason is: %v", err)
 			return

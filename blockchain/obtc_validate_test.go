@@ -548,3 +548,43 @@ func TestFetchAndValidateExpiredUtxosAndLargestHeight(t *testing.T) {
 		t.Errorf("Expired largest height is incorrect: %v", expectedHeight)
 	}
 }
+
+func TestFetchUtxosInRange(t *testing.T) {
+	utxo1 := &utxo.UtxoEntry{
+		Amount:      12345678,
+		BlockHeight: 5000,
+	}
+	op1 := wire.OutPoint{
+		Hash:  chainhash.Hash([32]byte{0x01}),
+		Index: 1,
+	}
+	utxos1 := make(map[wire.OutPoint]*utxo.UtxoEntry)
+	utxos1[op1] = utxo1
+
+	utxo2 := &utxo.UtxoEntry{
+		Amount:      12345678,
+		BlockHeight: 5001,
+	}
+	op2 := wire.OutPoint{
+		Hash:  chainhash.Hash([32]byte{0x02}),
+		Index: 1,
+	}
+	utxos2 := make(map[wire.OutPoint]*utxo.UtxoEntry)
+	utxos2[op2] = utxo2
+
+	ctl := gomock.NewController(t)
+	mockedBlockchain := mock_blockchain.NewMockInterface(ctl)
+	mockedBlockchain.EXPECT().FetchUtxosByHeight(int32(5000)).Return(utxos1, nil)
+	mockedBlockchain.EXPECT().FetchUtxosByHeight(int32(5001)).Return(utxos2, nil)
+	defer ctl.Finish()
+
+	resultUtxos, err := FetchUtxosInRange(mockedBlockchain, 5000, 5001)
+
+	if err != nil {
+		t.Errorf("something went wrong when testing FetchUtxosInRange %v", err)
+	}
+
+	if len(resultUtxos) != 2 {
+		t.Errorf("FetchUtxosInRange should return all utxos by the given range, but only return %v", len(resultUtxos))
+	}
+}
