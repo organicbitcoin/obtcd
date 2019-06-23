@@ -684,6 +684,13 @@ func (mp *TxPool) maybeAcceptTransaction(tx *btcutil.Tx, isNew, rateLimit, rejec
 		return nil, nil, txRuleError(wire.RejectInvalid, str)
 	}
 
+	// A transaction must not be a tax transaction.
+	if blockchain.IsTaxTransaction(tx) {
+		str := fmt.Sprintf("transaction %v is a tax transaction",
+			txHash)
+		return nil, nil, txRuleError(wire.RejectInvalid, str)
+	}
+
 	// Get the current height of the main chain.  A standalone transaction
 	// will be mined into the next block at best, so its height is at least
 	// one more than the current height.
@@ -735,6 +742,17 @@ func (mp *TxPool) maybeAcceptTransaction(tx *btcutil.Tx, isNew, rateLimit, rejec
 			return nil, nil, chainRuleError(cerr)
 		}
 		return nil, nil, err
+	}
+
+	// All input utxos must be active
+	for _, input := range tx.MsgTx().TxIn {
+		entry := utxoView.LookupEntry(input.PreviousOutPoint)
+		// it's orphan if entry is nil
+		if entry != nil && mp.cfg.ChainParams.TaxationBeginHeight <= mp.cfg.BestHeight() &&
+			(mp.cfg.BestHeight()-entry.BlockHeight) > mp.cfg.ChainParams.ValidChainLength {
+			// Taxation needs to be activated for this check
+			return nil, nil, txRuleError(wire.RejectExpiredUtxo, "input utxo has expired")
+		}
 	}
 
 	// Don't allow the transaction if it exists in the main chain and is not
