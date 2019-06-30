@@ -24,11 +24,11 @@ With the help of Taxation and EUTXOs, Organic Bitcoin will have:
 - **EUTXO**: Expired Unspent Transaction Output
 - **AUTXO**: Active Unspent Transaction Output
 - **Dust Amount**: Transaction amount lower than this value is considered as **Dust**. In OBTC, the default value is `5,460`.
-- Tax Rate: The charged percentage from EUTXO, by default, it is `30%`.
+- **Tax Rate**: The charged percentage from EUTXO, by default, it is `30%`.
 - **Common Tax Transaction Weight**: The total weight percentage of tax transactions in a new block. Witness data is excluded from total weight calculation. By default, it is `25%`.
 - **Urgent Tax Transaction Weight**: The total weight percentage of tax transactions in a new block. If the block height contained the oldest EUTXO is `100` height far lower than the beginning height of the valid block chain, the total weight percentage of tax transactions in the new mined block is raised higher than the common value. Witness data is excluded from total weight calculation. It is `50%` by default.
 - **Valid Chain Length**: The valid chain stands for the block chain from the last 7 years. Blocks before 7 years ago can be removed from full node. “7 years” is an approximate value, it is estimated based on new mined block in every 10 minutes. It is `368,208` by default.
-- Taxation Begin Height: Currently the OBTC will begin and be hard forked from the height `600,000`.
+- **Taxation Begin Height**: Currently the OBTC will begin and be hard forked from the height `600,000`.
 - **Urgent Expired UTXO Threshold**: The total weight percentage of tax transactions is adjustable. If the block height contained the oldest EUTXO is further away than this threshold from the first block in the valid chain, the total weight will be raised to 50% of the total block weight.
 - **zpy**: The minimum OBTC unit.
 
