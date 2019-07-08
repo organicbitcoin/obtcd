@@ -1,7 +1,7 @@
 package utxo
 
 import (
-	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/organicbitcoin/obtcd/chaincfg"
 )
 
 // TxoFlags is a bitmask defining additional information and state for a

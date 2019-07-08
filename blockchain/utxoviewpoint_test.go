@@ -3,7 +3,7 @@ package blockchain
 import (
 	"testing"
 
-	"github.com/btcsuite/btcd/utxo"
+	"github.com/organicbitcoin/obtcd/utxo"
 )
 
 func TestCheckExpired(t *testing.T) {

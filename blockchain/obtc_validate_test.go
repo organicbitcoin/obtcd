@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	mock_blockchain "github.com/btcsuite/btcd/blockchain/mock"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/utxo"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	mock_blockchain "github.com/organicbitcoin/obtcd/blockchain/mock"
+	"github.com/organicbitcoin/obtcd/chaincfg"
+	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
+	"github.com/organicbitcoin/obtcd/utxo"
+	"github.com/organicbitcoin/obtcd/wire"
+	"github.com/organicbitcoin/btcutil"
 	"github.com/golang/mock/gomock"
 )
 

@@ -38,3 +38,5 @@ _testmain.go
 
 # Mac
 .DS_Store
+
+blockchain/testdata/*.dat

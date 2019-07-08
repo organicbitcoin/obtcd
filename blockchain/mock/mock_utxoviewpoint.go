@@ -5,8 +5,8 @@
 package mock_blockchain
 
 import (
-	utxo "github.com/btcsuite/btcd/utxo"
-	wire "github.com/btcsuite/btcd/wire"
+	utxo "github.com/organicbitcoin/obtcd/utxo"
+	wire "github.com/organicbitcoin/obtcd/wire"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )

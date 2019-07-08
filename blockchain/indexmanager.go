@@ -1,8 +1,8 @@
 package blockchain
 
 import (
-	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcutil"
+	"github.com/organicbitcoin/obtcd/database"
+	"github.com/organicbitcoin/btcutil"
 )
 
 // IndexManager provides a generic interface that the is called when blocks are

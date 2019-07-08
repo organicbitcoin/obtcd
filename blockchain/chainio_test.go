@@ -11,9 +11,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcd/utxo"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/organicbitcoin/obtcd/database"
+	"github.com/organicbitcoin/obtcd/utxo"
+	"github.com/organicbitcoin/obtcd/wire"
 )
 
 // TestErrNotInMainChain ensures the functions related to errNotInMainChain work
