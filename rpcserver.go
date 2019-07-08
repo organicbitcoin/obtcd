@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/btcsuite/websocket"
+	"github.com/organicbitcoin/btcutil"
 	"github.com/organicbitcoin/obtcd/blockchain"
 	"github.com/organicbitcoin/obtcd/blockchain/indexers"
 	"github.com/organicbitcoin/obtcd/btcec"
@@ -40,8 +42,6 @@ import (
 	"github.com/organicbitcoin/obtcd/peer"
 	"github.com/organicbitcoin/obtcd/txscript"
 	"github.com/organicbitcoin/obtcd/wire"
-	"github.com/organicbitcoin/btcutil"
-	"github.com/btcsuite/websocket"
 )
 
 // API version constants

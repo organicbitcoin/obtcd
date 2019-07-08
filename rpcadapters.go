@@ -7,13 +7,13 @@ package main
 import (
 	"sync/atomic"
 
+	"github.com/organicbitcoin/btcutil"
 	"github.com/organicbitcoin/obtcd/blockchain"
 	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
 	"github.com/organicbitcoin/obtcd/mempool"
 	"github.com/organicbitcoin/obtcd/netsync"
 	"github.com/organicbitcoin/obtcd/peer"
 	"github.com/organicbitcoin/obtcd/wire"
-	"github.com/organicbitcoin/btcutil"
 )
 
 // rpcPeer provides a peer for use with the RPC server and implements the

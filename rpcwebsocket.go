@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/websocket"
+	"github.com/organicbitcoin/btcutil"
 	"github.com/organicbitcoin/obtcd/blockchain"
 	"github.com/organicbitcoin/obtcd/btcjson"
 	"github.com/organicbitcoin/obtcd/chaincfg"
@@ -27,8 +29,6 @@ import (
 	"github.com/organicbitcoin/obtcd/database"
 	"github.com/organicbitcoin/obtcd/txscript"
 	"github.com/organicbitcoin/obtcd/wire"
-	"github.com/organicbitcoin/btcutil"
-	"github.com/btcsuite/websocket"
 	"golang.org/x/crypto/ripemd160"
 )
 

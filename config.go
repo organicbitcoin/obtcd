@@ -20,6 +20,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btcsuite/go-socks/socks"
+	flags "github.com/jessevdk/go-flags"
+	"github.com/organicbitcoin/btcutil"
 	"github.com/organicbitcoin/obtcd/blockchain"
 	"github.com/organicbitcoin/obtcd/chaincfg"
 	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
@@ -28,9 +31,6 @@ import (
 	_ "github.com/organicbitcoin/obtcd/database/ffldb"
 	"github.com/organicbitcoin/obtcd/mempool"
 	"github.com/organicbitcoin/obtcd/peer"
-	"github.com/organicbitcoin/btcutil"
-	"github.com/btcsuite/go-socks/socks"
-	flags "github.com/jessevdk/go-flags"
 )
 
 const (

@@ -22,6 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/organicbitcoin/btcutil"
+	"github.com/organicbitcoin/btcutil/bloom"
 	"github.com/organicbitcoin/obtcd/addrmgr"
 	"github.com/organicbitcoin/obtcd/blockchain"
 	"github.com/organicbitcoin/obtcd/blockchain/indexers"
@@ -36,8 +38,6 @@ import (
 	"github.com/organicbitcoin/obtcd/peer"
 	"github.com/organicbitcoin/obtcd/txscript"
 	"github.com/organicbitcoin/obtcd/wire"
-	"github.com/organicbitcoin/btcutil"
-	"github.com/organicbitcoin/btcutil/bloom"
 )
 
 const (
