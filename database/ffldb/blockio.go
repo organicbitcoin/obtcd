@@ -17,9 +17,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/database"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
+	"github.com/organicbitcoin/obtcd/database"
+	"github.com/organicbitcoin/obtcd/wire"
 )
 
 const (

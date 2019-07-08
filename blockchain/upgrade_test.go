@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcd/utxo"
+	"github.com/organicbitcoin/obtcd/utxo"
 )
 
 // TestDeserializeUtxoEntryV0 ensures deserializing unspent trasaction output

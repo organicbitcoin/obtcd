@@ -10,15 +10,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
-	"github.com/btcsuite/btcutil/hdkeychain"
+	"github.com/organicbitcoin/obtcd/blockchain"
+	"github.com/organicbitcoin/obtcd/btcec"
+	"github.com/organicbitcoin/obtcd/chaincfg"
+	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
+	"github.com/organicbitcoin/obtcd/rpcclient"
+	"github.com/organicbitcoin/obtcd/txscript"
+	"github.com/organicbitcoin/obtcd/wire"
+	"github.com/organicbitcoin/btcutil"
+	"github.com/organicbitcoin/btcutil/hdkeychain"
 )
 
 var (

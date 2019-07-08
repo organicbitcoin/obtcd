@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
+	"github.com/organicbitcoin/obtcd/chaincfg"
+	"github.com/organicbitcoin/btcutil"
 )
 
 func loadBlkFileToChain(filename string, chain *BlockChain, skipGenesis bool) (int, int, error) {

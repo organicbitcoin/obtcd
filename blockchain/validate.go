@@ -12,12 +12,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/utxo"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/organicbitcoin/btcutil"
+	"github.com/organicbitcoin/obtcd/chaincfg"
+	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
+	"github.com/organicbitcoin/obtcd/txscript"
+	"github.com/organicbitcoin/obtcd/utxo"
+	"github.com/organicbitcoin/obtcd/wire"
 )
 
 const (

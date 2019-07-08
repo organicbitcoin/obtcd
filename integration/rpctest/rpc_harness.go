@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/organicbitcoin/obtcd/chaincfg"
+	"github.com/organicbitcoin/obtcd/chaincfg/chainhash"
+	"github.com/organicbitcoin/obtcd/rpcclient"
+	"github.com/organicbitcoin/obtcd/wire"
+	"github.com/organicbitcoin/btcutil"
 )
 
 const (
