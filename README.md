@@ -36,8 +36,10 @@ With the help of Taxation and EUTXOs, Organic Bitcoin will have:
 Organic Bitcoin is implemented in Golang and forked from the project [Btcsuite](https://github.com/btcsuite).
 
 ## FAQ
-- **OP_RETURN:** How Organic Bitcoin deal with expired OP_RETURN outputs?  OP_RETURN is a script opcode used to mark a transaction output as invalid. Since any outputs with OP_RETURN are provably unspendable, OP_RETURN outputs can be used to burn bitcoins. In Organic Bitcoin, burned bitcoins in the OP_RETURN outputs will be fully released.
-- **Timelock:** How Organic Bitcoin deal with timelock transactions?  Timelocked transactions stays in the transaction pool and won't be wrapped into new generated block until the timestamp reached.
+### How Organic Bitcoin deal with expired OP_RETURN outputs?
+OP_RETURN is a script opcode used to mark a transaction output as invalid. Since any outputs with OP_RETURN are provably unspendable, OP_RETURN outputs can be used to burn bitcoins. In Organic Bitcoin, burned bitcoins in the OP_RETURN outputs will be fully released.
+### How Organic Bitcoin deal with timelock transactions?
+Timelocked transactions stays in the transaction pool and won't be wrapped into new generated block until the timestamp reached.
 
 ## Contribution
 Any ideas, suggestions and implementations are appreciated!
