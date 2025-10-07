@@ -15,12 +15,12 @@ import (
 // This is the same as Bitcoin's testnet limit to allow easier testing.
 var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 
-// OBTCMainNetParams defines the network parameters for the OBTC main network.
+// ObtcMainNetParams defines the network parameters for the OBTC main network.
 // 
 // Note: This is currently a skeleton implementation for Week 1 of the OBTC
 // development plan. Many parameters are placeholders and will be finalized
 // in Week 3 when the genesis block and unique constants are frozen.
-var OBTCMainNetParams = Params{
+var ObtcMainNetParams = Params{
 	Name:        "obtcmainnet",
 	Net:         wire.ObtcMainNet,
 	DefaultPort: "8555", // Different from Bitcoin's 8333
@@ -108,8 +108,8 @@ var OBTCMainNetParams = Params{
 	HDCoinType: 1, // Using testnet coin type temporarily
 }
 
-// OBTCTestNetParams defines the network parameters for the OBTC test network.
-var OBTCTestNetParams = Params{
+// ObtcTestNetParams defines the network parameters for the OBTC test network.
+var ObtcTestNetParams = Params{
 	Name:        "obtctestnet",
 	Net:         wire.ObtcTestNet, // Use separate magic for testnet
 	DefaultPort: "18555",         // Different from Bitcoin testnet's 18333
@@ -138,8 +138,8 @@ var OBTCTestNetParams = Params{
 	// TODO: Complete remaining fields in Week 3
 }
 
-// OBTCRegTestParams defines the network parameters for OBTC regression testing.
-var OBTCRegTestParams = Params{
+// ObtcRegTestParams defines the network parameters for OBTC regression testing.
+var ObtcRegTestParams = Params{
 	Name:        "obtcregtest", 
 	Net:         wire.ObtcRegNet, // Use separate magic for regtest
 	DefaultPort: "18444",         // Same as Bitcoin regtest for now
@@ -181,17 +181,17 @@ func IsOBTC(params *Params) bool {
 // network selection functions.
 func init() {
 	// Register OBTC networks
-	err := Register(&OBTCMainNetParams)
+	err := Register(&ObtcMainNetParams)
 	if err != nil {
 		panic("failed to register OBTC mainnet parameters: " + err.Error())
 	}
 	
-	err = Register(&OBTCTestNetParams)
+	err = Register(&ObtcTestNetParams)
 	if err != nil {
 		panic("failed to register OBTC testnet parameters: " + err.Error())
 	}
 	
-	err = Register(&OBTCRegTestParams)
+	err = Register(&ObtcRegTestParams)
 	if err != nil {
 		panic("failed to register OBTC regtest parameters: " + err.Error())
 	}

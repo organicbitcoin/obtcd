@@ -19,17 +19,17 @@ func TestOBTCNetworkMagic(t *testing.T) {
 	}{
 		{
 			name:   "OBTC MainNet",
-			params: &OBTCMainNetParams,
+			params: &ObtcMainNetParams,
 			magic:  wire.ObtcMainNet,
 		},
 		{
 			name:   "OBTC TestNet",
-			params: &OBTCTestNetParams,
+			params: &ObtcTestNetParams,
 			magic:  wire.ObtcTestNet,
 		},
 		{
 			name:   "OBTC RegTest",
-			params: &OBTCRegTestParams,
+			params: &ObtcRegTestParams,
 			magic:  wire.ObtcRegNet,
 		},
 	}
@@ -53,17 +53,17 @@ func TestIsOBTC(t *testing.T) {
 	}{
 		{
 			name:     "OBTC MainNet should be detected as OBTC",
-			params:   &OBTCMainNetParams,
+			params:   &ObtcMainNetParams,
 			expected: true,
 		},
 		{
 			name:     "OBTC TestNet should be detected as OBTC",
-			params:   &OBTCTestNetParams,
+			params:   &ObtcTestNetParams,
 			expected: true,
 		},
 		{
 			name:     "OBTC RegTest should be detected as OBTC",
-			params:   &OBTCRegTestParams,
+			params:   &ObtcRegTestParams,
 			expected: true,
 		},
 		{
@@ -141,7 +141,7 @@ func TestOBTCAddressParameters(t *testing.T) {
 	}{
 		{
 			name:          "OBTC MainNet vs Bitcoin MainNet",
-			obtcParams:    &OBTCMainNetParams,
+			obtcParams:    &ObtcMainNetParams,
 			bitcoinParams: &MainNetParams,
 		},
 	}
@@ -182,12 +182,12 @@ func TestOBTCPortsUnique(t *testing.T) {
 	}{
 		{
 			name:          "OBTC MainNet port vs Bitcoin MainNet",
-			obtcParams:    &OBTCMainNetParams,
+			obtcParams:    &ObtcMainNetParams,
 			bitcoinParams: &MainNetParams,
 		},
 		{
 			name:          "OBTC TestNet port vs Bitcoin TestNet3",
-			obtcParams:    &OBTCTestNetParams,
+			obtcParams:    &ObtcTestNetParams,
 			bitcoinParams: &TestNet3Params,
 		},
 	}
@@ -204,7 +204,7 @@ func TestOBTCPortsUnique(t *testing.T) {
 
 // BenchmarkIsOBTC benchmarks the IsOBTC function performance.
 func BenchmarkIsOBTC(b *testing.B) {
-	params := &OBTCMainNetParams
+	params := &ObtcMainNetParams
 	for i := 0; i < b.N; i++ {
 		IsOBTC(params)
 	}
