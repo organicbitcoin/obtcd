@@ -194,17 +194,29 @@ const (
 
 	// SimNet represents the simulation test network.
 	SimNet BitcoinNet = 0x12141c16
+
+	// ObtcMainNet represents the OBTC main network.
+	ObtcMainNet BitcoinNet = 0x4F425443
+
+	// ObtcTestNet represents the OBTC test network.
+	ObtcTestNet BitcoinNet = 0x4F544553
+
+	// ObtcRegNet represents the OBTC regression test network.
+	ObtcRegNet BitcoinNet = 0x4F524547
 )
 
 // bnStrings is a map of bitcoin networks back to their constant names for
 // pretty printing.
 var bnStrings = map[BitcoinNet]string{
-	MainNet:  "MainNet",
-	TestNet:  "TestNet",
-	TestNet3: "TestNet3",
-	TestNet4: "TestNet4",
-	SigNet:   "SigNet",
-	SimNet:   "SimNet",
+	MainNet:      "MainNet",
+	TestNet:      "TestNet",
+	TestNet3:     "TestNet3",
+	TestNet4:     "TestNet4",
+	SigNet:       "SigNet",
+	SimNet:       "SimNet",
+	ObtcMainNet:  "ObtcMainNet",
+	ObtcTestNet:  "ObtcTestNet",
+	ObtcRegNet:   "ObtcRegNet",
 }
 
 // String returns the BitcoinNet in human-readable form.
