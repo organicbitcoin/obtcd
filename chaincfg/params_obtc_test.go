@@ -37,7 +37,7 @@ func TestOBTCNetworkMagic(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if test.params.Net != test.magic {
-				t.Errorf("%s: expected magic %x, got %x", 
+				t.Errorf("%s: expected magic %x, got %x",
 					test.name, test.magic, test.params.Net)
 			}
 		})
@@ -87,7 +87,7 @@ func TestIsOBTC(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := IsOBTC(test.params)
 			if result != test.expected {
-				t.Errorf("%s: expected %t, got %t", 
+				t.Errorf("%s: expected %t, got %t",
 					test.name, test.expected, result)
 			}
 		})
@@ -101,7 +101,7 @@ func TestOBTCNetworkUniqueness(t *testing.T) {
 		wire.ObtcTestNet,
 		wire.ObtcRegNet,
 	}
-	
+
 	bitcoinNets := []wire.BitcoinNet{
 		wire.MainNet,
 		wire.TestNet,
@@ -110,17 +110,17 @@ func TestOBTCNetworkUniqueness(t *testing.T) {
 		wire.SigNet,
 		wire.SimNet,
 	}
-	
+
 	// Check that no OBTC network magic conflicts with Bitcoin networks
 	for _, obtcNet := range obtcNets {
 		for _, bitcoinNet := range bitcoinNets {
 			if obtcNet == bitcoinNet {
-				t.Errorf("OBTC network magic %x conflicts with Bitcoin network %x", 
+				t.Errorf("OBTC network magic %x conflicts with Bitcoin network %x",
 					obtcNet, bitcoinNet)
 			}
 		}
 	}
-	
+
 	// Check that OBTC networks don't conflict with each other
 	for i, net1 := range obtcNets {
 		for j, net2 := range obtcNets {
@@ -135,9 +135,9 @@ func TestOBTCNetworkUniqueness(t *testing.T) {
 func TestOBTCAddressParameters(t *testing.T) {
 	// Test that OBTC uses different address prefixes than Bitcoin
 	tests := []struct {
-		name           string
-		obtcParams     *Params
-		bitcoinParams  *Params
+		name          string
+		obtcParams    *Params
+		bitcoinParams *Params
 	}{
 		{
 			name:          "OBTC MainNet vs Bitcoin MainNet",
@@ -150,23 +150,23 @@ func TestOBTCAddressParameters(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Verify HRP is different
 			if test.obtcParams.Bech32HRPSegwit == test.bitcoinParams.Bech32HRPSegwit {
-				t.Errorf("OBTC and Bitcoin use same Bech32 HRP: %s", 
+				t.Errorf("OBTC and Bitcoin use same Bech32 HRP: %s",
 					test.obtcParams.Bech32HRPSegwit)
 			}
-			
+
 			// Verify address IDs are different
 			if test.obtcParams.PubKeyHashAddrID == test.bitcoinParams.PubKeyHashAddrID {
-				t.Errorf("OBTC and Bitcoin use same PubKeyHashAddrID: %x", 
+				t.Errorf("OBTC and Bitcoin use same PubKeyHashAddrID: %x",
 					test.obtcParams.PubKeyHashAddrID)
 			}
-			
+
 			if test.obtcParams.ScriptHashAddrID == test.bitcoinParams.ScriptHashAddrID {
-				t.Errorf("OBTC and Bitcoin use same ScriptHashAddrID: %x", 
+				t.Errorf("OBTC and Bitcoin use same ScriptHashAddrID: %x",
 					test.obtcParams.ScriptHashAddrID)
 			}
-			
+
 			if test.obtcParams.PrivateKeyID == test.bitcoinParams.PrivateKeyID {
-				t.Errorf("OBTC and Bitcoin use same PrivateKeyID: %x", 
+				t.Errorf("OBTC and Bitcoin use same PrivateKeyID: %x",
 					test.obtcParams.PrivateKeyID)
 			}
 		})
@@ -176,9 +176,9 @@ func TestOBTCAddressParameters(t *testing.T) {
 // TestOBTCPortsUnique verifies that OBTC uses different default ports than Bitcoin.
 func TestOBTCPortsUnique(t *testing.T) {
 	tests := []struct {
-		name           string
-		obtcParams     *Params
-		bitcoinParams  *Params
+		name          string
+		obtcParams    *Params
+		bitcoinParams *Params
 	}{
 		{
 			name:          "OBTC MainNet port vs Bitcoin MainNet",
@@ -195,7 +195,7 @@ func TestOBTCPortsUnique(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if test.obtcParams.DefaultPort == test.bitcoinParams.DefaultPort {
-				t.Errorf("%s: OBTC and Bitcoin use same default port: %s", 
+				t.Errorf("%s: OBTC and Bitcoin use same default port: %s",
 					test.name, test.obtcParams.DefaultPort)
 			}
 		})
