@@ -17,9 +17,13 @@ var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 
 // ObtcMainNetParams defines the network parameters for the OBTC main network.
 //
+// IMPORTANT: OBTC is a hard fork of Bitcoin, not a new chain from genesis.
+// This means OBTC shares Bitcoin's history up to the fork height, then
+// diverges with OBTC-specific consensus rules and network isolation.
+//
 // Note: This is currently a skeleton implementation for Week 1 of the OBTC
-// development plan. Many parameters are placeholders and will be finalized
-// in Week 3 when the genesis block and unique constants are frozen.
+// development plan. The fork height and final parameters will be determined
+// in Week 3 during the "freeze constants" phase.
 var ObtcMainNetParams = Params{
 	Name:        "obtcmainnet",
 	Net:         wire.ObtcMainNet,
@@ -31,22 +35,30 @@ var ObtcMainNetParams = Params{
 		{"seed.obtc.example.com", true},
 	},
 
-	// Genesis block - TODO: Generate unique OBTC genesis block in Week 3
-	GenesisBlock: &genesisBlock, // Temporarily using Bitcoin's genesis
-	GenesisHash:  &genesisHash,  // Temporarily using Bitcoin's genesis hash
+	// CRITICAL: As a hard fork, OBTC uses Bitcoin's original genesis block
+	// and shares the same blockchain history up to the fork height.
+	// TODO Week 3: Determine exact fork height based on technical requirements
+	GenesisBlock: &genesisBlock, // Bitcoin's genesis block (shared history)
+	GenesisHash:  &genesisHash,  // Bitcoin's genesis hash (shared history)
 
 	// Proof of work parameters
 	PowLimit:                 obtcPowLimit,
 	PowLimitBits:             0x1d00ffff,
 	PoWNoRetargeting:         false,
 	EnforceBIP94:             true, // Enable timewarp protection
-	BIP0034Height:            1,    // Enable from block 1
-	BIP0065Height:            1,    // Enable CHECKLOCKTIMEVERIFY from block 1
-	BIP0066Height:            1,    // Enable strict DER signatures from block 1
+
+	// OBTC Fork Point and Consensus Rules:
+	// TODO Week 3: Set exact fork height (estimated: block 870000+)
+	// All BIP activation heights are set relative to the fork point.
+	// Before fork: Follow Bitcoin consensus rules exactly
+	// After fork: Apply OBTC-specific consensus modifications
+	BIP0034Height:            1,    // Already active in Bitcoin at fork point
+	BIP0065Height:            1,    // Already active in Bitcoin at fork point  
+	BIP0066Height:            1,    // Already active in Bitcoin at fork point
 	CoinbaseMaturity:         100,
-	SubsidyReductionInterval: 210000,              // Same as Bitcoin for now
-	TargetTimespan:           time.Hour * 24 * 14, // 14 days
-	TargetTimePerBlock:       time.Minute * 10,    // 10 minutes
+	SubsidyReductionInterval: 210000,              // Keep Bitcoin's halving schedule
+	TargetTimespan:           time.Hour * 24 * 14, // 14 days (same as Bitcoin)
+	TargetTimePerBlock:       time.Minute * 10,    // 10 minutes (same as Bitcoin)
 	RetargetAdjustmentFactor: 4,                   // 25% less, 400% more
 	ReduceMinDifficulty:      false,
 	MinDiffReductionTime:     0,
@@ -61,25 +73,25 @@ var ObtcMainNetParams = Params{
 	Deployments: [DefinedDeployments]ConsensusDeployment{
 		DeploymentTestDummy: {
 			BitNumber:          28,
-			AlwaysActiveHeight: 0, // Always active for OBTC
+			AlwaysActiveHeight: 0, // Always active for OBTC after fork
 			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
 		DeploymentCSV: {
 			BitNumber:          0,
-			AlwaysActiveHeight: 1, // Active from block 1
+			AlwaysActiveHeight: 1, // Already active in Bitcoin at fork point
 			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
 		DeploymentSegwit: {
 			BitNumber:          1,
-			AlwaysActiveHeight: 1, // Active from block 1
+			AlwaysActiveHeight: 1, // Already active in Bitcoin at fork point
 			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
 		DeploymentTaproot: {
 			BitNumber:          2,
-			AlwaysActiveHeight: 1, // Active from block 1
+			AlwaysActiveHeight: 1, // Already active in Bitcoin at fork point
 			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
@@ -108,26 +120,36 @@ var ObtcMainNetParams = Params{
 	HDCoinType: 1, // Using testnet coin type temporarily
 }
 
-// ObtcTestNetParams defines the network parameters for the OBTC test network.
+// ObtcTestNetParams defines the network parameters for OBTC test network.
+// Like mainnet, this is a hard fork of Bitcoin testnet, sharing history up to the fork point.
 var ObtcTestNetParams = Params{
 	Name:        "obtctestnet",
-	Net:         wire.ObtcTestNet, // Use separate magic for testnet
-	DefaultPort: "18555",          // Different from Bitcoin testnet's 18333
+	Net:         wire.ObtcTestNet,
+	DefaultPort: "18555", // Different from Bitcoin testnet's 18333
 
-	// Most parameters inherit from mainnet but with easier difficulty
-	PowLimit:                      obtcPowLimit,
-	PowLimitBits:                  0x1d00ffff,
-	PoWNoRetargeting:              false,
-	ReduceMinDifficulty:           true,             // Allow difficulty reduction
-	MinDiffReductionTime:          time.Minute * 20, // Reduce difficulty after 20 min
-	GenerateSupported:             true,             // Allow CPU mining
-	RuleChangeActivationThreshold: 1512,             // 75% instead of 95%
-	MinerConfirmationWindow:       2016,
+	// Use Bitcoin testnet's genesis and history up to fork point
+	GenesisBlock: &testNet3GenesisBlock,
+	GenesisHash:  &testNet3GenesisHash,
 
-	// Same address encoding as mainnet - they'll be distinguished by network context
-	Bech32HRPSegwit:         "obtct", // "obtc test"
-	PubKeyHashAddrID:        0x6F,  // Different from mainnet
-	ScriptHashAddrID:        0xC4,  // Different from mainnet
+	// Similar proof of work parameters to Bitcoin testnet  
+	PowLimit:         testNet3PowLimit,
+	PowLimitBits:     0x1d00ffff,
+	PoWNoRetargeting: false,
+
+	// Consensus parameters - inherit from Bitcoin at fork point
+	BIP0034Height:            21111, // Bitcoin testnet values
+	BIP0065Height:            581885,
+	BIP0066Height:            330776,
+	CoinbaseMaturity:         100,
+	SubsidyReductionInterval: 210000,
+	TargetTimespan:           time.Hour * 24 * 14,
+	TargetTimePerBlock:       time.Minute * 10,
+	RetargetAdjustmentFactor: 4,
+
+	// Address encoding parameters - unique to OBTC testnet
+	Bech32HRPSegwit:         "obtct", // "obtc testnet"
+	PubKeyHashAddrID:        0x6F,    // Different from mainnet
+	ScriptHashAddrID:        0xC4,    // Different from mainnet
 	PrivateKeyID:            0xEF,
 	WitnessPubKeyHashAddrID: 0x03,
 	WitnessScriptHashAddrID: 0x28,
@@ -135,19 +157,24 @@ var ObtcTestNetParams = Params{
 	HDPublicKeyID:           [4]byte{0x04, 0x35, 0x87, 0xCF}, // "tpub" equivalent
 	HDCoinType:              1,                               // Testnet coin type
 
-	// TODO: Complete remaining fields in Week 3
+	// TODO: Complete remaining testnet-specific fields in Week 3
 }
 
 // ObtcRegTestParams defines the network parameters for OBTC regression testing.
+// RegTest is used for development and testing, inheriting Bitcoin regtest characteristics.
 var ObtcRegTestParams = Params{
 	Name:        "obtcregtest",
-	Net:         wire.ObtcRegNet, // Use separate magic for regtest
-	DefaultPort: "18444",         // Same as Bitcoin regtest for now
+	Net:         wire.ObtcRegNet, // Use separate magic for regtest isolation
+	DefaultPort: "18666", // Different from Bitcoin regtest's 18444 for development isolation
 
-	// Regression test parameters - very easy mining
+	// Use Bitcoin regtest genesis for shared development environment
+	GenesisBlock: &regTestGenesisBlock,
+	GenesisHash:  &regTestGenesisHash,
+
+	// Regression test parameters - very easy mining for development
 	PowLimit:                 regressionPowLimit,
 	PowLimitBits:             0x207fffff,
-	PoWNoRetargeting:         true,
+	PoWNoRetargeting:         true, // No difficulty adjustment for testing
 	ReduceMinDifficulty:      false,
 	GenerateSupported:        true,
 	CoinbaseMaturity:         100,
