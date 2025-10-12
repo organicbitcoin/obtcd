@@ -44,7 +44,7 @@ jobs:
         continue-on-error: true
         with:
           file: coverage.txt
-          flag-name: btcd
+          flag-name: obtcd
           format: 'golang'
           parallel: true
 
@@ -95,3 +95,103 @@ jobs:
 
       - name: Test
         run: make unit-race
+
+  test-obtc:
+    name: OBTC Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Run OBTC Network Tests
+        run: |
+          echo "Running OBTC-specific tests..."
+          go test ./chaincfg ./wire -v -run "OBTC"
+
+      - name: Run OBTC Fork Height Tests
+        run: |
+          echo "Running OBTC fork height tests..."
+          go test ./chaincfg -v -run "Fork"
+
+      - name: Validate OBTC Parameters
+        run: |
+          echo "Validating OBTC network parameters..."
+          go run -c "
+          package main
+          import (
+            \"fmt\"
+            \"github.com/btcsuite/btcd/chaincfg\"
+            \"github.com/btcsuite/btcd/wire\"
+          )
+          func main() {
+            // Verify OBTC networks are registered
+            if !chaincfg.IsOBTC(&chaincfg.ObtcMainNetParams) {
+              panic(\"OBTC MainNet not properly registered\")
+            }
+            if !chaincfg.IsOBTC(&chaincfg.ObtcTestNetParams) {
+              panic(\"OBTC TestNet not properly registered\")
+            }
+            if !chaincfg.IsOBTC(&chaincfg.ObtcRegTestParams) {
+              panic(\"OBTC RegTest not properly registered\")
+            }
+            fmt.Println(\"All OBTC parameters validated successfully\")
+          }"
+
+      - name: Check DevNet Scripts
+        run: |
+          echo "Validating DevNet scripts..."
+          chmod +x scripts/devnet-up.sh scripts/rebase-upstream.sh
+          ./scripts/devnet-up.sh help
+          ./scripts/rebase-upstream.sh --help
+
+  vet:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Go Vet
+        run: go vet ./...
+
+      - name: Go Fmt Check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not properly formatted. Run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  build-matrix:
+    name: Build Matrix
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: [1.22.11]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build OBTCD
+        run: go build
+
+      - name: Build btcctl
+        run: |
+          cd cmd/btcctl
+          go build

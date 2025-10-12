@@ -1,53 +1,70 @@
-btcd
-====
+OBTCD (Organic Bitcoin) 
+=====================
 
-[![Build Status](https://github.com/btcsuite/btcd/workflows/Build%20and%20Test/badge.svg)](https://github.com/btcsuite/btcd/actions)
-[![Coverage Status](https://coveralls.io/repos/github/btcsuite/btcd/badge.svg?branch=master)](https://coveralls.io/github/btcsuite/btcd?branch=master)
+[![Build Status](https://github.com/organicbitcoin/obtcd/workflows/Build%20and%20Test/badge.svg)](https://github.com/organicbitcoin/obtcd/actions)
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/btcsuite/btcd)
+[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
 
-btcd is an alternative full node bitcoin implementation written in Go (golang).
+> ⚠️ **Week 1 Development Status**: OBTC is currently in active development. This implementation includes basic network parameters and infrastructure. OBTC-specific consensus rules (REAP) will be implemented in Weeks 2-4.
 
-This project is currently under active development and is in a Beta state.  It
-is extremely stable and has been in production use since October 2013.
+OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements the **Resource Expiration and Allocation Protocol (REAP)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
 
-It properly downloads, validates, and serves the block chain using the exact
-rules (including consensus bugs) for block acceptance as Bitcoin Core.  We have
-taken great care to avoid btcd causing a fork to the block chain.  It includes a
-full block validation testing framework which contains all of the 'official'
-block acceptance tests (and some additional ones) that is run on every pull
-request to help ensure it properly follows consensus.  Also, it passes all of
-the JSON test data in the Bitcoin Core code.
+## 🎯 Key Features
 
-It also properly relays newly mined blocks, maintains a transaction pool, and
-relays individual transactions that have not yet made it into a block.  It
-ensures all individual transactions admitted to the pool follow the rules
-required by the block chain and also includes more strict checks which filter
-transactions based on miner requirements ("standard" transactions).
+- **Hard Fork of Bitcoin**: OBTC shares Bitcoin's history up to fork height (~950,000, Q2 2026)
+- **REAP Protocol**: UTXOs expire after 7 years, with 30% value redistributed to miners
+- **Network Isolation**: Complete separation from Bitcoin networks (unique ports, addresses, magic numbers)
+- **btcd Foundation**: Built on the stable, production-tested btcd codebase
 
-One key difference between btcd and Bitcoin Core is that btcd does *NOT* include
-wallet functionality and this was a very intentional design decision.  See the
-blog entry [here](https://web.archive.org/web/20171125143919/https://blog.conformal.com/btcd-not-your-moms-bitcoin-daemon)
-for more details.  This means you can't actually make or receive payments
-directly with btcd.  That functionality is provided by the
-[btcwallet](https://github.com/btcsuite/btcwallet) and
-[Paymetheus](https://github.com/btcsuite/Paymetheus) (Windows-only) projects
-which are both under active development.
+## 🚀 Quick Start
 
-## Requirements
+### Prerequisites
 
-[Go](http://golang.org) 1.22 or newer.
+- [Go](http://golang.org) 1.22 or newer
+- Git
 
-## Installation
+### Build OBTCD
 
-https://github.com/btcsuite/btcd/releases
+```bash
+git clone https://github.com/organicbitcoin/obtcd.git
+cd obtcd
+go build
+```
 
-#### Linux/BSD/MacOSX/POSIX - Build from Source
+### Start Development Network (2-node simnet)
 
-- Install Go according to the installation instructions here:
-  http://golang.org/doc/install
+```bash
+# Start DevNet (simnet with 2 nodes)
+./scripts/devnet-up.sh start
 
-- Ensure Go was installed properly and is a supported version:
+# Run demo transaction
+./scripts/devnet-up.sh demo
+
+# Check network status
+./scripts/devnet-up.sh status
+
+# Stop network
+./scripts/devnet-up.sh stop
+```
+
+### Example Transaction
+
+```bash
+# Build btcctl
+cd cmd/btcctl && go build
+
+# Get network info
+./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getinfo
+
+# Generate blocks (node 1)
+./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 generate 101
+
+# Get new address (node 2)  
+./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18557 getnewaddress
+
+# Send transaction
+./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 sendtoaddress <address> 1.0
+```
 
 ```bash
 $ go version
@@ -61,48 +78,89 @@ recommended that `GOPATH` is set to a directory in your home directory such as
 
 - Run the following commands to obtain btcd, all dependencies, and install it:
 
-```bash
-$ cd $GOPATH/src/github.com/btcsuite/btcd
-$ go install -v . ./cmd/...
-```
+## 📊 OBTC Network Parameters (Week 1 Skeleton)
 
-- btcd (and utilities) will now be installed in ```$GOPATH/bin```.  If you did
-  not already add the bin directory to your system path during Go installation,
-  we recommend you do so now.
+> 🚧 **Note**: These parameters are placeholders for Week 1 skeleton implementation. **Final values will be frozen in Week 3** during the "freeze constants" phase.
 
-## Updating
+| Parameter | MainNet | TestNet | RegTest |
+|-----------|---------|---------|---------|
+| **Network Magic** | `0x4F425443` | `0x4F544553` | `0x4F524547` |
+| **Default Port** | `8555` | `18555` | `18666` |
+| **Fork Height** | `950000` (Q2 2026) | `2800000` | `100` |
+| **Bech32 HRP** | `obtc` | `obtct` | `obtcrt` |
+| **Address Prefixes** | *TBD Week 3* | *TBD Week 3* | *TBD Week 3* |
+| **HD Key Prefixes** | *TBD Week 3* | *TBD Week 3* | *TBD Week 3* |
+| **BIP44 Coin Type** | *TBD Week 3* | `1` (testnet) | `1` (regtest) |
 
-#### Linux/BSD/MacOSX/POSIX - Build from Source
+### Network Isolation Features
 
-- Run the following commands to update btcd, all dependencies, and install it:
+- ✅ **Unique Magic Numbers**: Prevents cross-network communication
+- ✅ **Separate Ports**: Avoids conflicts with Bitcoin nodes  
+- ✅ **Custom Address Encoding**: Will use unique prefixes (Week 3)
+- ✅ **Fork Height Detection**: `IsPostOBTCFork()` function available
+- ✅ **Network Detection**: `IsOBTC()` function for conditional logic
 
-```bash
-$ cd $GOPATH/src/github.com/btcsuite/btcd
-$ git pull
-$ go install -v . ./cmd/...
-```
+## 🧪 Development & Testing
 
-## Getting Started
-
-btcd has several configuration options available to tweak how it runs, but all
-of the basic operations described in the intro section work with zero
-configuration.
-
-#### Linux/BSD/POSIX/Source
+### Running Tests
 
 ```bash
-$ ./btcd
+# Run all tests
+go test ./...
+
+# Run OBTC-specific tests  
+go test ./chaincfg ./wire -v -run "OBTC"
+
+# Run with race detection
+go test -race ./...
 ```
 
-## IRC
+### Development Workflow
 
-- irc.libera.chat
-- channel #btcd
-- [webchat](https://web.libera.chat/gamja/?channels=btcd)
+```bash
+# Sync with upstream btcd (safely)
+./scripts/rebase-upstream.sh --dry-run  # Preview changes
+./scripts/rebase-upstream.sh            # Actual rebase
 
-## Issue Tracker
+# Development network management
+./scripts/devnet-up.sh start           # Start 2-node simnet
+./scripts/devnet-up.sh demo            # Run demo transaction  
+./scripts/devnet-up.sh logs            # View node logs
+./scripts/devnet-up.sh clean           # Clean all data
+```
 
-The [integrated github issue tracker](https://github.com/btcsuite/btcd/issues)
+## 🗓️ Development Roadmap
+
+- **Week 1** ✅: Network parameters and infrastructure (COMPLETED)
+- **Week 2**: Expiry index implementation
+- **Week 3**: REAP selector and transaction construction
+- **Week 4**: Validation rules and mining integration
+- **Week 5**: Wallet extension and RPC
+- **Week 6**: TestNet deployment and monitoring
+- **Week 7**: Hardening and stress testing
+- **Week 8**: MainNet candidate release
+
+## 📚 Documentation
+
+- [Development Roadmap](obtc_doc/obtc_roadmap_plan.md) - Complete 8-week development plan
+- [Week 1 Implementation](obtc_doc/week1_implementation.md) - Current week details
+- [Original btcd Documentation](docs/) - Inherited btcd documentation
+
+## ⚠️ Important Notes
+
+- **Development Status**: Week 1 skeleton implementation
+- **Network**: Currently simnet/regtest only (production networks TBD)
+- **Consensus Rules**: REAP protocol implementation starts Week 2
+- **Compatibility**: Shares Bitcoin history up to fork height
+- **Production Use**: Not ready for production until Week 8
+
+## 🤝 Contributing
+
+This project follows an 8-week development timeline with specific milestones. Please refer to the [development roadmap](obtc_doc/obtc_roadmap_plan.md) for current priorities.
+
+## 📜 License
+
+OBTCD is licensed under the [copyfree](http://copyfree.org) ISC License.
 is used for this project.
 
 ## Documentation
