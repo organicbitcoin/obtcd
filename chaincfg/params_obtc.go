@@ -15,11 +15,37 @@ import (
 // This is the same as Bitcoin's testnet limit to allow easier testing.
 var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 
+// OBTC Hard Fork Heights
+//
+// These constants define the block heights at which OBTC diverges from Bitcoin.
+// Before these heights: Follow Bitcoin consensus rules exactly
+// After these heights: Apply OBTC-specific consensus modifications
+//
+// TODO Week 3: Finalize exact fork heights based on Bitcoin mainnet conditions
+const (
+	// ObtcMainNetForkHeight defines when OBTC mainnet forks from Bitcoin mainnet
+	// Estimated target: Around block 870000 (Q4 2024)
+	// This will be set to a specific Bitcoin block hash in Week 3
+	ObtcMainNetForkHeight int32 = 870000
+
+	// ObtcTestNetForkHeight defines when OBTC testnet forks from Bitcoin testnet
+	// For testing purposes, use a recent testnet block
+	ObtcTestNetForkHeight int32 = 2800000
+
+	// ObtcRegTestForkHeight defines when OBTC regtest forks (for development)
+	// Set to a low value for immediate testing
+	ObtcRegTestForkHeight int32 = 100
+)
+
 // ObtcMainNetParams defines the network parameters for the OBTC main network.
 //
 // IMPORTANT: OBTC is a hard fork of Bitcoin, not a new chain from genesis.
 // This means OBTC shares Bitcoin's history up to the fork height, then
 // diverges with OBTC-specific consensus rules and network isolation.
+//
+// Fork Height: Block 870000 (estimated Q4 2024)
+// Before fork: Identical to Bitcoin mainnet 
+// After fork: OBTC-specific consensus rules apply
 //
 // Note: This is currently a skeleton implementation for Week 1 of the OBTC
 // development plan. The fork height and final parameters will be determined
@@ -122,6 +148,9 @@ var ObtcMainNetParams = Params{
 
 // ObtcTestNetParams defines the network parameters for OBTC test network.
 // Like mainnet, this is a hard fork of Bitcoin testnet, sharing history up to the fork point.
+//
+// Fork Height: Block 2800000 (Bitcoin testnet)
+// This allows testing OBTC functionality while maintaining testnet compatibility.
 var ObtcTestNetParams = Params{
 	Name:        "obtctestnet",
 	Net:         wire.ObtcTestNet,
@@ -162,6 +191,9 @@ var ObtcTestNetParams = Params{
 
 // ObtcRegTestParams defines the network parameters for OBTC regression testing.
 // RegTest is used for development and testing, inheriting Bitcoin regtest characteristics.
+//
+// Fork Height: Block 100 (for immediate development testing)
+// This allows developers to quickly test OBTC-specific features.
 var ObtcRegTestParams = Params{
 	Name:        "obtcregtest",
 	Net:         wire.ObtcRegNet, // Use separate magic for regtest isolation
@@ -213,6 +245,33 @@ func IsOBTC(params *Params) bool {
 	return params.Net == wire.ObtcMainNet ||
 		params.Net == wire.ObtcTestNet ||
 		params.Net == wire.ObtcRegNet
+}
+
+// GetOBTCForkHeight returns the fork height for the given OBTC network.
+// Returns -1 if the network is not an OBTC network.
+func GetOBTCForkHeight(params *Params) int32 {
+	switch params.Net {
+	case wire.ObtcMainNet:
+		return ObtcMainNetForkHeight
+	case wire.ObtcTestNet:
+		return ObtcTestNetForkHeight
+	case wire.ObtcRegNet:
+		return ObtcRegTestForkHeight
+	default:
+		return -1 // Not an OBTC network
+	}
+}
+
+// IsPostOBTCFork returns true if the given block height is at or after
+// the OBTC fork point for the specified network.
+// This determines whether OBTC-specific consensus rules should be applied.
+func IsPostOBTCFork(params *Params, height int32) bool {
+	if !IsOBTC(params) {
+		return false // Bitcoin networks never have OBTC rules
+	}
+	
+	forkHeight := GetOBTCForkHeight(params)
+	return height >= forkHeight
 }
 
 // init registers the OBTC network parameters so they can be used with the

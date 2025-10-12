@@ -209,3 +209,118 @@ func BenchmarkIsOBTC(b *testing.B) {
 		IsOBTC(params)
 	}
 }
+
+// TestOBTCForkHeights verifies that OBTC fork heights are properly defined.
+func TestOBTCForkHeights(t *testing.T) {
+	tests := []struct {
+		name           string
+		params         *Params
+		expectedHeight int32
+	}{
+		{
+			name:           "OBTC MainNet fork height",
+			params:         &ObtcMainNetParams,
+			expectedHeight: ObtcMainNetForkHeight,
+		},
+		{
+			name:           "OBTC TestNet fork height",
+			params:         &ObtcTestNetParams,
+			expectedHeight: ObtcTestNetForkHeight,
+		},
+		{
+			name:           "OBTC RegTest fork height",
+			params:         &ObtcRegTestParams,
+			expectedHeight: ObtcRegTestForkHeight,
+		},
+		{
+			name:           "Bitcoin MainNet (no fork)",
+			params:         &MainNetParams,
+			expectedHeight: -1, // Not an OBTC network
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			height := GetOBTCForkHeight(test.params)
+			if height != test.expectedHeight {
+				t.Errorf("%s: expected fork height %d, got %d",
+					test.name, test.expectedHeight, height)
+			}
+		})
+	}
+}
+
+// TestIsPostOBTCFork verifies the post-fork detection logic.
+func TestIsPostOBTCFork(t *testing.T) {
+	tests := []struct {
+		name       string
+		params     *Params
+		height     int32
+		expectPost bool
+	}{
+		{
+			name:       "OBTC MainNet before fork",
+			params:     &ObtcMainNetParams,
+			height:     ObtcMainNetForkHeight - 1,
+			expectPost: false,
+		},
+		{
+			name:       "OBTC MainNet at fork",
+			params:     &ObtcMainNetParams,
+			height:     ObtcMainNetForkHeight,
+			expectPost: true,
+		},
+		{
+			name:       "OBTC MainNet after fork",
+			params:     &ObtcMainNetParams,
+			height:     ObtcMainNetForkHeight + 1000,
+			expectPost: true,
+		},
+		{
+			name:       "OBTC TestNet before fork",
+			params:     &ObtcTestNetParams,
+			height:     ObtcTestNetForkHeight - 1,
+			expectPost: false,
+		},
+		{
+			name:       "OBTC TestNet after fork",
+			params:     &ObtcTestNetParams,
+			height:     ObtcTestNetForkHeight + 100,
+			expectPost: true,
+		},
+		{
+			name:       "Bitcoin MainNet (never post-fork)",
+			params:     &MainNetParams,
+			height:     1000000, // Any height
+			expectPost: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			isPost := IsPostOBTCFork(test.params, test.height)
+			if isPost != test.expectPost {
+				t.Errorf("%s: expected post-fork %v, got %v",
+					test.name, test.expectPost, isPost)
+			}
+		})
+	}
+}
+
+// TestOBTCForkHeightValues verifies fork heights are reasonable.
+func TestOBTCForkHeightValues(t *testing.T) {
+	// MainNet fork height should be in a reasonable range
+	if ObtcMainNetForkHeight < 800000 || ObtcMainNetForkHeight > 1000000 {
+		t.Errorf("MainNet fork height %d seems unreasonable", ObtcMainNetForkHeight)
+	}
+
+	// TestNet fork height should be positive
+	if ObtcTestNetForkHeight <= 0 {
+		t.Errorf("TestNet fork height %d should be positive", ObtcTestNetForkHeight)
+	}
+
+	// RegTest fork height should be low for development
+	if ObtcRegTestForkHeight <= 0 || ObtcRegTestForkHeight > 1000 {
+		t.Errorf("RegTest fork height %d should be low for development", ObtcRegTestForkHeight)
+	}
+}
