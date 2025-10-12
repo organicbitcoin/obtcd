@@ -24,9 +24,9 @@ var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 // TODO Week 3: Finalize exact fork heights based on Bitcoin mainnet conditions
 const (
 	// ObtcMainNetForkHeight defines when OBTC mainnet forks from Bitcoin mainnet
-	// Estimated target: Around block 870000 (Q4 2024)
+	// Target: Q2 2026 (estimated around block 950000)
 	// This will be set to a specific Bitcoin block hash in Week 3
-	ObtcMainNetForkHeight int32 = 870000
+	ObtcMainNetForkHeight int32 = 950000
 
 	// ObtcTestNetForkHeight defines when OBTC testnet forks from Bitcoin testnet
 	// For testing purposes, use a recent testnet block
@@ -43,7 +43,7 @@ const (
 // This means OBTC shares Bitcoin's history up to the fork height, then
 // diverges with OBTC-specific consensus rules and network isolation.
 //
-// Fork Height: Block 870000 (estimated Q4 2024)
+// Fork Height: Block 950000 (target: Q2 2026)
 // Before fork: Identical to Bitcoin mainnet 
 // After fork: OBTC-specific consensus rules apply
 //
