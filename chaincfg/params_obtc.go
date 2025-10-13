@@ -44,7 +44,7 @@ const (
 // diverges with OBTC-specific consensus rules and network isolation.
 //
 // Fork Height: Block 950000 (target: Q2 2026)
-// Before fork: Identical to Bitcoin mainnet 
+// Before fork: Identical to Bitcoin mainnet
 // After fork: OBTC-specific consensus rules apply
 //
 // Note: This is currently a skeleton implementation for Week 1 of the OBTC
@@ -68,19 +68,19 @@ var ObtcMainNetParams = Params{
 	GenesisHash:  &genesisHash,  // Bitcoin's genesis hash (shared history)
 
 	// Proof of work parameters
-	PowLimit:                 obtcPowLimit,
-	PowLimitBits:             0x1d00ffff,
-	PoWNoRetargeting:         false,
-	EnforceBIP94:             true, // Enable timewarp protection
+	PowLimit:         obtcPowLimit,
+	PowLimitBits:     0x1d00ffff,
+	PoWNoRetargeting: false,
+	EnforceBIP94:     true, // Enable timewarp protection
 
 	// OBTC Fork Point and Consensus Rules:
 	// TODO Week 3: Set exact fork height (estimated: block 870000+)
 	// All BIP activation heights are set relative to the fork point.
 	// Before fork: Follow Bitcoin consensus rules exactly
 	// After fork: Apply OBTC-specific consensus modifications
-	BIP0034Height:            1,    // Already active in Bitcoin at fork point
-	BIP0065Height:            1,    // Already active in Bitcoin at fork point  
-	BIP0066Height:            1,    // Already active in Bitcoin at fork point
+	BIP0034Height:            1, // Already active in Bitcoin at fork point
+	BIP0065Height:            1, // Already active in Bitcoin at fork point
+	BIP0066Height:            1, // Already active in Bitcoin at fork point
 	CoinbaseMaturity:         100,
 	SubsidyReductionInterval: 210000,              // Keep Bitcoin's halving schedule
 	TargetTimespan:           time.Hour * 24 * 14, // 14 days (same as Bitcoin)
@@ -160,7 +160,7 @@ var ObtcTestNetParams = Params{
 	GenesisBlock: &testNet3GenesisBlock,
 	GenesisHash:  &testNet3GenesisHash,
 
-	// Similar proof of work parameters to Bitcoin testnet  
+	// Similar proof of work parameters to Bitcoin testnet
 	PowLimit:         testNet3PowLimit,
 	PowLimitBits:     0x1d00ffff,
 	PoWNoRetargeting: false,
@@ -197,7 +197,7 @@ var ObtcTestNetParams = Params{
 var ObtcRegTestParams = Params{
 	Name:        "obtcregtest",
 	Net:         wire.ObtcRegNet, // Use separate magic for regtest isolation
-	DefaultPort: "18666", // Different from Bitcoin regtest's 18444 for development isolation
+	DefaultPort: "18666",         // Different from Bitcoin regtest's 18444 for development isolation
 
 	// Use Bitcoin regtest genesis for shared development environment
 	GenesisBlock: &regTestGenesisBlock,
@@ -224,17 +224,17 @@ var ObtcRegTestParams = Params{
 	// Consensus deployments always active
 	RuleChangeActivationThreshold: 108, // 75% of MinerConfirmationWindow
 	MinerConfirmationWindow:       144, // Faster than normal
-	
+
 	// Address encoding for regtest
-	Bech32HRPSegwit:         "obtcrt", // "obtc regtest"
-	PubKeyHashAddrID:        0x6F,     // Same as Bitcoin regtest
-	ScriptHashAddrID:        0xC4,     // Same as Bitcoin regtest  
-	PrivateKeyID:            0xEF,     // Same as Bitcoin regtest
-	WitnessPubKeyHashAddrID: 0x03,     // Same as Bitcoin regtest
-	WitnessScriptHashAddrID: 0x28,     // Same as Bitcoin regtest
+	Bech32HRPSegwit:         "obtcrt",                        // "obtc regtest"
+	PubKeyHashAddrID:        0x6F,                            // Same as Bitcoin regtest
+	ScriptHashAddrID:        0xC4,                            // Same as Bitcoin regtest
+	PrivateKeyID:            0xEF,                            // Same as Bitcoin regtest
+	WitnessPubKeyHashAddrID: 0x03,                            // Same as Bitcoin regtest
+	WitnessScriptHashAddrID: 0x28,                            // Same as Bitcoin regtest
 	HDPrivateKeyID:          [4]byte{0x04, 0x35, 0x83, 0x94}, // Same as Bitcoin regtest
 	HDPublicKeyID:           [4]byte{0x04, 0x35, 0x87, 0xCF}, // Same as Bitcoin regtest
-	HDCoinType:              1,        // Regtest coin type
+	HDCoinType:              1,                               // Regtest coin type
 
 	// TODO: Complete remaining fields in Week 3
 }
@@ -269,7 +269,7 @@ func IsPostOBTCFork(params *Params, height int32) bool {
 	if !IsOBTC(params) {
 		return false // Bitcoin networks never have OBTC rules
 	}
-	
+
 	forkHeight := GetOBTCForkHeight(params)
 	return height >= forkHeight
 }
