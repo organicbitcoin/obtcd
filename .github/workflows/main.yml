@@ -121,33 +121,53 @@ jobs:
       - name: Validate OBTC Parameters
         run: |
           echo "Validating OBTC network parameters..."
-          go run -c "
+          cat > validate_obtc.go << 'EOF'
           package main
           import (
-            \"fmt\"
-            \"github.com/btcsuite/btcd/chaincfg\"
-            \"github.com/btcsuite/btcd/wire\"
+            "fmt"
+            "github.com/btcsuite/btcd/chaincfg"
           )
           func main() {
             // Verify OBTC networks are registered
             if !chaincfg.IsOBTC(&chaincfg.ObtcMainNetParams) {
-              panic(\"OBTC MainNet not properly registered\")
+              panic("OBTC MainNet not properly registered")
             }
             if !chaincfg.IsOBTC(&chaincfg.ObtcTestNetParams) {
-              panic(\"OBTC TestNet not properly registered\")
+              panic("OBTC TestNet not properly registered")
             }
             if !chaincfg.IsOBTC(&chaincfg.ObtcRegTestParams) {
-              panic(\"OBTC RegTest not properly registered\")
+              panic("OBTC RegTest not properly registered")
             }
-            fmt.Println(\"All OBTC parameters validated successfully\")
-          }"
+            
+            // Verify fork heights
+            mainnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcMainNetParams)
+            testnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcTestNetParams)
+            regtestFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcRegTestParams)
+            
+            if mainnetFork <= 0 || testnetFork <= 0 || regtestFork <= 0 {
+              panic("Invalid fork heights detected")
+            }
+            
+            fmt.Println("✅ All OBTC parameters validated successfully")
+            fmt.Printf("Fork heights - MainNet: %d, TestNet: %d, RegTest: %d\n", 
+              mainnetFork, testnetFork, regtestFork)
+          }
+          EOF
+          go run validate_obtc.go
 
       - name: Check DevNet Scripts
         run: |
           echo "Validating DevNet scripts..."
+          ls -la scripts/
           chmod +x scripts/devnet-up.sh scripts/rebase-upstream.sh
+          
+          echo "Testing devnet-up.sh help..."
           ./scripts/devnet-up.sh help
+          
+          echo "Testing rebase-upstream.sh help..."
           ./scripts/rebase-upstream.sh --help
+          
+          echo "✅ All scripts validated successfully"
 
   vet:
     name: Code Quality

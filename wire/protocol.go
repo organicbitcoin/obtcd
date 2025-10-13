@@ -208,15 +208,15 @@ const (
 // bnStrings is a map of bitcoin networks back to their constant names for
 // pretty printing.
 var bnStrings = map[BitcoinNet]string{
-	MainNet:      "MainNet",
-	TestNet:      "TestNet",
-	TestNet3:     "TestNet3",
-	TestNet4:     "TestNet4",
-	SigNet:       "SigNet",
-	SimNet:       "SimNet",
-	ObtcMainNet:  "ObtcMainNet",
-	ObtcTestNet:  "ObtcTestNet",
-	ObtcRegNet:   "ObtcRegNet",
+	MainNet:     "MainNet",
+	TestNet:     "TestNet",
+	TestNet3:    "TestNet3",
+	TestNet4:    "TestNet4",
+	SigNet:      "SigNet",
+	SimNet:      "SimNet",
+	ObtcMainNet: "ObtcMainNet",
+	ObtcTestNet: "ObtcTestNet",
+	ObtcRegNet:  "ObtcRegNet",
 }
 
 // String returns the BitcoinNet in human-readable form.
