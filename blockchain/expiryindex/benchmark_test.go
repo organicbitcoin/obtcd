@@ -28,15 +28,15 @@ func BenchmarkOutPointEncoding(b *testing.B) {
 		Hash:  *hash,
 		Index: 12345,
 	}
-	
+
 	b.ResetTimer()
-	
+
 	b.Run("Encode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = encodeOutPoint(outpoint)
 		}
 	})
-	
+
 	encoded := encodeOutPoint(outpoint)
 	b.Run("Decode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -48,15 +48,15 @@ func BenchmarkOutPointEncoding(b *testing.B) {
 // BenchmarkExpiryKeyEncoding benchmarks ExpiryKey encoding/decoding
 func BenchmarkExpiryKeyEncoding(b *testing.B) {
 	expiryKey := uint64(1000000)
-	
+
 	b.ResetTimer()
-	
+
 	b.Run("Encode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = encodeExpiryKey(expiryKey)
 		}
 	})
-	
+
 	encoded := encodeExpiryKey(expiryKey)
 	b.Run("Decode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -77,15 +77,15 @@ func BenchmarkOutPointListEncoding(b *testing.B) {
 			Index: uint32(i),
 		})
 	}
-	
+
 	b.ResetTimer()
-	
+
 	b.Run("Encode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = encodeOutPointList(outpoints)
 		}
 	})
-	
+
 	encoded := encodeOutPointList(outpoints)
 	b.Run("Decode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -132,7 +132,7 @@ func BenchmarkConnectBlock(b *testing.B) {
 		txCount := len(block.Transactions())
 		b.Run("TxCount", func(b *testing.B) {
 			b.ReportMetric(float64(txCount), "txs/block")
-			
+
 			for i := 0; i < b.N; i++ {
 				err = db.Update(func(dbTx database.Tx) error {
 					spentTxOuts := []blockchain.SpentTxOut{}
@@ -186,11 +186,11 @@ func BenchmarkScanExpiringUTXOs(b *testing.B) {
 
 	// Benchmark different scan sizes
 	scanSizes := []int{10, 100, 1000, 10000}
-	
+
 	for _, maxResults := range scanSizes {
 		b.Run("MaxResults", func(b *testing.B) {
 			b.ReportMetric(float64(maxResults), "max_results")
-			
+
 			for i := 0; i < b.N; i++ {
 				_, err := idx.ScanExpiringUTXOs(0, 1000000, maxResults)
 				if err != nil {
@@ -256,7 +256,7 @@ func createBenchBlock(b *testing.B, height int32, txCount int) *btcutil.Block {
 	rand.Read(prevHash[:])
 	merkleRoot := chainhash.Hash{}
 	rand.Read(merkleRoot[:])
-	
+
 	header := &wire.BlockHeader{
 		Version:    1,
 		PrevBlock:  prevHash,
@@ -281,7 +281,7 @@ func createBenchBlock(b *testing.B, height int32, txCount int) *btcutil.Block {
 		},
 		TxOut: []*wire.TxOut{
 			{
-				Value:    5000000000, // 50 BTC
+				Value:    5000000000,   // 50 BTC
 				PkScript: []byte{0x51}, // OP_1
 			},
 		},
@@ -294,7 +294,7 @@ func createBenchBlock(b *testing.B, height int32, txCount int) *btcutil.Block {
 		// Create random input
 		inputHash := chainhash.Hash{}
 		rand.Read(inputHash[:])
-		
+
 		tx := &wire.MsgTx{
 			Version: 1,
 			TxIn: []*wire.TxIn{
@@ -309,11 +309,11 @@ func createBenchBlock(b *testing.B, height int32, txCount int) *btcutil.Block {
 			},
 			TxOut: []*wire.TxOut{
 				{
-					Value:    1000000, // 0.01 BTC
+					Value:    1000000,                  // 0.01 BTC
 					PkScript: []byte{0x76, 0xa9, 0x14}, // Mock P2PKH
 				},
 				{
-					Value:    999000, // Change output
+					Value:    999000,                   // Change output
 					PkScript: []byte{0x76, 0xa9, 0x14}, // Mock P2PKH
 				},
 			},
@@ -330,7 +330,7 @@ func createBenchBlock(b *testing.B, height int32, txCount int) *btcutil.Block {
 
 	block := btcutil.NewBlock(msgBlock)
 	block.SetHeight(height)
-	
+
 	return block
 }
 
@@ -341,9 +341,9 @@ func createBenchDB() (database.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	dbPath := filepath.Join(tmpDir, "bench.db")
-	
+
 	// Create database
 	db, err := database.Create("ffldb", dbPath, wire.TestNet3)
 	if err != nil {

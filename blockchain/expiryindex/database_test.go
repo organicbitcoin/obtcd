@@ -449,7 +449,7 @@ func TestDBConcurrentAccess(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		
+
 		err = dbPutTipHeightIndexed(dbTx, 100)
 		if err != nil {
 			return err
@@ -526,9 +526,9 @@ func createDBTestDB() (database.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	dbPath := filepath.Join(tmpDir, "db_test.db")
-	
+
 	// Create database
 	db, err := database.Create("ffldb", dbPath, wire.TestNet3)
 	if err != nil {

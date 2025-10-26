@@ -66,7 +66,7 @@ func TestConnectTxOut(t *testing.T) {
 		},
 		{
 			name:         "height before fork (should skip)",
-			createHeight: 50, // Before ObtcRegTestForkHeight
+			createHeight: 50,    // Before ObtcRegTestForkHeight
 			expectError:  false, // No error, but should be skipped
 		},
 	}
@@ -191,7 +191,7 @@ func TestDisconnectTxOut(t *testing.T) {
 	// Create test outpoints
 	hash1, _ := chainhash.NewHashFromStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	hash2, _ := chainhash.NewHashFromStr("1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	
+
 	outpoint1 := &wire.OutPoint{Hash: *hash1, Index: 0}
 	outpoint2 := &wire.OutPoint{Hash: *hash2, Index: 1}
 
@@ -331,7 +331,7 @@ func TestConnectDisconnectTxOutRoundTrip(t *testing.T) {
 	}
 
 	if addedStats.TotalUTXOs <= initialStats.TotalUTXOs {
-		t.Errorf("UTXO count should have increased: initial=%d, after_add=%d", 
+		t.Errorf("UTXO count should have increased: initial=%d, after_add=%d",
 			initialStats.TotalUTXOs, addedStats.TotalUTXOs)
 	}
 
@@ -350,7 +350,7 @@ func TestConnectDisconnectTxOutRoundTrip(t *testing.T) {
 	}
 
 	if finalStats.TotalUTXOs != initialStats.TotalUTXOs {
-		t.Errorf("UTXO count should be back to initial: initial=%d, final=%d", 
+		t.Errorf("UTXO count should be back to initial: initial=%d, final=%d",
 			initialStats.TotalUTXOs, finalStats.TotalUTXOs)
 	}
 }
@@ -362,9 +362,9 @@ func createUTXOTestDB() (database.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	dbPath := filepath.Join(tmpDir, "utxo_test.db")
-	
+
 	// Create database
 	db, err := database.Create("ffldb", dbPath, wire.TestNet3)
 	if err != nil {

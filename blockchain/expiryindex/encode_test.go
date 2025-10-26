@@ -41,7 +41,7 @@ func TestEncodeDecodeOutPoint(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Test encoding
 			encoded := encodeOutPoint(&test.outpoint)
-			
+
 			// Verify encoded length (32 bytes hash + 4 bytes index)
 			expectedLen := 36
 			if len(encoded) != expectedLen {
@@ -93,7 +93,7 @@ func TestEncodeDecodeExpiryKey(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Test encoding
 			encoded := encodeExpiryKey(test.expiryKey)
-			
+
 			// Verify encoded length (8 bytes for uint64)
 			expectedLen := 8
 			if len(encoded) != expectedLen {
@@ -187,7 +187,7 @@ func TestEncodeDecodeOutPointList(t *testing.T) {
 			for i := range test.outpoints {
 				ptrs = append(ptrs, &test.outpoints[i])
 			}
-			
+
 			// Test encoding
 			encoded := encodeOutPointList(ptrs)
 
@@ -208,7 +208,7 @@ func TestEncodeDecodeOutPointList(t *testing.T) {
 					t.Errorf("Missing outpoint at index %d", i)
 					continue
 				}
-				
+
 				actual := decoded[i]
 				if !actual.Hash.IsEqual(&expected.Hash) {
 					t.Errorf("Hash mismatch at index %d: got %v, want %v", i, actual.Hash, expected.Hash)

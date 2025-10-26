@@ -34,25 +34,25 @@ func TestCreateBuckets(t *testing.T) {
 	// Verify buckets exist
 	err = db.View(func(dbTx database.Tx) error {
 		meta := dbTx.Metadata()
-		
+
 		// Check outpoint-to-expiry bucket
 		outpointBucket := meta.Bucket(bktOutpoint2Expiry)
 		if outpointBucket == nil {
 			t.Error("outpoint-to-expiry bucket not created")
 		}
-		
+
 		// Check expiry-to-outpoints bucket
 		expiryBucket := meta.Bucket(bktExpiry2Outpoints)
 		if expiryBucket == nil {
 			t.Error("expiry-to-outpoints bucket not created")
 		}
-		
+
 		// Check metadata bucket
 		metaBucket := meta.Bucket(bktExpiryMeta)
 		if metaBucket == nil {
 			t.Error("metadata bucket not created")
 		}
-		
+
 		return nil
 	})
 	if err != nil {
@@ -88,25 +88,25 @@ func TestDropBuckets(t *testing.T) {
 	// Verify buckets are gone
 	err = db.View(func(dbTx database.Tx) error {
 		meta := dbTx.Metadata()
-		
+
 		// Check outpoint-to-expiry bucket
 		outpointBucket := meta.Bucket(bktOutpoint2Expiry)
 		if outpointBucket != nil {
 			t.Error("outpoint-to-expiry bucket still exists after drop")
 		}
-		
+
 		// Check expiry-to-outpoints bucket
 		expiryBucket := meta.Bucket(bktExpiry2Outpoints)
 		if expiryBucket != nil {
 			t.Error("expiry-to-outpoints bucket still exists after drop")
 		}
-		
+
 		// Check metadata bucket
 		metaBucket := meta.Bucket(bktExpiryMeta)
 		if metaBucket != nil {
 			t.Error("metadata bucket still exists after drop")
 		}
-		
+
 		return nil
 	})
 	if err != nil {
@@ -133,7 +133,7 @@ func TestMetadataOperations(t *testing.T) {
 
 	// Test tip height operations
 	testHeights := []int32{0, 100, 12345, 999999}
-	
+
 	for _, height := range testHeights {
 		t.Run("height", func(t *testing.T) {
 			// Write tip height
@@ -143,7 +143,7 @@ func TestMetadataOperations(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to write tip height %d: %v", height, err)
 			}
-			
+
 			// Read tip height
 			var readHeight int32
 			err = db.View(func(dbTx database.Tx) error {
@@ -154,7 +154,7 @@ func TestMetadataOperations(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read tip height: %v", err)
 			}
-			
+
 			// Verify
 			if readHeight != height {
 				t.Errorf("Height mismatch: got %d, want %d", readHeight, height)
@@ -232,9 +232,9 @@ func createTestDB() (database.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	dbPath := filepath.Join(tmpDir, "test.db")
-	
+
 	// Create database
 	db, err := database.Create("ffldb", dbPath, wire.TestNet3)
 	if err != nil {

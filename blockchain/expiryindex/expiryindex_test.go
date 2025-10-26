@@ -330,7 +330,7 @@ func TestConnectDisconnectBlock(t *testing.T) {
 
 	// Tip height should be decremented
 	if disconnectedStats.TipHeight != connectedStats.TipHeight-1 {
-		t.Errorf("Tip height not decremented: got %d, want %d", 
+		t.Errorf("Tip height not decremented: got %d, want %d",
 			disconnectedStats.TipHeight, connectedStats.TipHeight-1)
 	}
 
@@ -346,7 +346,7 @@ func createTestBlock(t *testing.T, height int32) *btcutil.Block {
 	// Create a block header
 	prevHash, _ := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
 	merkleRoot, _ := chainhash.NewHashFromStr("1111111111111111111111111111111111111111111111111111111111111111")
-	
+
 	header := &wire.BlockHeader{
 		Version:    1,
 		PrevBlock:  *prevHash,
@@ -368,7 +368,7 @@ func createTestBlock(t *testing.T, height int32) *btcutil.Block {
 		},
 		TxOut: []*wire.TxOut{
 			{
-				Value:    5000000000, // 50 BTC
+				Value:    5000000000,   // 50 BTC
 				PkScript: []byte{0x51}, // OP_1
 			},
 		},
@@ -383,7 +383,7 @@ func createTestBlock(t *testing.T, height int32) *btcutil.Block {
 
 	block := btcutil.NewBlock(msgBlock)
 	block.SetHeight(height)
-	
+
 	return block
 }
 
@@ -394,9 +394,9 @@ func createCoreTestDB() (database.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	dbPath := filepath.Join(tmpDir, "test.db")
-	
+
 	// Create database
 	db, err := database.Create("ffldb", dbPath, wire.TestNet3)
 	if err != nil {

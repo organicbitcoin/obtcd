@@ -16,7 +16,7 @@ func TestAppendOutPointToList(t *testing.T) {
 	// Create test outpoints
 	hash1, _ := chainhash.NewHashFromStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	hash2, _ := chainhash.NewHashFromStr("1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	
+
 	outpoint1 := &wire.OutPoint{Hash: *hash1, Index: 0}
 	outpoint2 := &wire.OutPoint{Hash: *hash2, Index: 1}
 
@@ -66,7 +66,7 @@ func TestRemoveOutPointFromList(t *testing.T) {
 	// Create test outpoints
 	hash1, _ := chainhash.NewHashFromStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	hash2, _ := chainhash.NewHashFromStr("1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	
+
 	outpoint1 := &wire.OutPoint{Hash: *hash1, Index: 0}
 	outpoint2 := &wire.OutPoint{Hash: *hash2, Index: 1}
 

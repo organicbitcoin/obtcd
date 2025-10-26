@@ -18,10 +18,10 @@ var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 // ExpiryParams defines parameters for UTXO expiry calculation
 // OBTC uses height-based expiry for deterministic and consensus-friendly behavior
 type ExpiryParams struct {
-	WindowBlocks        uint64     // Expiry window in blocks
-	ListBatchLimit      int        // Max items returned in one RPC scan
-	StartScanHeight     int32      // Height to start building index
-	EnableAtHeight      int32      // Height to enable expiry enforcement (Week 3+)
+	WindowBlocks    uint64 // Expiry window in blocks
+	ListBatchLimit  int    // Max items returned in one RPC scan
+	StartScanHeight int32  // Height to start building index
+	EnableAtHeight  int32  // Height to enable expiry enforcement (Week 3+)
 }
 
 // OBTC Hard Fork Heights
@@ -289,7 +289,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 	if !IsOBTC(params) {
 		return nil // Only OBTC networks have expiry
 	}
-	
+
 	switch params.Net {
 	case wire.ObtcMainNet:
 		return &ExpiryParams{
@@ -298,7 +298,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			StartScanHeight: ObtcMainNetForkHeight,
 			EnableAtHeight:  ObtcMainNetForkHeight + 100000, // Week 3+
 		}
-		
+
 	case wire.ObtcTestNet:
 		return &ExpiryParams{
 			WindowBlocks:    1008, // ~1 week for testing (144 * 7)
@@ -306,7 +306,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			StartScanHeight: ObtcTestNetForkHeight,
 			EnableAtHeight:  ObtcTestNetForkHeight + 100,
 		}
-		
+
 	case wire.ObtcRegNet:
 		return &ExpiryParams{
 			WindowBlocks:    144, // ~1 day for development
@@ -314,7 +314,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			StartScanHeight: ObtcRegTestForkHeight,
 			EnableAtHeight:  ObtcRegTestForkHeight + 10,
 		}
-		
+
 	default:
 		return nil
 	}

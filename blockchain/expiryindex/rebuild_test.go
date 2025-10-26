@@ -33,28 +33,28 @@ func TestSmartRebuild(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		indexTipHeight  int32
-		expectError     bool
-		shouldCallFast  bool // Whether we expect fast rebuild to be attempted
+		name           string
+		indexTipHeight int32
+		expectError    bool
+		shouldCallFast bool // Whether we expect fast rebuild to be attempted
 	}{
 		{
-			name:            "fresh index rebuild",
-			indexTipHeight:  -1, // Fresh index
-			expectError:     false, // Will fail due to missing blockchain methods but no logic error
-			shouldCallFast:  true,
+			name:           "fresh index rebuild",
+			indexTipHeight: -1,    // Fresh index
+			expectError:    false, // Will fail due to missing blockchain methods but no logic error
+			shouldCallFast: true,
 		},
 		{
-			name:            "up to date index",
-			indexTipHeight:  200, // Assuming current chain tip is around this
-			expectError:     false,
-			shouldCallFast:  false,
+			name:           "up to date index",
+			indexTipHeight: 200, // Assuming current chain tip is around this
+			expectError:    false,
+			shouldCallFast: false,
 		},
 		{
-			name:            "slightly behind index",
-			indexTipHeight:  190,
-			expectError:     false,
-			shouldCallFast:  false,
+			name:           "slightly behind index",
+			indexTipHeight: 190,
+			expectError:    false,
+			shouldCallFast: false,
 		},
 	}
 
@@ -115,9 +115,9 @@ func TestTryFastRebuildOrFallback(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
+		name           string
 		chainTipHeight int32
-		expectError   bool
+		expectError    bool
 	}{
 		{
 			name:           "reasonable chain tip",
@@ -375,7 +375,7 @@ func TestIndexConsistencyAfterRebuild(t *testing.T) {
 	// Verify buckets still exist and are accessible
 	err = db.View(func(dbTx database.Tx) error {
 		meta := dbTx.Metadata()
-		
+
 		buckets := [][]byte{bktOutpoint2Expiry, bktExpiry2Outpoints, bktExpiryMeta}
 		for _, bucketName := range buckets {
 			bucket := meta.Bucket(bucketName)
@@ -383,7 +383,7 @@ func TestIndexConsistencyAfterRebuild(t *testing.T) {
 				t.Errorf("Bucket %s missing after rebuild attempt", string(bucketName))
 			}
 		}
-		
+
 		return nil
 	})
 
@@ -399,9 +399,9 @@ func createRebuildTestDB() (database.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	dbPath := filepath.Join(tmpDir, "rebuild_test.db")
-	
+
 	// Create database
 	db, err := database.Create("ffldb", dbPath, wire.TestNet3)
 	if err != nil {

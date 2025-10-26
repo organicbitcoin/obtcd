@@ -23,11 +23,11 @@ var (
 	// bktExpiryMeta stores metadata about the index state
 	// Keys: keyTipHeightIndexed, keyIndexVersion
 	bktExpiryMeta = []byte("expiry-meta")
-	
+
 	// bktOutpoint2Expiry maps outpoint (36 bytes) -> expiry key (8 bytes)
 	// This enables fast lookup when UTXOs are spent or renewed
 	bktOutpoint2Expiry = []byte("outpoint-to-expiry")
-	
+
 	// bktExpiry2Outpoints maps expiry key (8 bytes) -> compressed outpoint list
 	// This enables efficient scanning of UTXOs by expiry order
 	bktExpiry2Outpoints = []byte("expiry-to-outpoints")
@@ -37,7 +37,7 @@ var (
 var (
 	// keyTipHeightIndexed tracks the highest block height that has been indexed
 	keyTipHeightIndexed = []byte("tip-height")
-	
+
 	// keyIndexVersion tracks the index format version for future upgrades
 	keyIndexVersion = []byte("version")
 )
@@ -47,11 +47,11 @@ const (
 	// CurrentIndexVersion tracks the current index format version
 	// Increment this when making breaking changes to the index format
 	CurrentIndexVersion = 1
-	
+
 	// MaxOutpointsPerKey limits the size of outpoint lists to prevent
 	// unbounded memory usage for keys with many UTXOs
 	MaxOutpointsPerKey = 10000
-	
+
 	// DefaultBatchSize is the default number of entries to process in a single
 	// database transaction to balance memory usage and transaction overhead
 	DefaultBatchSize = 1000
@@ -124,25 +124,25 @@ func dbGetIndexVersion(dbTx database.Tx) (uint16, error) {
 // createExpiryIndexBuckets creates all the buckets needed for the expiry index
 func createExpiryIndexBuckets(dbTx database.Tx) error {
 	meta := dbTx.Metadata()
-	
+
 	// Create meta bucket
 	_, err := meta.CreateBucketIfNotExists(bktExpiryMeta)
 	if err != nil {
 		return fmt.Errorf("failed to create expiry meta bucket: %v", err)
 	}
-	
+
 	// Create outpoint-to-expiry bucket
 	_, err = meta.CreateBucketIfNotExists(bktOutpoint2Expiry)
 	if err != nil {
 		return fmt.Errorf("failed to create outpoint-to-expiry bucket: %v", err)
 	}
-	
+
 	// Create expiry-to-outpoints bucket
 	_, err = meta.CreateBucketIfNotExists(bktExpiry2Outpoints)
 	if err != nil {
 		return fmt.Errorf("failed to create expiry-to-outpoints bucket: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -150,19 +150,19 @@ func createExpiryIndexBuckets(dbTx database.Tx) error {
 // This is used during index deletion or version upgrades
 func dropExpiryIndexBuckets(dbTx database.Tx) error {
 	meta := dbTx.Metadata()
-	
+
 	// Drop all buckets in reverse order of creation
 	if err := meta.DeleteBucket(bktExpiry2Outpoints); err != nil {
 		return fmt.Errorf("failed to drop expiry-to-outpoints bucket: %v", err)
 	}
-	
+
 	if err := meta.DeleteBucket(bktOutpoint2Expiry); err != nil {
 		return fmt.Errorf("failed to drop outpoint-to-expiry bucket: %v", err)
 	}
-	
+
 	if err := meta.DeleteBucket(bktExpiryMeta); err != nil {
 		return fmt.Errorf("failed to drop expiry meta bucket: %v", err)
 	}
-	
+
 	return nil
 }
