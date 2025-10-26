@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -21,8 +21,8 @@ const (
 	indexName = "expiry index"
 )
 
-// Ensure the ExpiryIndex type implements the blockchain.Indexer interface.
-var _ blockchain.Indexer = (*ExpiryIndex)(nil)
+// Ensure the ExpiryIndex type implements the indexers.Indexer interface.
+var _ indexers.Indexer = (*ExpiryIndex)(nil)
 
 // ExpiryIndex implements a UTXO expiry index that tracks when UTXOs will expire.
 // It maintains bidirectional mappings to support both fast deletion when UTXOs
@@ -49,14 +49,18 @@ type ExpiryIndex struct {
 
 // NewExpiryIndex returns a new instance of an expiry index.
 //
-// The index will be disabled if the network doesn't support OBTC expiry
+// Returns an error if the network doesn't support OBTC expiry
 // (i.e., it's a Bitcoin network rather than an OBTC network).
 func NewExpiryIndex(db database.DB, params *chaincfg.Params) (*ExpiryIndex, error) {
 	// Get expiry parameters for this network
 	expiryParams := GetExpiryParams(params)
 	
-	// Disable the index if this is not an OBTC network
-	disabled := expiryParams == nil
+	// Return error if this is not an OBTC network
+	if expiryParams == nil {
+		return nil, fmt.Errorf("expiry index not supported for network %s", params.Name)
+	}
+	
+	disabled := false
 	
 	index := &ExpiryIndex{
 		db:           db,
@@ -71,7 +75,7 @@ func NewExpiryIndex(db database.DB, params *chaincfg.Params) (*ExpiryIndex, erro
 
 // Key returns the database key to use for the index as a byte slice.
 func (idx *ExpiryIndex) Key() []byte {
-	return []byte("expiryidx")
+	return []byte("expiryindex")
 }
 
 // Name returns the human-readable name of the index.
@@ -182,7 +186,7 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 		}
 		
 		// Process new UTXOs (add to index)
-		for voutIdx, txOut := range msgTx.TxOut {
+		for voutIdx, _ := range msgTx.TxOut {
 			// Create outpoint for this output
 			outpoint := &wire.OutPoint{
 				Hash:  *tx.Hash(),
@@ -232,7 +236,6 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	}
 	
 	// Process all transactions in reverse order
-	blockHash := block.Hash()
 	transactions := block.Transactions()
 	
 	for txIdx := len(transactions) - 1; txIdx >= 0; txIdx-- {
@@ -410,9 +413,19 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 		
 		// Start from the fromKey
 		encodedFromKey := encodeExpiryKey(fromKey)
-		key, value := cursor.Seek(encodedFromKey)
+		found := cursor.Seek(encodedFromKey)
+		if !found {
+			return nil
+		}
 		
-		for key != nil && len(results) < maxResults {
+		// Now we can safely get the key and value since found is true
+		for found && len(results) < maxResults {
+			key := cursor.Key()
+			value := cursor.Value()
+			
+			if key == nil {
+				break
+			}
 			// Decode the expiry key
 			expiryKey, err := decodeExpiryKey(key)
 			if err != nil {
@@ -443,7 +456,7 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 			}
 			
 			// Move to next key
-			key, value = cursor.Next()
+			found = cursor.Next()
 		}
 		
 		return nil
@@ -472,16 +485,20 @@ func (idx *ExpiryIndex) GetStats() (*ExpiryIndexStats, error) {
 		outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
 		if outpointBucket != nil {
 			cursor := outpointBucket.Cursor()
-			for key, _ := cursor.First(); key != nil; key, _ = cursor.Next() {
+			found := cursor.First()
+			for found {
 				stats.TotalUTXOs++
+				found = cursor.Next()
 			}
 		}
 		
 		expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
 		if expiryBucket != nil {
 			cursor := expiryBucket.Cursor()
-			for key, _ := cursor.First(); key != nil; key, _ = cursor.Next() {
+			found := cursor.First()
+			for found {
 				stats.TotalExpiryKeys++
+				found = cursor.Next()
 			}
 		}
 		
@@ -572,7 +589,10 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		
 		// Iterate through all UTXOs
 		cursor := utxoBucket.Cursor()
-		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		found := cursor.First()
+		for found {
+			k := cursor.Key()
+			v := cursor.Value()
 			// Parse UTXO entry
 			outpoint, createHeight, err := idx.parseUTXOEntry(k, v)
 			if err != nil {
@@ -596,6 +616,8 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 				rate := float64(processed) / elapsed.Seconds()
 				log.Infof("ExpiryIndex: Processed %d UTXOs (%.0f/s)", processed, rate)
 			}
+			
+			found = cursor.Next()
 		}
 		
 		// Mark index as complete
@@ -679,10 +701,12 @@ func (idx *ExpiryIndex) clearIndexBuckets(dbTx database.Tx) error {
 	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
 	if outpointBucket != nil {
 		cursor := outpointBucket.Cursor()
-		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+		found := cursor.First()
+		for found {
 			if err := cursor.Delete(); err != nil {
 				return err
 			}
+			found = cursor.Next()
 		}
 	}
 	
@@ -690,10 +714,12 @@ func (idx *ExpiryIndex) clearIndexBuckets(dbTx database.Tx) error {
 	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
 	if expiryBucket != nil {
 		cursor := expiryBucket.Cursor()
-		for k, _ := cursor.First(); k != nil; k, _ = cursor.Next() {
+		found := cursor.First()
+		for found {
 			if err := cursor.Delete(); err != nil {
 				return err
 			}
+			found = cursor.Next()
 		}
 	}
 	

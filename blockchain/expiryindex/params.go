@@ -37,7 +37,18 @@ type ExpiryParams struct {
 // Returns nil if the network is not an OBTC network.
 func GetExpiryParams(params *chaincfg.Params) *ExpiryParams {
 	// Get the expiry params from chaincfg (which handles the network detection)
-	return chaincfg.GetExpiryParams(params)
+	cfg := chaincfg.GetExpiryParams(params)
+	if cfg == nil {
+		return nil
+	}
+	
+	// Convert chaincfg.ExpiryParams to expiryindex.ExpiryParams
+	return &ExpiryParams{
+		WindowBlocks:    cfg.WindowBlocks,
+		ListBatchLimit:  cfg.ListBatchLimit,
+		StartScanHeight: cfg.StartScanHeight,
+		EnableAtHeight:  cfg.EnableAtHeight,
+	}
 }
 
 // CalculateExpiryKey calculates the expiry key for a UTXO created at the given height.
