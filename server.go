@@ -24,8 +24,8 @@ import (
 
 	"github.com/btcsuite/btcd/addrmgr"
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
+	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/bloom"
 	"github.com/btcsuite/btcd/chaincfg"

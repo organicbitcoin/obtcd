@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
+	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
@@ -189,8 +189,8 @@ var rpcHandlersBeforeInit = map[string]commandHandler{
 	"gettxspendingprevout":   handleGetTxSpendingPrevOut,
 
 	// OBTC-specific commands
-	"listexpiring":         handleListExpiring,
-	"getexpiryindexstats":  handleGetExpiryIndexStats,
+	"listexpiring":        handleListExpiring,
+	"getexpiryindexstats": handleGetExpiryIndexStats,
 }
 
 // list of commands that we recognize, but for which btcd has no support because
@@ -4067,7 +4067,7 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 	for i, utxo := range expiringUTXOs {
 		// Calculate blocks to expiry
 		blocksToExpiry := int64(utxo.ExpiryKey) - int64(currentHeight)
-		
+
 		// Calculate create height from expiry key (requires network params)
 		var createHeight uint64
 		if s.cfg.ChainParams != nil {

@@ -14,17 +14,17 @@ type ListExpiringCmd struct {
 	// StartHeight is the block height to start scanning from.
 	// Optional: defaults to current tip height.
 	StartHeight *int32 `jsonrpcusage:"\"start_height\""`
-	
-	// EndHeight is the block height to stop scanning at.  
+
+	// EndHeight is the block height to stop scanning at.
 	// Optional: defaults to startHeight + default horizon.
 	EndHeight *int32 `jsonrpcusage:"\"end_height\""`
-	
+
 	// MaxResults is the maximum number of results to return.
 	// Optional: defaults to network-specific limit.
 	MaxResults *int `jsonrpcusage:"\"max_results\""`
 }
 
-// NewListExpiringCmd returns a new instance which can be used to issue a 
+// NewListExpiringCmd returns a new instance which can be used to issue a
 // `listexpiring` JSON-RPC command.
 //
 // The parameters which are pointers indicate they are optional. Passing nil
