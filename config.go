@@ -101,6 +101,7 @@ type config struct {
 	AddCheckpoints       []string      `long:"addcheckpoint" description:"Add a custom checkpoint.  Format: '<height>:<hash>'"`
 	AddPeers             []string      `short:"a" long:"addpeer" description:"Add a peer to connect with at startup"`
 	AddrIndex            bool          `long:"addrindex" description:"Maintain a full address-based transaction index which makes the searchrawtransactions RPC available"`
+	ExpiryIndex          bool          `long:"expiryindex" description:"Maintain an OBTC UTXO expiry index which tracks when UTXOs will expire (OBTC networks only)"`
 	AgentBlacklist       []string      `long:"agentblacklist" description:"A comma separated list of user-agent substrings which will cause btcd to reject any peers whose user-agent contains any of the blacklisted substrings."`
 	AgentWhitelist       []string      `long:"agentwhitelist" description:"A comma separated list of user-agent substrings which will cause btcd to require all peers' user-agents to contain one of the whitelisted substrings. The blacklist is applied before the whitelist, and an empty whitelist will allow all agents that do not fail the blacklist."`
 	BanDuration          time.Duration `long:"banduration" description:"How long to ban misbehaving peers.  Valid time units are {s, m, h}.  Minimum 1 second"`
@@ -927,6 +928,16 @@ func loadConfig() (*config, []string, error) {
 			"options may not be activated at the same time "+
 			"because the address index relies on the transaction "+
 			"index",
+			funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+
+	// ExpiryIndex is only supported on OBTC networks.
+	if cfg.ExpiryIndex && !chaincfg.IsOBTC(activeNetParams.Params) {
+		err := fmt.Errorf("%s: the --expiryindex option is only "+
+			"supported on OBTC networks (obtcmainnet, obtctestnet, obtcregtest)",
 			funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)

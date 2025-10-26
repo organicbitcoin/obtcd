@@ -25,6 +25,7 @@ import (
 	"github.com/btcsuite/btcd/addrmgr"
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/blockchain/indexers"
+	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/bloom"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -236,9 +237,10 @@ type server struct {
 	// if the associated index is not enabled.  These fields are set during
 	// initial creation of the server and never changed afterwards, so they
 	// do not need to be protected for concurrent access.
-	txIndex   *indexers.TxIndex
-	addrIndex *indexers.AddrIndex
-	cfIndex   *indexers.CfIndex
+	txIndex     *indexers.TxIndex
+	addrIndex   *indexers.AddrIndex
+	cfIndex     *indexers.CfIndex
+	expiryIndex *expiryindex.ExpiryIndex
 
 	// The fee estimator keeps track of how long transactions are left in
 	// the mempool before they are mined into blocks.
@@ -2898,6 +2900,20 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 		s.cfIndex = indexers.NewCfIndex(db, chainParams)
 		indexes = append(indexes, s.cfIndex)
 	}
+	if cfg.ExpiryIndex {
+		// Only enable ExpiryIndex for OBTC networks
+		if chaincfg.IsOBTC(chainParams) {
+			indxLog.Info("OBTC expiry index is enabled")
+			var err error
+			s.expiryIndex, err = expiryindex.NewExpiryIndex(db, chainParams)
+			if err != nil {
+				return nil, err
+			}
+			indexes = append(indexes, s.expiryIndex)
+		} else {
+			indxLog.Info("ExpiryIndex requires OBTC network - skipping")
+		}
+	}
 
 	// Create an index manager if any of the optional indexes are enabled.
 	var indexManager blockchain.IndexManager
@@ -3142,6 +3158,7 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 			TxIndex:      s.txIndex,
 			AddrIndex:    s.addrIndex,
 			CfIndex:      s.cfIndex,
+			ExpiryIndex:  s.expiryIndex,
 			FeeEstimator: s.feeEstimator,
 		})
 		if err != nil {
