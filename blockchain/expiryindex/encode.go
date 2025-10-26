@@ -43,11 +43,11 @@ func decodeOutPoint(encoded []byte) (*wire.OutPoint, error) {
 	if len(encoded) != 36 {
 		return nil, fmt.Errorf("invalid outpoint encoding length: got %d, expected 36", len(encoded))
 	}
-	
+
 	var hash chainhash.Hash
 	copy(hash[:], encoded[0:32])
 	index := binary.LittleEndian.Uint32(encoded[32:36])
-	
+
 	return &wire.OutPoint{Hash: hash, Index: index}, nil
 }
 
@@ -87,7 +87,7 @@ func encodeOutPointList(outpoints []*wire.OutPoint) []byte {
 	// Sort for deterministic encoding
 	sortedOPs := make([]*wire.OutPoint, len(outpoints))
 	copy(sortedOPs, outpoints)
-	
+
 	sort.Slice(sortedOPs, func(i, j int) bool {
 		// Primary sort: transaction hash (lexicographic)
 		hashCmp := sortedOPs[i].Hash.String() < sortedOPs[j].Hash.String()
@@ -97,16 +97,16 @@ func encodeOutPointList(outpoints []*wire.OutPoint) []byte {
 		// Secondary sort: output index (numeric)
 		return sortedOPs[i].Index < sortedOPs[j].Index
 	})
-	
+
 	// Encode: count (4 bytes) + outpoints (36 bytes each)
 	encoded := make([]byte, 4+len(sortedOPs)*36)
 	binary.LittleEndian.PutUint32(encoded[0:4], uint32(len(sortedOPs)))
-	
+
 	for i, op := range sortedOPs {
 		offset := 4 + i*36
 		copy(encoded[offset:offset+36], encodeOutPoint(op))
 	}
-	
+
 	return encoded
 }
 
@@ -115,14 +115,14 @@ func decodeOutPointList(encoded []byte) ([]*wire.OutPoint, error) {
 	if len(encoded) < 4 {
 		return nil, fmt.Errorf("invalid outpoint list encoding: too short (got %d bytes)", len(encoded))
 	}
-	
+
 	count := binary.LittleEndian.Uint32(encoded[0:4])
 	expectedLen := 4 + int(count)*36
 	if len(encoded) != expectedLen {
-		return nil, fmt.Errorf("invalid outpoint list length: got %d, expected %d", 
+		return nil, fmt.Errorf("invalid outpoint list length: got %d, expected %d",
 			len(encoded), expectedLen)
 	}
-	
+
 	outpoints := make([]*wire.OutPoint, count)
 	for i := uint32(0); i < count; i++ {
 		offset := 4 + int(i)*36
@@ -132,7 +132,7 @@ func decodeOutPointList(encoded []byte) ([]*wire.OutPoint, error) {
 		}
 		outpoints[i] = op
 	}
-	
+
 	return outpoints, nil
 }
 
@@ -144,7 +144,7 @@ func appendOutPointToList(existingEncoded []byte, newOutPoint *wire.OutPoint) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode existing list: %v", err)
 	}
-	
+
 	// Check if already exists (duplicate prevention)
 	for _, existing := range existingOutPoints {
 		if existing.Hash == newOutPoint.Hash && existing.Index == newOutPoint.Index {
@@ -152,7 +152,7 @@ func appendOutPointToList(existingEncoded []byte, newOutPoint *wire.OutPoint) ([
 			return existingEncoded, nil
 		}
 	}
-	
+
 	// Add new outpoint and re-encode
 	allOutPoints := append(existingOutPoints, newOutPoint)
 	return encodeOutPointList(allOutPoints), nil
@@ -166,7 +166,7 @@ func removeOutPointFromList(existingEncoded []byte, targetOutPoint *wire.OutPoin
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode existing list: %v", err)
 	}
-	
+
 	// Filter out the target outpoint
 	var filteredOutPoints []*wire.OutPoint
 	for _, existing := range existingOutPoints {
@@ -174,12 +174,12 @@ func removeOutPointFromList(existingEncoded []byte, targetOutPoint *wire.OutPoin
 			filteredOutPoints = append(filteredOutPoints, existing)
 		}
 	}
-	
+
 	// If list is now empty, return nil (caller should delete the key)
 	if len(filteredOutPoints) == 0 {
 		return nil, nil
 	}
-	
+
 	// Re-encode the filtered list
 	return encodeOutPointList(filteredOutPoints), nil
 }
@@ -187,7 +187,7 @@ func removeOutPointFromList(existingEncoded []byte, targetOutPoint *wire.OutPoin
 // validateOutPointListSize checks if a list exceeds the maximum size limit
 func validateOutPointListSize(outpoints []*wire.OutPoint) error {
 	if len(outpoints) > MaxOutpointsPerKey {
-		return fmt.Errorf("outpoint list too large: %d > %d (max)", 
+		return fmt.Errorf("outpoint list too large: %d > %d (max)",
 			len(outpoints), MaxOutpointsPerKey)
 	}
 	return nil

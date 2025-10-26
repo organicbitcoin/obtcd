@@ -19,15 +19,15 @@ type ExpiryParams struct {
 	// For mainnet: ~1 year worth of blocks (144 * 365 = 52,560)
 	// For testnet: shorter periods for faster testing
 	WindowBlocks uint64
-	
+
 	// ListBatchLimit is the maximum number of items returned in one RPC scan
 	// This prevents excessive memory usage and long-running queries
 	ListBatchLimit int
-	
+
 	// StartScanHeight is the block height at which to start building the index
 	// This should typically be set to the OBTC fork height
 	StartScanHeight int32
-	
+
 	// EnableAtHeight is the block height at which expiry enforcement begins
 	// This allows the index to be built before enforcement starts (Week 3+)
 	EnableAtHeight int32
@@ -37,7 +37,18 @@ type ExpiryParams struct {
 // Returns nil if the network is not an OBTC network.
 func GetExpiryParams(params *chaincfg.Params) *ExpiryParams {
 	// Get the expiry params from chaincfg (which handles the network detection)
-	return chaincfg.GetExpiryParams(params)
+	cfg := chaincfg.GetExpiryParams(params)
+	if cfg == nil {
+		return nil
+	}
+
+	// Convert chaincfg.ExpiryParams to expiryindex.ExpiryParams
+	return &ExpiryParams{
+		WindowBlocks:    cfg.WindowBlocks,
+		ListBatchLimit:  cfg.ListBatchLimit,
+		StartScanHeight: cfg.StartScanHeight,
+		EnableAtHeight:  cfg.EnableAtHeight,
+	}
 }
 
 // CalculateExpiryKey calculates the expiry key for a UTXO created at the given height.
@@ -81,12 +92,12 @@ func (p *ExpiryParams) ValidateListParams(limit int) error {
 func (p *ExpiryParams) CalculateExpiryRange(fromHeight uint64, horizonBlocks uint64) (fromKey, toKey uint64) {
 	fromKey = fromHeight
 	toKey = fromHeight + horizonBlocks
-	
+
 	// Ensure toKey doesn't overflow
 	if toKey < fromHeight {
 		toKey = ^uint64(0) // Max uint64
 	}
-	
+
 	return fromKey, toKey
 }
 

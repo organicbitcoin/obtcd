@@ -15,7 +15,7 @@ The index maintains two-way mappings:
 
 OBTC uses height-based expiry for deterministic and consensus-friendly behavior.
 All UTXOs expire after a fixed number of blocks from their creation height.
-All operations are atomic and support blockchain reorganizations through 
+All operations are atomic and support blockchain reorganizations through
 Connect/Disconnect operations.
 
 Design principles:
