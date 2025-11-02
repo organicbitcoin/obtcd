@@ -756,36 +756,36 @@ var helpDescsEnUS = map[string]string{
 	"gettxspendingprevoutresult-spendingtxid": "The hash of the transaction that spends the output.",
 
 	// ListExpiringCmd help.
-	"listexpiring--synopsis": "Returns a list of UTXOs that will expire within a specified height range",
+	"listexpiring--synopsis":   "Returns a list of UTXOs that will expire within a specified height range",
 	"listexpiring-startheight": "The minimum height at which UTXOs expire (optional)",
-	"listexpiring-endheight": "The maximum height at which UTXOs expire (optional)",
-	"listexpiring-maxresults": "Maximum number of results to return (optional)",
+	"listexpiring-endheight":   "The maximum height at which UTXOs expire (optional)",
+	"listexpiring-maxresults":  "Maximum number of results to return (optional)",
 
 	// ListExpiringCmd result help.
-	"listexpiringresult-expiring_utxos":     "Array of expiring UTXOs",
-	"listexpiringresult-start_height":       "Height at which the scan started",
-	"listexpiringresult-end_height":         "Height at which the scan ended", 
-	"listexpiringresult-total_results":      "Total number of results found",
-	"listexpiringresult-next_height":        "Next height to query for pagination (optional)",
-	"expiringutxoresult-txid":               "Transaction hash in hex",
-	"expiringutxoresult-vout":               "Output index",
-	"expiringutxoresult-expiry_height":      "Block height when UTXO expires",
-	"expiringutxoresult-create_height":      "Block height where transaction was confirmed",
-	"expiringutxoresult-blocks_to_expiry":   "Number of blocks until expiry",
+	"listexpiringresult-expiring_utxos":   "Array of expiring UTXOs",
+	"listexpiringresult-start_height":     "Height at which the scan started",
+	"listexpiringresult-end_height":       "Height at which the scan ended",
+	"listexpiringresult-total_results":    "Total number of results found",
+	"listexpiringresult-next_height":      "Next height to query for pagination (optional)",
+	"expiringutxoresult-txid":             "Transaction hash in hex",
+	"expiringutxoresult-vout":             "Output index",
+	"expiringutxoresult-expiry_height":    "Block height when UTXO expires",
+	"expiringutxoresult-create_height":    "Block height where transaction was confirmed",
+	"expiringutxoresult-blocks_to_expiry": "Number of blocks until expiry",
 
 	// GetExpiryIndexStatsCmd help.
 	"getexpiryindexstats--synopsis": "Returns statistics about the expiry index",
 
 	// GetExpiryIndexStatsCmd result help.
-	"expiryindexstatsresult-disabled":           "Whether the expiry index is disabled",
-	"expiryindexstatsresult-tip_height":         "Current tip height indexed",
-	"expiryindexstatsresult-total_utxos":        "Total number of UTXOs tracked in the index",
-	"expiryindexstatsresult-total_expiry_keys":  "Total number of unique expiry heights",
-	"expiryindexstatsresult-network_params":     "Network-specific expiry parameters",
-	"expiryparamsresult-window_blocks":          "Expiry window in blocks",
-	"expiryparamsresult-list_batch_limit":       "Maximum number of items returned in one RPC scan",
-	"expiryparamsresult-start_scan_height":      "Block height at which to start building the index",
-	"expiryparamsresult-enable_at_height":       "Block height at which expiry enforcement begins",
+	"expiryindexstatsresult-disabled":          "Whether the expiry index is disabled",
+	"expiryindexstatsresult-tip_height":        "Current tip height indexed",
+	"expiryindexstatsresult-total_utxos":       "Total number of UTXOs tracked in the index",
+	"expiryindexstatsresult-total_expiry_keys": "Total number of unique expiry heights",
+	"expiryindexstatsresult-network_params":    "Network-specific expiry parameters",
+	"expiryparamsresult-window_blocks":         "Expiry window in blocks",
+	"expiryparamsresult-list_batch_limit":      "Maximum number of items returned in one RPC scan",
+	"expiryparamsresult-start_scan_height":     "Block height at which to start building the index",
+	"expiryparamsresult-enable_at_height":      "Block height at which expiry enforcement begins",
 }
 
 // rpcResultTypes specifies the result types that each RPC command can return.
@@ -847,8 +847,8 @@ var rpcResultTypes = map[string][]interface{}{
 	"gettxspendingprevout":   {(*[]btcjson.GetTxSpendingPrevOutResult)(nil)},
 
 	// OBTC specific extensions
-	"listexpiring":           {(*btcjson.ListExpiringResult)(nil)},
-	"getexpiryindexstats":    {(*btcjson.ExpiryIndexStatsResult)(nil)},
+	"listexpiring":        {(*btcjson.ListExpiringResult)(nil)},
+	"getexpiryindexstats": {(*btcjson.ExpiryIndexStatsResult)(nil)},
 
 	// Websocket commands.
 	"loadtxfilter":              nil,
