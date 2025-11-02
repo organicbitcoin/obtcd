@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcjson"
@@ -186,6 +187,10 @@ var rpcHandlersBeforeInit = map[string]commandHandler{
 	"version":                handleVersion,
 	"testmempoolaccept":      handleTestMempoolAccept,
 	"gettxspendingprevout":   handleGetTxSpendingPrevOut,
+
+	// OBTC-specific commands
+	"listexpiring":        handleListExpiring,
+	"getexpiryindexstats": handleGetExpiryIndexStats,
 }
 
 // list of commands that we recognize, but for which btcd has no support because
@@ -3989,6 +3994,153 @@ func validateFeeRate(feeSats btcutil.Amount, txSize int64,
 	}, true
 }
 
+// handleListExpiring implements the listexpiring command.
+func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	c := cmd.(*btcjson.ListExpiringCmd)
+
+	// Check if the expiry index is available
+	if s.cfg.ExpiryIndex == nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCMisc,
+			Message: "ExpiryIndex is not enabled. Use --expiryindex to enable it.",
+		}
+	}
+
+	// Get current chain tip
+	best := s.cfg.Chain.BestSnapshot()
+	currentHeight := best.Height
+
+	// Set default values for parameters
+	startHeight := currentHeight
+	if c.StartHeight != nil {
+		startHeight = *c.StartHeight
+	}
+
+	// Calculate default end height (scan 1 day ahead by default)
+	defaultHorizon := int32(144) // ~1 day worth of blocks
+	endHeight := startHeight + defaultHorizon
+	if c.EndHeight != nil {
+		endHeight = *c.EndHeight
+	}
+
+	// Validate height range
+	if startHeight < 0 {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInvalidParameter,
+			Message: "Start height cannot be negative",
+		}
+	}
+	if endHeight < startHeight {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInvalidParameter,
+			Message: "End height must be greater than or equal to start height",
+		}
+	}
+
+	// Set default max results
+	maxResults := 1000
+	if c.MaxResults != nil {
+		maxResults = *c.MaxResults
+		if maxResults <= 0 {
+			return nil, &btcjson.RPCError{
+				Code:    btcjson.ErrRPCInvalidParameter,
+				Message: "Max results must be positive",
+			}
+		}
+	}
+
+	// Convert heights to expiry keys for scanning
+	fromKey := uint64(startHeight)
+	toKey := uint64(endHeight)
+
+	// Scan for expiring UTXOs
+	expiringUTXOs, err := s.cfg.ExpiryIndex.ScanExpiringUTXOs(fromKey, toKey, maxResults)
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("Failed to scan expiring UTXOs: %v", err),
+		}
+	}
+
+	// Convert to result format
+	results := make([]btcjson.ExpiringUTXOResult, len(expiringUTXOs))
+	for i, utxo := range expiringUTXOs {
+		// Calculate blocks to expiry
+		blocksToExpiry := int64(utxo.ExpiryKey) - int64(currentHeight)
+
+		// Calculate create height from expiry key (requires network params)
+		var createHeight uint64
+		if s.cfg.ChainParams != nil {
+			if expiryParams := chaincfg.GetExpiryParams(s.cfg.ChainParams); expiryParams != nil {
+				createHeight = utxo.ExpiryKey - expiryParams.WindowBlocks
+			}
+		}
+
+		results[i] = btcjson.ExpiringUTXOResult{
+			TxID:           utxo.OutPoint.Hash.String(),
+			Vout:           utxo.OutPoint.Index,
+			ExpiryHeight:   utxo.ExpiryKey,
+			CreateHeight:   createHeight,
+			BlocksToExpiry: blocksToExpiry,
+		}
+	}
+
+	// Calculate next height for pagination
+	var nextHeight *int32
+	if len(results) == maxResults {
+		next := endHeight + 1
+		nextHeight = &next
+	}
+
+	return &btcjson.ListExpiringResult{
+		ExpiringUTXOs: results,
+		StartHeight:   startHeight,
+		EndHeight:     endHeight,
+		TotalResults:  len(results),
+		NextHeight:    nextHeight,
+	}, nil
+}
+
+// handleGetExpiryIndexStats implements the getexpiryindexstats command.
+func handleGetExpiryIndexStats(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	// Check if the expiry index is available
+	if s.cfg.ExpiryIndex == nil {
+		return &btcjson.ExpiryIndexStatsResult{
+			Disabled: true,
+		}, nil
+	}
+
+	// Get statistics from the expiry index
+	stats, err := s.cfg.ExpiryIndex.GetStats()
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("Failed to get expiry index stats: %v", err),
+		}
+	}
+
+	result := &btcjson.ExpiryIndexStatsResult{
+		Disabled:        stats.Disabled,
+		TipHeight:       stats.TipHeight,
+		TotalUTXOs:      stats.TotalUTXOs,
+		TotalExpiryKeys: stats.TotalExpiryKeys,
+	}
+
+	// Add network parameters if available
+	if s.cfg.ChainParams != nil {
+		if expiryParams := chaincfg.GetExpiryParams(s.cfg.ChainParams); expiryParams != nil {
+			result.NetworkParams = &btcjson.ExpiryParamsResult{
+				WindowBlocks:    expiryParams.WindowBlocks,
+				ListBatchLimit:  expiryParams.ListBatchLimit,
+				StartScanHeight: expiryParams.StartScanHeight,
+				EnableAtHeight:  expiryParams.EnableAtHeight,
+			}
+		}
+	}
+
+	return result, nil
+}
+
 // rpcServer provides a concurrent safe RPC server to a chain server.
 type rpcServer struct {
 	started                int32
@@ -4828,9 +4980,10 @@ type rpcserverConfig struct {
 
 	// These fields define any optional indexes the RPC server can make use
 	// of to provide additional data when queried.
-	TxIndex   *indexers.TxIndex
-	AddrIndex *indexers.AddrIndex
-	CfIndex   *indexers.CfIndex
+	TxIndex     *indexers.TxIndex
+	AddrIndex   *indexers.AddrIndex
+	CfIndex     *indexers.CfIndex
+	ExpiryIndex *expiryindex.ExpiryIndex
 
 	// The fee estimator keeps track of how long transactions are left in
 	// the mempool before they are mined into blocks.
