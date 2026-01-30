@@ -141,29 +141,29 @@ func normalizeAddress(addr string, chain *chaincfg.Params, useWallet bool) (stri
 			} else {
 				defaultPort = "18556"
 			}
-	case &chaincfg.RegressionNetParams:
-		if useWallet {
-			// TODO: add port once regtest is supported in btcwallet
-			paramErr := fmt.Errorf("cannot use -wallet with -regtest, btcwallet not yet compatible with regtest")
-			return "", paramErr
-		} else {
-			defaultPort = "18334"
-		}
-	case &chaincfg.ObtcMainNetParams:
-		if useWallet {
-			return "", fmt.Errorf("cannot use -wallet with -obtcmainnet, btcwallet not yet compatible with OBTC")
-		}
-		defaultPort = "8556"
-	case &chaincfg.ObtcTestNetParams:
-		if useWallet {
-			return "", fmt.Errorf("cannot use -wallet with -obtctestnet, btcwallet not yet compatible with OBTC")
-		}
-		defaultPort = "18556"
-	case &chaincfg.ObtcRegTestParams:
-		if useWallet {
-			return "", fmt.Errorf("cannot use -wallet with -obtcregtest, btcwallet not yet compatible with OBTC")
-		}
-		defaultPort = "18667"
+		case &chaincfg.RegressionNetParams:
+			if useWallet {
+				// TODO: add port once regtest is supported in btcwallet
+				paramErr := fmt.Errorf("cannot use -wallet with -regtest, btcwallet not yet compatible with regtest")
+				return "", paramErr
+			} else {
+				defaultPort = "18334"
+			}
+		case &chaincfg.ObtcMainNetParams:
+			if useWallet {
+				return "", fmt.Errorf("cannot use -wallet with -obtcmainnet, btcwallet not yet compatible with OBTC")
+			}
+			defaultPort = "8556"
+		case &chaincfg.ObtcTestNetParams:
+			if useWallet {
+				return "", fmt.Errorf("cannot use -wallet with -obtctestnet, btcwallet not yet compatible with OBTC")
+			}
+			defaultPort = "18556"
+		case &chaincfg.ObtcRegTestParams:
+			if useWallet {
+				return "", fmt.Errorf("cannot use -wallet with -obtcregtest, btcwallet not yet compatible with OBTC")
+			}
+			defaultPort = "18667"
 		case &chaincfg.SigNetParams:
 			if useWallet {
 				defaultPort = "38332"
