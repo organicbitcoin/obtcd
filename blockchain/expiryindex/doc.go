@@ -2,6 +2,8 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
+// OBTC-only: expiry index used by OBTC networks.
+
 /*
 Package expiryindex provides an index for tracking UTXO expiry times.
 

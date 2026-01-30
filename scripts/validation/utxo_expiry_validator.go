@@ -2,6 +2,8 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
+// OBTC-only: ExpiryIndex validation tool.
+
 // Comprehensive validation tool for testing OBTC UTXO expiry index functionality.
 package main
 

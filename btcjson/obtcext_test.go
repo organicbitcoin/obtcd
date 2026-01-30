@@ -20,7 +20,7 @@ func TestListExpiringCmd(t *testing.T) {
 		endHeight := int32(2000)
 		maxResults := 500
 
-		cmd := NewListExpiringCmd(&startHeight, &endHeight, &maxResults)
+		cmd := NewListExpiringCmd(&startHeight, &endHeight, &maxResults, nil)
 
 		// Test that the command can be marshaled to JSON
 		data, err := json.Marshal(cmd)
@@ -37,7 +37,7 @@ func TestListExpiringCmd(t *testing.T) {
 	})
 
 	t.Run("marshal with nil parameters", func(t *testing.T) {
-		cmd := NewListExpiringCmd(nil, nil, nil)
+		cmd := NewListExpiringCmd(nil, nil, nil, nil)
 
 		// Test that the command can be marshaled to JSON
 		data, err := json.Marshal(cmd)
@@ -57,7 +57,7 @@ func TestListExpiringCmd(t *testing.T) {
 		startHeight := int32(1500)
 		maxResults := 100
 
-		cmd := NewListExpiringCmd(&startHeight, nil, &maxResults)
+		cmd := NewListExpiringCmd(&startHeight, nil, &maxResults, nil)
 
 		// Test that the command can be marshaled to JSON
 		data, err := json.Marshal(cmd)
@@ -75,7 +75,7 @@ func TestListExpiringCmd(t *testing.T) {
 
 	t.Run("json rpc command creation", func(t *testing.T) {
 		startHeight := int32(500)
-		cmd := NewListExpiringCmd(&startHeight, nil, nil)
+		cmd := NewListExpiringCmd(&startHeight, nil, nil, nil)
 
 		// Test that the command implements the expected interface
 		require.NotNil(cmd)

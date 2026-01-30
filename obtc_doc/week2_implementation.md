@@ -5,8 +5,8 @@
 ## 🎯 本周目标（Definition of Done）
 
 * 在 `btcd/blockchain/expiryindex/` 实现 **ExpiryIndex**（含持久化、重启恢复、重组一致性）。
-* 新增最小 RPC：`obtc.listExpiring`（节点侧）可按**区块高度/时间窗**列出即将到期的 UTXO。
-* 端到端：在 **simnet** 上生成一批 UTXO，推进到“将到期”窗口，`obtc.listExpiring` 输出与预期一致。
+* 新增最小 RPC：`listexpiring`（节点侧）按**区块高度**列出即将到期的 UTXO。
+* 端到端：在 **simnet/obtcregtest** 上生成一批 UTXO，推进到“将到期”窗口，`listexpiring` 输出与预期一致。
 * 单元测试（包含 **reorg 用例**）与基准测试通过；CI 绿。
 
 ---
@@ -53,7 +53,7 @@ btcd/
       reorg_test.go         # 重组一致性测试
       expiryindex_test.go   # 单测/基准
   rpc/
-    rpcserver.go            # 注册 obtc.listExpiring
+    rpcserver.go            # 注册 listexpiring
     rpcwebsocket.go         # （如需）
   chaincfg/
     params_obtc.go          # Week1 骨架已建：补上 Expiry 参数占位（不切网络）
@@ -93,35 +93,34 @@ btcd/
 
 ## 📡 RPC 规格（节点侧，最小可用）
 
-`obtc.listExpiring` —— 列出“在 \[fromKey, toKey] 范围内将到期”的 UTXO
+`listexpiring` —— 列出“在 \[start_height, end_height] 范围内将到期”的 UTXO
 
-* **请求**
+* **请求（JSON-RPC 参数顺序）**
+
+  ```json
+  [
+    123450,          // start_height，起始到期高度（可选）
+    124450,          // end_height，结束到期高度（可选）
+    1000,            // max_results，返回上限（可选）
+    "txid:vout"      // start_after，分页游标（可选）
+  ]
+  ```
+* **响应（示例）**
 
   ```json
   {
-    "from": 123450,           // 起始到期高度（或秒），为空则默认 tipHeight+1
-    "horizon": 1440,          // 扫描窗口（高度/秒）
-    "limit": 1000,            // 返回上限（硬上限<= ListBatchLimit）
-    "mode": "height|time",    // 可选；默认跟随 ExpiryParams.Mode
-    "includeSpent": false     // 可选；默认 false
-  }
-  ```
-* **响应**
-
-  ```json
-  {
-    "mode": "height",
-    "from": 123450,
-    "to": 124450,
-    "count": 42,
-    "items": [
-      {"txid":"…","vout":0,"expiry":123456},
-      ...
-    ]
+    "start_height": 123450,
+    "end_height": 124450,
+    "total_results": 42,
+    "expiring_utxos": [
+      {"txid":"…","vout":0,"expiry_height":123456}
+    ],
+    "next_height": 123456,
+    "next_outpoint": "txid:vout"
   }
   ```
 
-> **说明**：不返回金额；第 3–4 周在矿工模板中再查 UTXO 集获取金额与脚本类型。
+> **说明**：分页时携带 `next_height + next_outpoint` 继续查询；不返回金额。
 
 ---
 
@@ -137,7 +136,7 @@ btcd/
 
 ## ✅ 本周交付物（Deliverables）
 
-* `expiryindex/` 目录与实现、单测 & 基准、`obtc.listExpiring` RPC。
+* `expiryindex/` 目录与实现、单测 & 基准、`listexpiring` RPC。
 * `docs/week2-validation.md`：测试步骤与输出（含 reorg 用例）。
 * CI 增加 `./blockchain/expiryindex` 路径的测试与 `-race`。
 
@@ -165,7 +164,7 @@ btcd/
 4. **RPC 集成测试（simnet）**
 
    * 链上快速造一批 UTXO；推进到“将到期窗口”；
-   * `obtc.listExpiring` 返回数量与 outpoint 集合符合预期；
+   * `listexpiring` 返回数量与 outpoint 集合符合预期；
    * `limit`、`horizon` 生效，分页行为正确。
 
 ---

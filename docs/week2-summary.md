@@ -104,7 +104,7 @@ type ExpiryIndex struct {
 
 func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block, stxos []blockchain.SpentTxOut) error
 func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block, stxos []blockchain.SpentTxOut) error
-func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64, maxResults int) ([]*ExpiringUTXO, error)
+func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64, maxResults int, startAfter *wire.OutPoint) ([]*ExpiringUTXO, bool, error)
 ```
 
 **处理逻辑：**
@@ -260,31 +260,35 @@ ConnectBlock() → 实时同步处理新区块
 
 ## 📡 **RPC接口设计**
 
-### **规划的RPC方法**
+### **已实现的RPC方法**
 ```go
-// 查询即将到期的UTXO
-btcd-cli obtc.listExpiring <limit> [horizon]
+// 查询即将到期的UTXO（按到期高度范围）
+btcd-cli listexpiring [start_height] [end_height] [max_results] [start_after]
 
-// 响应格式
+// 响应格式（示例）
 {
   "expiring_utxos": [
     {
-      "outpoint": "txid:vout",
+      "txid": "…",
+      "vout": 0,
       "expiry_height": 130000,
-      "expiry_key": "00000000001FB000",
-      "blocks_until_expiry": 42
+      "create_height": 120000,
+      "blocks_to_expiry": 42
     }
   ],
-  "total_count": 1500,
-  "horizon_blocks": 1000
+  "start_height": 123450,
+  "end_height": 124450,
+  "total_results": 42,
+  "next_height": 123456,
+  "next_outpoint": "txid:vout"
 }
 ```
 
 ### **实现状态**
-- ✅ **后端支持**：`ScanExpiringUTXOs()`方法已实现
-- ❌ **RPC注册**：需要与btcd RPC系统集成
-- ❌ **参数验证**：需要完善参数校验
-- ❌ **分页支持**：需要实现大结果集分页
+- ✅ **后端支持**：`ScanExpiringUTXOs()` 支持分页游标（startAfter）与 hasMore 标记
+- ✅ **RPC注册**：已集成到 btcd RPC
+- ✅ **参数验证**：基本校验已完成
+- ✅ **分页支持**：通过 `next_height + next_outpoint` 游标继续查询
 
 ## 🎯 **完成度总结**
 

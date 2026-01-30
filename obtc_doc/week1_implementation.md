@@ -189,7 +189,7 @@ jobs:
 
 * 设计键空间与推进策略（按高度/时间窗）
 * 持久化与恢复（含重组一致性）
-* RPC：`obtc.listExpiring [days]`
+* RPC：`listexpiring`
 * 单元测试 + 基准（10k/100k 假 UTXO）
 
 ---

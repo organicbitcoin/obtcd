@@ -2,6 +2,8 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
+// OBTC-only: JSON-RPC result types for OBTC extensions.
+
 package btcjson
 
 // ExpiringUTXOResult represents a UTXO that is scheduled to expire.
@@ -38,6 +40,10 @@ type ListExpiringResult struct {
 
 	// NextHeight can be used for pagination in subsequent requests
 	NextHeight *int32 `json:"next_height,omitempty"`
+
+	// NextOutpoint can be used with next_height to resume pagination.
+	// Format: "txid:vout"
+	NextOutpoint *string `json:"next_outpoint,omitempty"`
 }
 
 // ExpiryIndexStatsResult models the data returned from the getexpiryindexstats command.
