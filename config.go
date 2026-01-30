@@ -153,6 +153,9 @@ type config struct {
 	ProxyUser            string        `long:"proxyuser" description:"Username for proxy server"`
 	Prune                uint64        `long:"prune" description:"Prune already validated blocks from the database. Must specify a target size in MiB (minimum value of 1536, default value of 0 will disable pruning)"`
 	RegressionTest       bool          `long:"regtest" description:"Use the regression test network"`
+	ObtcMainNet          bool          `long:"obtcmainnet" description:"Use the OBTC main network"`
+	ObtcTestNet          bool          `long:"obtctestnet" description:"Use the OBTC test network"`
+	ObtcRegTest          bool          `long:"obtcregtest" description:"Use the OBTC regression test network"`
 	RejectNonStd         bool          `long:"rejectnonstd" description:"Reject non-standard transactions regardless of the default settings for the active network."`
 	RejectReplacement    bool          `long:"rejectreplacement" description:"Reject transactions that attempt to replace existing transactions within the mempool through the Replace-By-Fee (RBF) signaling policy."`
 	RelayNonStd          bool          `long:"relaynonstd" description:"Relay non-standard transactions regardless of the default settings for the active network."`
@@ -560,6 +563,18 @@ func loadConfig() (*config, []string, error) {
 		numNets++
 		activeNetParams = &regressionNetParams
 	}
+	if cfg.ObtcMainNet {
+		numNets++
+		activeNetParams = &obtcMainNetParams
+	}
+	if cfg.ObtcTestNet {
+		numNets++
+		activeNetParams = &obtcTestNetParams
+	}
+	if cfg.ObtcRegTest {
+		numNets++
+		activeNetParams = &obtcRegTestParams
+	}
 	if cfg.SimNet {
 		numNets++
 		// Also disable dns seeding on the simulation test network.
@@ -606,9 +621,9 @@ func loadConfig() (*config, []string, error) {
 		activeNetParams.Params = &chainParams
 	}
 	if numNets > 1 {
-		str := "%s: The testnet, regtest, segnet, signet and simnet " +
-			"params can't be used together -- choose one of the " +
-			"five"
+		str := "%s: Network params can't be used together -- " +
+			"choose only one of testnet, testnet4, regtest, signet, " +
+			"simnet, obtcmainnet, obtctestnet, obtcregtest"
 		err := fmt.Errorf(str, funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
