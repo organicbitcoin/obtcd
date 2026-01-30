@@ -70,6 +70,24 @@ var sigNetParams = params{
 	rpcPort: "38332",
 }
 
+// obtcMainNetParams contains parameters specific to the OBTC main network.
+var obtcMainNetParams = params{
+	Params:  &chaincfg.ObtcMainNetParams,
+	rpcPort: "8556",
+}
+
+// obtcTestNetParams contains parameters specific to the OBTC test network.
+var obtcTestNetParams = params{
+	Params:  &chaincfg.ObtcTestNetParams,
+	rpcPort: "18556",
+}
+
+// obtcRegTestParams contains parameters specific to the OBTC regression test network.
+var obtcRegTestParams = params{
+	Params:  &chaincfg.ObtcRegTestParams,
+	rpcPort: "18667",
+}
+
 // netName returns the name used when referring to a bitcoin network.  At the
 // time of writing, btcd currently places blocks for testnet version 3 in the
 // data and log directory "testnet", which does not match the Name field of the
