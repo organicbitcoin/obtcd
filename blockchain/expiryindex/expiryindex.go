@@ -24,6 +24,7 @@ const (
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
 
+// OBTC-only: ExpiryIndex implements UTXO expiry tracking.
 // ExpiryIndex implements a UTXO expiry index that tracks when UTXOs will expire.
 // It maintains bidirectional mappings to support both fast deletion when UTXOs
 // are spent and efficient scanning for expired UTXOs.
@@ -395,13 +396,14 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 // ScanExpiringUTXOs scans for UTXOs expiring within the specified range.
 // This method is used by RPC calls to find UTXOs approaching expiration.
 func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
-	maxResults int) ([]*ExpiringUTXO, error) {
+	maxResults int, startAfter *wire.OutPoint) ([]*ExpiringUTXO, bool, error) {
 
 	if idx.disabled {
-		return nil, fmt.Errorf("expiry index is disabled")
+		return nil, false, fmt.Errorf("expiry index is disabled")
 	}
 
 	var results []*ExpiringUTXO
+	var hasMore bool
 
 	err := idx.db.View(func(dbTx database.Tx) error {
 		expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
@@ -419,6 +421,7 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 		}
 
 		// Now we can safely get the key and value since found is true
+	outer:
 		for found && len(results) < maxResults {
 			key := cursor.Key()
 			value := cursor.Value()
@@ -443,16 +446,50 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 				return fmt.Errorf("failed to decode outpoint list: %v", err)
 			}
 
+			startIdx := 0
+			if startAfter != nil && expiryKey == fromKey {
+				startIdx = findOutPointStartIndex(outpoints, startAfter)
+			}
+
 			// Add each outpoint to results
-			for _, outpoint := range outpoints {
+			for i := startIdx; i < len(outpoints); i++ {
+				outpoint := outpoints[i]
 				if len(results) >= maxResults {
-					break
+					// Check if there are more results in-range
+					if i < len(outpoints) {
+						hasMore = true
+					} else if cursor.Next() {
+						nextKey := cursor.Key()
+						if nextKey != nil {
+							nextExpiryKey, err := decodeExpiryKey(nextKey)
+							if err == nil && nextExpiryKey <= toKey {
+								hasMore = true
+							}
+						}
+					}
+					break outer
 				}
 
 				results = append(results, &ExpiringUTXO{
 					OutPoint:  *outpoint,
 					ExpiryKey: expiryKey,
 				})
+
+				if len(results) >= maxResults {
+					// Determine if more results remain
+					if i+1 < len(outpoints) {
+						hasMore = true
+					} else if cursor.Next() {
+						nextKey := cursor.Key()
+						if nextKey != nil {
+							nextExpiryKey, err := decodeExpiryKey(nextKey)
+							if err == nil && nextExpiryKey <= toKey {
+								hasMore = true
+							}
+						}
+					}
+					break outer
+				}
 			}
 
 			// Move to next key
@@ -462,7 +499,42 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 		return nil
 	})
 
-	return results, err
+	return results, hasMore, err
+}
+
+func compareOutPoint(a, b *wire.OutPoint) int {
+	if a.Hash != b.Hash {
+		if a.Hash.String() < b.Hash.String() {
+			return -1
+		}
+		return 1
+	}
+	switch {
+	case a.Index < b.Index:
+		return -1
+	case a.Index > b.Index:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// findOutPointStartIndex returns the first index whose outpoint is greater than startAfter.
+func findOutPointStartIndex(outpoints []*wire.OutPoint, startAfter *wire.OutPoint) int {
+	if startAfter == nil || len(outpoints) == 0 {
+		return 0
+	}
+	low := 0
+	high := len(outpoints)
+	for low < high {
+		mid := (low + high) / 2
+		if compareOutPoint(outpoints[mid], startAfter) <= 0 {
+			low = mid + 1
+		} else {
+			high = mid
+		}
+	}
+	return low
 }
 
 // GetStats returns statistics about the expiry index

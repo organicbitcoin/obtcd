@@ -209,7 +209,7 @@ Max Results: 100
 
 5. **Pagination Test**
    - Tests pagination functionality
-   - Verifies `next_height` field works correctly
+   - Verifies `next_height` + `next_outpoint` cursor works correctly
    - Validates large result set handling
 
 6. **Edge Cases Test**

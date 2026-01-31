@@ -3994,6 +3994,7 @@ func validateFeeRate(feeSats btcutil.Amount, txSize int64,
 	}, true
 }
 
+// OBTC-only: ExpiryIndex RPCs.
 // handleListExpiring implements the listexpiring command.
 func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	c := cmd.(*btcjson.ListExpiringCmd)
@@ -4053,8 +4054,21 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 	fromKey := uint64(startHeight)
 	toKey := uint64(endHeight)
 
+	// Parse optional pagination cursor
+	var startAfter *wire.OutPoint
+	if c.StartAfter != nil && *c.StartAfter != "" {
+		parsed, err := parseOutPointCursor(*c.StartAfter)
+		if err != nil {
+			return nil, &btcjson.RPCError{
+				Code:    btcjson.ErrRPCInvalidParameter,
+				Message: fmt.Sprintf("Invalid start_after cursor: %v", err),
+			}
+		}
+		startAfter = parsed
+	}
+
 	// Scan for expiring UTXOs
-	expiringUTXOs, err := s.cfg.ExpiryIndex.ScanExpiringUTXOs(fromKey, toKey, maxResults)
+	expiringUTXOs, hasMore, err := s.cfg.ExpiryIndex.ScanExpiringUTXOs(fromKey, toKey, maxResults, startAfter)
 	if err != nil {
 		return nil, &btcjson.RPCError{
 			Code:    btcjson.ErrRPCInternal.Code,
@@ -4085,11 +4099,15 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 		}
 	}
 
-	// Calculate next height for pagination
+	// Calculate next cursor for pagination
 	var nextHeight *int32
-	if len(results) == maxResults {
-		next := endHeight + 1
+	var nextOutpoint *string
+	if hasMore && len(results) > 0 {
+		last := results[len(results)-1]
+		next := int32(last.ExpiryHeight)
 		nextHeight = &next
+		cursor := fmt.Sprintf("%s:%d", last.TxID, last.Vout)
+		nextOutpoint = &cursor
 	}
 
 	return &btcjson.ListExpiringResult{
@@ -4098,9 +4116,33 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 		EndHeight:     endHeight,
 		TotalResults:  len(results),
 		NextHeight:    nextHeight,
+		NextOutpoint:  nextOutpoint,
 	}, nil
 }
 
+func parseOutPointCursor(cursor string) (*wire.OutPoint, error) {
+	parts := strings.Split(cursor, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("expected format txid:vout")
+	}
+
+	hash, err := chainhash.NewHashFromStr(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid txid: %v", err)
+	}
+
+	vout, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid vout: %v", err)
+	}
+
+	return &wire.OutPoint{
+		Hash:  *hash,
+		Index: uint32(vout),
+	}, nil
+}
+
+// OBTC-only: ExpiryIndex RPCs.
 // handleGetExpiryIndexStats implements the getexpiryindexstats command.
 func handleGetExpiryIndexStats(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	// Check if the expiry index is available

@@ -760,6 +760,7 @@ var helpDescsEnUS = map[string]string{
 	"listexpiring-startheight": "The minimum height at which UTXOs expire (optional)",
 	"listexpiring-endheight":   "The maximum height at which UTXOs expire (optional)",
 	"listexpiring-maxresults":  "Maximum number of results to return (optional)",
+	"listexpiring-startafter":  "Pagination cursor in the form txid:vout (optional)",
 
 	// ListExpiringCmd result help.
 	"listexpiringresult-expiring_utxos":   "Array of expiring UTXOs",
@@ -767,6 +768,7 @@ var helpDescsEnUS = map[string]string{
 	"listexpiringresult-end_height":       "Height at which the scan ended",
 	"listexpiringresult-total_results":    "Total number of results found",
 	"listexpiringresult-next_height":      "Next height to query for pagination (optional)",
+	"listexpiringresult-next_outpoint":    "Next outpoint cursor to query for pagination (optional)",
 	"expiringutxoresult-txid":             "Transaction hash in hex",
 	"expiringutxoresult-vout":             "Output index",
 	"expiringutxoresult-expiry_height":    "Block height when UTXO expires",

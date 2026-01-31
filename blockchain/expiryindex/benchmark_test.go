@@ -192,7 +192,7 @@ func BenchmarkScanExpiringUTXOs(b *testing.B) {
 			b.ReportMetric(float64(maxResults), "max_results")
 
 			for i := 0; i < b.N; i++ {
-				_, err := idx.ScanExpiringUTXOs(0, 1000000, maxResults)
+				_, _, err := idx.ScanExpiringUTXOs(0, 1000000, maxResults, nil)
 				if err != nil {
 					b.Fatalf("Failed to scan UTXOs: %v", err)
 				}

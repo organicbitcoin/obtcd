@@ -5,6 +5,8 @@
 // NOTE: This file is intended to house the RPC commands that are specific to
 // OBTC (Organic Bitcoin) extensions.
 
+// OBTC-only: JSON-RPC command definitions.
+
 package btcjson
 
 // ListExpiringCmd defines the listexpiring JSON-RPC command.
@@ -22,6 +24,10 @@ type ListExpiringCmd struct {
 	// MaxResults is the maximum number of results to return.
 	// Optional: defaults to network-specific limit.
 	MaxResults *int `jsonrpcusage:"\"max_results\""`
+
+	// StartAfter is an optional cursor in the form \"txid:vout\" to resume
+	// pagination within the start height.
+	StartAfter *string `jsonrpcusage:"\"start_after\""`
 }
 
 // NewListExpiringCmd returns a new instance which can be used to issue a
@@ -29,11 +35,12 @@ type ListExpiringCmd struct {
 //
 // The parameters which are pointers indicate they are optional. Passing nil
 // for optional parameters will use the default value.
-func NewListExpiringCmd(startHeight *int32, endHeight *int32, maxResults *int) *ListExpiringCmd {
+func NewListExpiringCmd(startHeight *int32, endHeight *int32, maxResults *int, startAfter *string) *ListExpiringCmd {
 	return &ListExpiringCmd{
 		StartHeight: startHeight,
 		EndHeight:   endHeight,
 		MaxResults:  maxResults,
+		StartAfter:  startAfter,
 	}
 }
 

@@ -40,7 +40,7 @@
 
 * 设计与数据结构：2h（高度推进+键空间）
 * 实现 `blockchain/expiryindex/`：8h（持久化、再扫、恢复）
-* RPC：`obtc.listExpiring [days]`：3h
+* RPC：`listexpiring`：3h
 * 单测+基准：5h（10k/100k UTXO 假数据；启动/恢复用例）
   **Cursor**：生成表驱动测试、错误路径枚举。
   **验收**：假 UTXO 能被正确索引；重启后索引不丢失。
