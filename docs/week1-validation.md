@@ -160,13 +160,7 @@ go test -race ./...
    - ✅ Status monitoring
    - ✅ Clean shutdown and cleanup
 
-2. **Upstream Sync Script** (`scripts/rebase-upstream.sh`):
-   - ✅ Safe upstream synchronization
-   - ✅ Backup creation before rebase
-   - ✅ OBTC functionality verification
-   - ✅ Conflict resolution guidance
-
-3. **Documentation**:
+2. **Documentation**:
    - ✅ Updated README.md with OBTC focus
    - ✅ Network parameter tables
    - ✅ Quick start guide

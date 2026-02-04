@@ -9,11 +9,9 @@
   - OBTC 网络参数（主网/测试网/回归网）与 Expiry 参数骨架
   - Register/IsOBTC/ForkHeight 相关逻辑
 
-### 2) 开发与上游同步脚本
+### 2) 开发脚本
 - `scripts/devnet-up.sh`
   - 本地双节点启动脚本（simnet）
-- `scripts/rebase-upstream.sh`
-  - 上游同步脚本
 
 ### 3) 验证记录
 - `docs/week1-validation.md`
@@ -79,4 +77,3 @@
 2. `blockchain/expiryindex/expiryindex.go`
 3. `rpcserver.go`（listexpiring/getexpiryindexstats）
 4. `scripts/validation/README.md` + `utxo_expiry_validator.go`
-

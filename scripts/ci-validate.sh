@@ -136,27 +136,19 @@ EOF
 test_scripts() {
     print_section "Testing DevNet Scripts"
     
-    if [ ! -f "scripts/devnet-up.sh" ] || [ ! -f "scripts/rebase-upstream.sh" ]; then
-        print_error "Required scripts not found"
+    if [ ! -f "scripts/devnet-up.sh" ]; then
+        print_error "Required script not found: scripts/devnet-up.sh"
         return 1
     fi
     
     print_status "Checking script permissions..."
-    chmod +x scripts/devnet-up.sh scripts/rebase-upstream.sh
+    chmod +x scripts/devnet-up.sh
     
     print_status "Testing devnet-up.sh help..."
     if ./scripts/devnet-up.sh help > /dev/null; then
         print_success "devnet-up.sh help works"
     else
         print_error "devnet-up.sh help failed"
-        return 1
-    fi
-    
-    print_status "Testing rebase-upstream.sh help..."
-    if ./scripts/rebase-upstream.sh --help > /dev/null; then
-        print_success "rebase-upstream.sh help works"
-    else
-        print_error "rebase-upstream.sh help failed"
         return 1
     fi
     
