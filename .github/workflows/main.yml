@@ -155,13 +155,10 @@ jobs:
         run: |
           echo "Validating DevNet scripts..."
           ls -la scripts/
-          chmod +x scripts/devnet-up.sh scripts/rebase-upstream.sh
+          chmod +x scripts/devnet-up.sh
           
           echo "Testing devnet-up.sh help..."
           ./scripts/devnet-up.sh help
-          
-          echo "Testing rebase-upstream.sh help..."
-          ./scripts/rebase-upstream.sh --help
           
           echo "✅ All scripts validated successfully"
 
