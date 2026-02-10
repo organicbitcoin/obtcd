@@ -118,10 +118,6 @@ go test -race ./...
 ### Development Workflow
 
 ```bash
-# Sync with upstream btcd (safely)
-./scripts/rebase-upstream.sh --dry-run  # Preview changes
-./scripts/rebase-upstream.sh            # Actual rebase
-
 # Development network management
 ./scripts/devnet-up.sh start           # Start 2-node simnet
 ./scripts/devnet-up.sh demo            # Run demo transaction  

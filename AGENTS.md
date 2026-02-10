@@ -25,7 +25,6 @@ obtc/ (repo root)
     obtc-status/       # Week6: 最小状态页（规划）
   scripts/
     devnet-up.sh       # Week1: devnet 一键脚本
-    rebase-upstream.sh # Week1: 同步上游脚本
     validation/        # Week2: 验证脚本与工具
   docs/
     week1-validation.md

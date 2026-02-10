@@ -15,7 +15,6 @@
 * `scripts/devnet-up.sh`：一键起 2 节点（simnet）脚本
 * `chaincfg/params_obtc.go`：OBTC 参数骨架（含 `Register()`、`IsOBTC()`、TODO: 唯一常量占位）
 * `.github/workflows/ci.yml`：最小 CI（Linux + vet + -race）
-* `scripts/rebase-upstream.sh`：上游同步脚本
 * `README.md`：一页快速上手
 * 端到端验证记录：高度、出块日志、转账 **txid**、测试通过截图（可放到 `docs/`）
 
@@ -29,7 +28,6 @@ btcd/ (fork)
     params_obtc.go      # 本周创建骨架（不启用）
 scripts/
   devnet-up.sh
-  rebase-upstream.sh
 .github/
   workflows/ci.yml
 docs/
@@ -43,7 +41,6 @@ docs/
 ### 1) Fork & 远端设置（2h）
 
 * 添加 upstream、创建 `obtc-main`、开启分支保护（禁止直接推 main）。
-* 写 `scripts/rebase-upstream.sh`（仅开发分支可 rebase；发布分支用 merge）。
 
 ```bash
 git remote add upstream https://github.com/btcsuite/btcd.git
@@ -52,7 +49,7 @@ git checkout -b obtc-main
 git push -u origin obtc-main
 ```
 
-**验收**：`git remote -v` 正确、`obtc-main` 已受保护、脚本可运行。
+**验收**：`git remote -v` 正确、`obtc-main` 已受保护。
 
 ---
 
@@ -191,19 +188,3 @@ jobs:
 * 持久化与恢复（含重组一致性）
 * RPC：`listexpiring`
 * 单元测试 + 基准（10k/100k 假 UTXO）
-
----
-
-### 附：上游同步脚本（可选）
-
-`scripts/rebase-upstream.sh`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-git fetch upstream
-git checkout obtc-main
-git rebase upstream/master
-```
-
-> 仅用于开发分支。若未来打 `release/*`，请改用 **merge**，保留历史。
