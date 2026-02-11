@@ -24,6 +24,18 @@ func TestIsLikelyREAPTx(t *testing.T) {
 	if IsLikelyREAPTx(tx) {
 		t.Fatalf("marker output must be zero")
 	}
+
+	tx.TxOut[1].Value = 0
+	tx.Version = 1
+	if IsLikelyREAPTx(tx) {
+		t.Fatalf("version mismatch should not be identified as REAP")
+	}
+
+	tx.Version = REAPTxVersion
+	tx.TxOut = tx.TxOut[:1]
+	if IsLikelyREAPTx(tx) {
+		t.Fatalf("tx with wrong output count should not be REAP")
+	}
 }
 
 func TestExtractMarkerPayload(t *testing.T) {
