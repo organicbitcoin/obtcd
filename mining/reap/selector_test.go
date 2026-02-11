@@ -70,6 +70,72 @@ func TestSelectCandidatesDeterministic(t *testing.T) {
 	}
 }
 
+func TestSelectCandidatesMaxInputsAndWeightBudget(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	scanner := &stubScanner{}
+
+	for i := 0; i < 10; i++ {
+		op := addUtxo(t, view, 1000, uint32(200+i))
+		scanner.items = append(scanner.items, &expiryindex.ExpiringUTXO{OutPoint: op, ExpiryKey: 1})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 3
+	p.WeightBudget = 0
+	plan, err := selectCandidatesWithScanner(context.Background(), 100, scanner, view, p)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(plan.Inputs) != 3 {
+		t.Fatalf("expected max-input truncation to 3, got %d", len(plan.Inputs))
+	}
+
+	p.MaxInputs = 100
+	p.WeightBudget = EstimateBlueprintWeight(2)
+	plan2, err := selectCandidatesWithScanner(context.Background(), 100, scanner, view, p)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(plan2.Inputs) != 2 {
+		t.Fatalf("expected weight-budget truncation to 2, got %d", len(plan2.Inputs))
+	}
+}
+
+func TestSelectCandidatesIntegrationFiltersMissingAndSpent(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	scanner := &stubScanner{}
+
+	valid1 := addUtxo(t, view, 1000, 1)
+	valid2 := addUtxo(t, view, 2000, 2)
+	spent := addUtxo(t, view, 3000, 3)
+	if e := view.LookupEntry(spent); e == nil {
+		t.Fatalf("expected spent entry")
+	} else {
+		e.Spend()
+	}
+
+	missing := wire.OutPoint{Index: 999}
+	scanner.items = []*expiryindex.ExpiringUTXO{
+		{OutPoint: valid1, ExpiryKey: 1},
+		{OutPoint: missing, ExpiryKey: 1},
+		{OutPoint: spent, ExpiryKey: 1},
+		{OutPoint: valid2, ExpiryKey: 2},
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.ScanBatch = 2 // force paging path
+	plan, err := selectCandidatesWithScanner(context.Background(), 10, scanner, view, p)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if plan.Stats.Candidates != 2 {
+		t.Fatalf("expected 2 valid candidates after filtering, got %d", plan.Stats.Candidates)
+	}
+	if len(plan.Inputs) != 2 {
+		t.Fatalf("expected 2 picked inputs, got %d", len(plan.Inputs))
+	}
+}
+
 func TestTaxRoundingInvariant(t *testing.T) {
 	p := DefaultREAPParams(SortModeStrict)
 	r := rand.New(rand.NewSource(42))

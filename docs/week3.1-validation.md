@@ -1,6 +1,6 @@
 # Week 3.1 Validation (Kickoff)
 
-## Scope in this kickoff commit
+## Scope in this phase
 
 - Added marker digest helper and fixed test vector:
   - `mining/reap/marker.go`
@@ -9,8 +9,12 @@
 - Added network-aware REAP parameter defaults + validation:
   - `DefaultREAPParamsForNet(...)`
   - `REAPParams.Validate()`
-- Added tests:
+- Added dry-run summary helper for auditable output fields:
+  - `mining/reap/dryrun.go`
+- Added/extended tests:
   - `mining/reap/params_test.go`
+  - `mining/reap/dryrun_test.go`
+  - `mining/reap/selector_test.go` (MaxInputs/WeightBudget boundary + integration-style filtering/paging path)
 
 ## Validation commands
 
@@ -19,8 +23,8 @@ go test ./mining/reap -v
 go test ./...
 ```
 
-## Next steps (not started in kickoff)
+## Next steps
 
-- dry-run command/RPC output (`picked/tax/burn/estWeight/markerHash`)
-- stronger integration tests for scanner + realistic view fetch path
-- documentation of marker serialization in developer docs
+- expose `BuildDryRunSummary` via command/RPC output (`picked/tax/burn/estWeight/markerHash`)
+- add a real chain-backed integration test once Week4 hooks are available
+- document marker serialization spec in developer docs
