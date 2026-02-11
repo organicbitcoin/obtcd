@@ -20,6 +20,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/mining"
+	"github.com/btcsuite/btcd/mining/reap"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
@@ -1381,6 +1382,12 @@ func (mp *TxPool) checkMempoolAcceptance(tx *btcutil.Tx,
 			txHash)
 
 		return nil, txRuleError(wire.RejectInvalid, str)
+	}
+
+	// REAP system transactions are block-internal and must never enter mempool.
+	if reap.IsLikelyREAPTx(tx.MsgTx()) {
+		return nil, txRuleError(wire.RejectNonstandard,
+			"reap system transaction is not accepted in mempool")
 	}
 
 	// Get the current height of the main chain. A standalone transaction
