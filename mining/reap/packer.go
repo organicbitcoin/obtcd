@@ -1,8 +1,6 @@
 package reap
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -84,17 +82,7 @@ func burnScript(policy BurnPolicy) ([]byte, error) {
 }
 
 func markerScript(height int32, count int, inputs []wire.OutPoint) ([]byte, error) {
-	h := sha256.New()
-	for _, op := range inputs {
-		h.Write(op.Hash[:])
-		var idx [4]byte
-		idx[0] = byte(op.Index)
-		idx[1] = byte(op.Index >> 8)
-		idx[2] = byte(op.Index >> 16)
-		idx[3] = byte(op.Index >> 24)
-		h.Write(idx[:])
-	}
-	sum := hex.EncodeToString(h.Sum(nil))
+	sum := MarkerDigest(inputs)
 	payload := strings.Join([]string{"REAP", strconv.FormatInt(int64(height), 10), strconv.Itoa(count), sum}, ":")
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_RETURN).AddData([]byte(payload)).Script()
 }
