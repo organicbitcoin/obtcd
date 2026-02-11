@@ -56,6 +56,16 @@
   **Cursor**：跨文件抽取共识常量、生成属性测试骨架。
   **验收**：喂入索引→产出系统交易，哈希与排序可复现。
 
+## 第 3.1 周｜REAP 工程化补强（8–12h）
+
+**产出**：把 Week3 原型补齐为可稳定接入共识/模板的模块。
+
+* 固化 marker 序列化规范与测试向量：2h
+* 参数映射（chaincfg -> reap params）与边界测试：2h
+* dry-run 工具或调试 RPC：2h
+* 集成回归（含 WeightBudget/MaxInputs 截断一致性）：2–4h
+  **验收**：`go test ./mining/reap -v` 与全仓测试通过，输出可审计 dry-run 结果。
+
 ## 第 4 周｜验证规则 & 挖矿模板集成（18–20h）
 
 **产出**：端到端 Devnet 自动 REAP 生效、税入 coinbase。
