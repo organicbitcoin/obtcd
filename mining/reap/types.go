@@ -21,11 +21,11 @@ type REAPStats struct {
 }
 
 type REAPPlan struct {
-	Inputs       []wire.OutPoint
-	TaxTotal     int64
-	RefundTotal  int64
-	Height       int32
-	Stats        REAPStats
+	Inputs      []wire.OutPoint
+	TaxTotal    int64
+	RefundTotal int64
+	Height      int32
+	Stats       REAPStats
 }
 
 var (
