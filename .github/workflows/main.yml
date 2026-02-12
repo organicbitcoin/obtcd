@@ -162,6 +162,25 @@ jobs:
           
           echo "✅ All scripts validated successfully"
 
+  test-rpctest:
+    name: RPC Integration (rpctest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build btcd (for harness)
+        run: go build -o btcd .
+
+      - name: Run rpctest integration
+        run: go test -tags=rpctest ./integration/... -count=1 -v
+
   vet:
     name: Code Quality
     runs-on: ubuntu-latest
