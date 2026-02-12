@@ -10,7 +10,7 @@
 * 产出**系统交易蓝图**（`wire.MsgTx`），包含：
 
   * 多个 **“到期 UTXO” 输入**（暂不校验脚本，本周仅构造）。
-  * **Burn 输出**（聚合 70% 到“可证明不可花费”的脚本；形式由参数决定，默认 `OP_RETURN`/P2WSH-0 占位）。
+  * **Refund 输出**（将 70% 返还至原始 `scriptPubKey`；相同脚本可做确定性聚合）。
   * **REAP 标记输出**（`OP_RETURN "REAP:<height>:<count>:<hash>"`，便于识别与审计）。
   * 费用=**30% 税**（由系统交易“少付输出”让渡为 Miner fee；第 4 周由 coinbase 收取）。
 * 属性测试：**排序稳定性/幂等性/舍入一致性**；基准：10k 候选的选择耗时。
@@ -27,15 +27,15 @@
    * **简化模式（降级开关）**：`expiryHeight → txid → vout`（去掉 `amount`，发生性能/一致性问题时可一键切换）。
    * 两种模式均做属性测试，默认使用**严格模式**。
 
-2. **税与烧毁（整数舍入规则）**
+2. **税与返还（整数舍入规则）**
 
    * 对每个输入 **单独** 计算税：`tax_i = floor(value_i * 30 / 100)`；
-   * `burn = Σvalue_i - Σtax_i`；
+   * `refund = Σvalue_i - Σtax_i`；
    * 这样避免累计浮点/跨实现差异，**确定性强**。
 
-3. **Burn 脚本策略（可配置，默认占位）**
+3. **返还脚本策略（按原脚本返还）**
 
-   * `BurnPolicy = OP_RETURN|P2WSH_Zero|P2TR_NullKey`（默认 `OP_RETURN` 占位，本周不触发标准性校验）。
+   * 不再使用 BurnPolicy；返还输出直接使用输入 UTXO 的原始 `scriptPubKey`。
    * 若用 `OP_RETURN`，只**占位**并在第 4 周的策略/共识里允许其携带金额（或改为 P2WSH\_Zero）。
 
 4. **容量与上限（不触链上限制）**
@@ -52,8 +52,8 @@ btcd/
   mining/
     reap/
       selector.go          # SelectCandidates() - 读 ExpiryIndex + UTXO view，输出 REAPPlan
-      packer.go            # BuildBlueprint() - 构造 MsgTx（burn 输出 + 标记输出）
-      params.go            # 选择/打包参数（排序模式、上限、burn 策略、税率）
+      packer.go            # BuildBlueprint() - 构造 MsgTx（refund 输出 + 标记输出）
+      params.go            # 选择/打包参数（排序模式、上限、税率）
       weight.go            # 交易重量估算（保守估计）
       types.go             # REAPPlan/Stats/Errors
       selector_test.go     # 属性测试（排序稳定/幂等/舍入）
@@ -68,13 +68,11 @@ btcd/
 ```go
 // 排序/模式/策略
 type SortMode int    // Strict, Simple
-type BurnPolicy int  // OP_RETURN, P2WSH_Zero, P2TR_NullKey
 
 type REAPParams struct {
   Sort        SortMode
   MaxInputs   int        // 每块最多纳入多少个到期输入
   WeightBudget int64     // 预估系统交易重量上限（可选，0=忽略）
-  BurnPolicy  BurnPolicy
   TaxNum, TaxDen int64   // 默认 30/100
 }
 
@@ -82,7 +80,7 @@ type REAPParams struct {
 type REAPPlan struct {
   Inputs    []wire.OutPoint // 已按最终顺序排好
   TaxTotal  int64           // Σ floor(value_i*TaxNum/TaxDen)
-  BurnTotal int64           // Σ value_i - TaxTotal
+  RefundTotal int64         // Σ value_i - TaxTotal
   Height    int32           // 计划针对的 tip height（或执行高度）
   Stats     struct {
     Candidates int
@@ -125,15 +123,15 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
   * `Version = REAP_VERSION`（常量占位，例如 `3` 或 `0x4F42`）
   * `LockTime = plan.Height`（利于后续审计；不用于共识）
   * 输入：每个 outpoint 的 `TxIn{SignatureScript: nil, Witness: nil, Sequence: 0xFFFFFFFE}`（占位；第 4 周验证规则中绕过脚本校验）
-  * 输出1（**Burn**）：`value = plan.BurnTotal`，`scriptPubKey = BurnScript(BurnPolicy)`
+  * 输出1..N（**Refund**）：将 `plan.RefundTotal` 按原 `scriptPubKey` 聚合后输出
   * 输出2（**Marker**）：`value = 0`，`scriptPubKey = OP_RETURN "REAP:<height>:<count>:<sha256(inputs)>"`
-* 计算 `TaxTotal`、`BurnTotal` 校验一致（断言：`Σinputs = TaxTotal + BurnTotal`）。
+* 计算 `TaxTotal`、`RefundTotal` 校验一致（断言：`Σinputs = TaxTotal + RefundTotal`）。
 * 返回 `*MsgTx`（蓝图），**不入 mempool**，仅供第 4 周的模板/验证使用。
 
 ### C. 重量估算（`weight.go`）
 
 * 输入估算：按 P2WSH 上界计（比实际更重，保证安全）。
-* 输出估算：2 个输出（Burn + Marker），Marker 较小。
+* 输出估算：保守按 `N(Refund)+1(Marker)` 估算。
 * 暴露 `EstimateBlueprintWeight(plan)`，供选择器“预算截断”。
 
 ### D. 参数注入（`params.go`）
@@ -150,7 +148,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 
 * **排序稳定性**：同一批输入重复运行 100 次，输出顺序完全一致。
 * **幂等性**：`Select` → `BuildBlueprint` → 重新基于蓝图还原输入集合，等价于原集合。
-* **舍入一致性**：构造随机金额集合，验证 `Σfloor(value_i*30/100) + burn == Σvalue_i`。
+* **舍入一致性**：构造随机金额集合，验证 `Σfloor(value_i*30/100) + refund == Σvalue_i`。
 * **降级一致性**（Simple 模式）：移除 `amount` 参与排序后，若输入金额互异，顺序不同但**蓝图哈希**在 Simple 模式内稳定。
 
 ### 2) 单元测试（`packer_test.go`）
@@ -158,7 +156,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 * **两端极值**：最小/最大金额、数量（1、MaxInputs）。
 * **容量截断**：给大于 `MaxInputs` 的候选，确保截断位置正确。
 * **重量截断**：设置紧张预算，确保估算重量触顶时停止。
-* **BurnPolicy 变化**：OP\_RETURN 与 P2WSH\_Zero 输出结构均可构造。
+* **返还聚合**：相同 `scriptPubKey` 的返还输出会聚合且结果稳定。
 
 ### 3) 基准（`bench_test.go`）
 
@@ -169,7 +167,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 
 * 用脚本批量造 UTXO（地址轮换、金额分布）；
 * 推进高度使其“到期”（利用 Week 2 的 ExpiryIndex 加速窗口）；
-* 调 `Select` + `BuildBlueprint`，打印统计：`picked/estWeight/tax/burn`；
+* 调 `Select` + `BuildBlueprint`，打印统计：`picked/estWeight/tax/refund`；
 * 验证 Marker 输出里 `sha256(inputs)` 与计划一致。
 
 ---
@@ -180,7 +178,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 | ------------------------------ | --------: |
 | 需求定稿 & 框架（types/params/weight） |      1.5h |
 | 选择器实现（分页读取/过滤/排序/截断）           |      6.0h |
-| 打包器实现（Burn/Marker/金额校验）        |      4.5h |
+| 打包器实现（Refund/Marker/金额校验）      |      4.5h |
 | 属性测试与单测（稳定/幂等/舍入/容量）           |      4.0h |
 | 基准测试与优化                        |      1.0h |
 | 集成“干跑”脚本 & 文档（简要）              |      1.0h |
@@ -204,7 +202,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 
 * `mining/reap/`: `selector.go`, `packer.go`, `params.go`, `weight.go`, `types.go`
 * 测试：`selector_test.go`, `packer_test.go`, `bench_test.go`
-* `docs/week3-validation.md`：干跑结果（picked/tax/burn/estWeight/marker 哈希）
+* `docs/week3-validation.md`：干跑结果（picked/tax/refund/estWeight/marker 哈希）
 * （可选）`cmd/reap-dryrun/`：命令行小工具，便于在 simnet 交互查看计划与蓝图摘要
 
 ---

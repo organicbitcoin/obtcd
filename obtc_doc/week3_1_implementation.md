@@ -10,7 +10,7 @@
 
 1. **生产依赖解耦**：选择器需要稳定访问 UTXO 数据与到期索引，避免调用方必须手工拼完整 view。
 2. **可审计一致性**：Marker 规范、排序键、税额规则需做“规范化描述 + 固定测试向量”。
-3. **集成干跑能力**：需要一个可执行 dry-run 工具或 RPC，便于链上前验证 picked/tax/burn/weight。
+3. **集成干跑能力**：需要一个可执行 dry-run 工具或 RPC，便于链上前验证 picked/tax/refund/weight。
 
 ---
 
@@ -24,7 +24,7 @@
 * 补齐重量与上限行为测试：
   * `MaxInputs`、`WeightBudget`、`Tax cap`（若参数存在）的交互边界。
 * 增加一个 dry-run 入口（命令或调试 RPC 二选一）：
-  * 输出 `picked/tax/burn/estWeight/markerHash`。
+  * 输出 `picked/tax/refund/estWeight/markerHash`。
 * 文档化：`docs/week3.1-validation.md`。
 
 ---
@@ -47,7 +47,7 @@ docs/week3.1-validation.md       # 新
 ## 测试补强清单
 
 1. **确定性向量测试**（必须）
-   * 给定固定 outpoints 与金额，输出顺序、tax、burn、marker hash 固定。
+   * 给定固定 outpoints 与金额，输出顺序、tax、refund、marker hash 固定。
 2. **预算截断一致性**（必须）
    * 当 `WeightBudget` 触顶时，截断点稳定且重复运行一致。
 3. **模式回归**（建议）

@@ -7,11 +7,11 @@ import (
 )
 
 type DryRunSummary struct {
-	Picked     int
-	TaxTotal   int64
-	BurnTotal  int64
-	EstWeight  int64
-	MarkerHash string
+	Picked      int
+	TaxTotal    int64
+	RefundTotal int64
+	EstWeight   int64
+	MarkerHash  string
 }
 
 func BuildDryRunSummary(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams) (DryRunSummary, error) {
@@ -34,16 +34,16 @@ func BuildDryRunSummary(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPPar
 		taxTotal += taxForValue(entry.Amount(), p)
 	}
 
-	burnTotal := inTotal - taxTotal
-	if burnTotal < 0 {
-		return DryRunSummary{}, fmt.Errorf("negative burn total")
+	refundTotal := inTotal - taxTotal
+	if refundTotal < 0 {
+		return DryRunSummary{}, fmt.Errorf("negative refund total")
 	}
 
 	return DryRunSummary{
-		Picked:     len(plan.Inputs),
-		TaxTotal:   taxTotal,
-		BurnTotal:  burnTotal,
-		EstWeight:  EstimateBlueprintWeight(len(plan.Inputs)),
-		MarkerHash: MarkerDigest(plan.Inputs),
+		Picked:      len(plan.Inputs),
+		TaxTotal:    taxTotal,
+		RefundTotal: refundTotal,
+		EstWeight:   EstimateBlueprintWeight(len(plan.Inputs)),
+		MarkerHash:  MarkerDigest(plan.Inputs),
 	}, nil
 }

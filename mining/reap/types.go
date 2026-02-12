@@ -13,14 +13,6 @@ const (
 	SortModeSimple
 )
 
-type BurnPolicy int
-
-const (
-	BurnPolicyOpReturn BurnPolicy = iota
-	BurnPolicyP2WSHZero
-	BurnPolicyP2TRNullKey
-)
-
 type REAPStats struct {
 	Candidates int
 	Picked     int
@@ -29,11 +21,11 @@ type REAPStats struct {
 }
 
 type REAPPlan struct {
-	Inputs    []wire.OutPoint
-	TaxTotal  int64
-	BurnTotal int64
-	Height    int32
-	Stats     REAPStats
+	Inputs       []wire.OutPoint
+	TaxTotal     int64
+	RefundTotal  int64
+	Height       int32
+	Stats        REAPStats
 }
 
 var (

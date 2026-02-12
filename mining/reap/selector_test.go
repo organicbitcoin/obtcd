@@ -142,18 +142,22 @@ func TestTaxRoundingInvariant(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		v := r.Int63n(5_000_000_000)
 		tax := taxForValue(v, p)
-		burn := v - tax
-		if tax+burn != v {
+		refund := v - tax
+		if tax+refund != v {
 			t.Fatalf("invariant broken for %d", v)
 		}
 	}
 }
 
 func addUtxo(t testing.TB, view *blockchain.UtxoViewpoint, amount int64, nonce uint32) wire.OutPoint {
+	return addUtxoWithScript(t, view, amount, nonce, []byte{0x51})
+}
+
+func addUtxoWithScript(t testing.TB, view *blockchain.UtxoViewpoint, amount int64, nonce uint32, pkScript []byte) wire.OutPoint {
 	t.Helper()
 	msg := wire.NewMsgTx(2)
 	msg.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Index: nonce}})
-	msg.AddTxOut(&wire.TxOut{Value: amount, PkScript: []byte{0x51}})
+	msg.AddTxOut(&wire.TxOut{Value: amount, PkScript: pkScript})
 	tx := btcutil.NewTx(msg)
 	view.AddTxOut(tx, 0, 100)
 	return wire.OutPoint{Hash: *tx.Hash(), Index: 0}

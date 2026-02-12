@@ -8,7 +8,7 @@
 
 ## 🎯 本周目标（Definition of Done）
 
-* **共识验证**：区块中允许**至多 1 笔 REAP 交易**；对其执行**专用验证规则**（无需签名脚本），并强制**确定性选择**与**税/烧毁**一致。
+* **共识验证**：区块中允许**至多 1 笔 REAP 交易**；对其执行**专用验证规则**（无需签名脚本），并强制**确定性选择**与**税/返还**一致。
 * **挖矿模板**：在 `NewBlockTemplate` 中自动插入 REAP 蓝图，**税额以交易费形式**并入 coinbase（含**每块税上限**）。
 * **策略/中继**：mempool **拒绝** REAP 交易（只允许矿工内部构造），普通交易**不得花费已过期 UTXO**。
 * **端到端**：simnet 上演示“到期→REAP→coinbase 收税”≥48 小时稳定出块。
@@ -51,7 +51,7 @@ btcd/
   * **无签名数据**（`ScriptSig/Witness` 为空）；
   * **恰有 2 个输出**：
 
-    * **Burn 输出**：脚本匹配 `BurnPolicy`（默认 `OP_RETURN` 或 `P2WSH_Zero`）；金额为 `Σinputs - TaxTotal`；
+    * **Refund 输出**：金额为 `Σinputs - TaxTotal`，并返还至输入原始 `scriptPubKey`（允许按脚本聚合）；
     * **Marker 输出**：`OP_RETURN "REAP:<height>:<count>:<sha256(inputs)>"`，金额=0；
   * **无锁时/序号**要求（可将 `nLockTime = height` 作为审计信息，不参与规则判定）。
 
@@ -70,8 +70,8 @@ btcd/
 
   * **输入集合**必须等于 `Plan.Inputs[:k]`（`k ≤ MaxInputs`，与蓝图一致）；
   * **税额** `TaxTotal = Σ floor(value_i * r.num / r.den)`；
-  * **Burn** = `Σvalue_i - TaxTotal`；
-  * 交易内 **Burn/Marker 输出**金额与脚本必须精确匹配；
+  * **Refund** = `Σvalue_i - TaxTotal`；
+  * 交易内 **Refund/Marker 输出**金额与脚本必须精确匹配；
   * **不允许额外输出**。
 * 区块**不含** REAP：
 
@@ -80,7 +80,7 @@ btcd/
 
 ### 4) 税收入账（fee 化）与上限
 
-* REAP 交易的 **交易费 = TaxTotal**（因为仅有 Burn 输出）；
+* REAP 交易的 **交易费 = TaxTotal**（返还部分由交易输出显式支付）；
 * coinbase 总额 = **区块补贴 + 全部交易费**（包括 REAP 税）。
 * 增加网络参数：`MaxReapTaxPerBlock`（例如对主网设置一个安全上限），若 `TaxTotal > cap` → **区块无效**（或截断选择器以不超 cap）。
 * 为防极端体积，保留 `MaxREAPInputsPerBlock` 与模板侧的**估重**限制。
@@ -113,7 +113,7 @@ btcd/
 
 1. **验证规则**（`validation_reap_test.go`）
 
-   * 合法 REAP：输入为到期集合，Burn/Marker 正确，区块有效。
+   * 合法 REAP：输入为到期集合，Refund/Marker 正确，区块有效。
    * **错序/漏选/多选**：与 `SelectCandidates` 结果不一致 → 无效。
    * **税额/四舍五入**：逐输入 `floor` 累加一致，任何偏差 → 无效。
    * **超 cap**：`TaxTotal > MaxReapTaxPerBlock` → 无效。
@@ -130,7 +130,7 @@ btcd/
 * 构造一批“将到期”UTXO；推进高度触发 REAP：
 
   * 观察：区块含 1 笔 REAP、coinbase 费用增长=税额；
-  * 导出 Burn/Marker 输出并校验与计划一致。
+  * 导出 Refund/Marker 输出并校验与计划一致。
 * **reorg**：
 
   * 分叉两条链（分别含/不含 REAP 或不同选择），以更长链取胜；
@@ -149,7 +149,7 @@ btcd/
 | 任务                                      |        预估 |
 | --------------------------------------- | --------: |
 | 规则梳理 & 接口挂钩（validate.go / spendcheck）   |      2.0h |
-| `IsREAP` + `CheckReapTx`（识别/税/烧毁/集合一致性） |      5.0h |
+| `IsREAP` + `CheckReapTx`（识别/税/返还/集合一致性） |      5.0h |
 | `CheckExpiredSpends`（非 REAP 禁止花费过期）     |      1.0h |
 | 模板集成（构造/插入/费统计/截断 & cap）                |      4.0h |
 | 策略/中继（mempool 拒收 REAP & 过期花费）           |      1.0h |

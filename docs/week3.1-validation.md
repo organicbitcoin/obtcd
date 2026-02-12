@@ -25,6 +25,6 @@ go test ./...
 
 ## Next steps
 
-- expose `BuildDryRunSummary` via command/RPC output (`picked/tax/burn/estWeight/markerHash`)
+- expose `BuildDryRunSummary` via command/RPC output (`picked/tax/refund/estWeight/markerHash`)
 - add a real chain-backed integration test once Week4 hooks are available
 - document marker serialization spec in developer docs

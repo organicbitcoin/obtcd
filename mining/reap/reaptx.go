@@ -18,13 +18,14 @@ func IsLikelyREAPTx(tx *wire.MsgTx) bool {
 	if tx.Version != REAPTxVersion {
 		return false
 	}
-	if len(tx.TxOut) != 2 {
+	if len(tx.TxOut) < 1 {
 		return false
 	}
-	if tx.TxOut[1].Value != 0 {
+	markerOut := tx.TxOut[len(tx.TxOut)-1]
+	if markerOut.Value != 0 {
 		return false
 	}
-	marker, ok := ExtractMarkerPayload(tx.TxOut[1].PkScript)
+	marker, ok := ExtractMarkerPayload(markerOut.PkScript)
 	if !ok {
 		return false
 	}
