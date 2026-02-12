@@ -14,9 +14,10 @@ Added:
 
 - `mining/reap/selector_test.go`
   - deterministic ordering across repeated runs
-  - tax rounding invariant check (`tax + burn == input`)
+  - tax rounding invariant check (`tax + refund == input`)
 - `mining/reap/packer_test.go`
   - blueprint IO/totals/marker structure checks
+  - refund outputs are returned to original script(s), with deterministic grouping
   - missing UTXO error path
 - `mining/reap/bench_test.go`
   - benchmark scaffolding for 1k/10k candidates
@@ -37,4 +38,4 @@ Result: PASS.
 - Sorting modes implemented: `Strict` and `Simple`.
 - Tax computation is per-input floor division.
 - Marker output format: `REAP:<height>:<count>:<sha256(inputs)>`.
-- Burn script policies implemented: `OP_RETURN`, `P2WSH_Zero`, `P2TR_NullKey`.
+- Core rule aligned with OBTC spec: 70% refund to original locking script, 30% tax.

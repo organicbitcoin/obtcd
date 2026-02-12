@@ -94,7 +94,7 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 		plan.Inputs = append(plan.Inputs, c.op)
 		tax := taxForValue(c.amount, p)
 		plan.TaxTotal += tax
-		plan.BurnTotal += c.amount - tax
+		plan.RefundTotal += c.amount - tax
 	}
 
 	plan.Stats.Picked = len(plan.Inputs)

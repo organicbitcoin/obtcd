@@ -26,8 +26,8 @@ func TestBuildDryRunSummary(t *testing.T) {
 	if s.TaxTotal != wantTax {
 		t.Fatalf("tax mismatch got=%d want=%d", s.TaxTotal, wantTax)
 	}
-	if s.BurnTotal != 3001-wantTax {
-		t.Fatalf("burn mismatch got=%d", s.BurnTotal)
+	if s.RefundTotal != 3001-wantTax {
+		t.Fatalf("refund mismatch got=%d", s.RefundTotal)
 	}
 	if s.EstWeight != EstimateBlueprintWeight(2) {
 		t.Fatalf("weight mismatch got=%d", s.EstWeight)

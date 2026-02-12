@@ -11,8 +11,7 @@ import (
 func TestIsLikelyREAPTx(t *testing.T) {
 	tx := wire.NewMsgTx(REAPTxVersion)
 	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Hash: chainhash.Hash{1}, Index: 0}})
-	burn, _ := burnScript(BurnPolicyOpReturn)
-	tx.AddTxOut(&wire.TxOut{Value: 1000, PkScript: burn})
+	tx.AddTxOut(&wire.TxOut{Value: 1000, PkScript: []byte{txscript.OP_TRUE}})
 	m, _ := txscript.NewScriptBuilder().AddOp(txscript.OP_RETURN).AddData([]byte("REAP:100:1:abcd")).Script()
 	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: m})
 
@@ -20,21 +19,21 @@ func TestIsLikelyREAPTx(t *testing.T) {
 		t.Fatalf("expected reap tx")
 	}
 
-	tx.TxOut[1].Value = 1
+	tx.TxOut[len(tx.TxOut)-1].Value = 1
 	if IsLikelyREAPTx(tx) {
 		t.Fatalf("marker output must be zero")
 	}
 
-	tx.TxOut[1].Value = 0
+	tx.TxOut[len(tx.TxOut)-1].Value = 0
 	tx.Version = 1
 	if IsLikelyREAPTx(tx) {
 		t.Fatalf("version mismatch should not be identified as REAP")
 	}
 
 	tx.Version = REAPTxVersion
-	tx.TxOut = tx.TxOut[:1]
+	tx.TxOut = nil
 	if IsLikelyREAPTx(tx) {
-		t.Fatalf("tx with wrong output count should not be REAP")
+		t.Fatalf("tx without outputs should not be REAP")
 	}
 }
 
