@@ -68,3 +68,49 @@ func TestBuildBlueprintMissingUTXO(t *testing.T) {
 		t.Fatalf("expected error for missing utxo")
 	}
 }
+
+func TestMarkerScriptDirect(t *testing.T) {
+	op := wire.OutPoint{Index: 7}
+	s, err := markerScript(321, 1, []wire.OutPoint{op})
+	if err != nil {
+		t.Fatalf("markerScript failed: %v", err)
+	}
+	payload, ok := ExtractMarkerPayload(s)
+	if !ok {
+		t.Fatalf("expected valid marker payload")
+	}
+	if payload == "" {
+		t.Fatalf("expected non-empty marker payload")
+	}
+}
+
+func TestMarkerScriptEmptyAndDeterministic(t *testing.T) {
+	s1, err := markerScript(0, 0, nil)
+	if err != nil {
+		t.Fatalf("markerScript(nil) failed: %v", err)
+	}
+	s2, err := markerScript(0, 0, []wire.OutPoint{})
+	if err != nil {
+		t.Fatalf("markerScript(empty) failed: %v", err)
+	}
+	if !bytes.Equal(s1, s2) {
+		t.Fatalf("nil/empty inputs should produce identical marker script")
+	}
+}
+
+func TestBuildBlueprintLargeAmountInvariant(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	op := addUtxo(t, view, 9_000_000_000_000_000, 42)
+	p := DefaultREAPParams(SortModeStrict)
+	plan := REAPPlan{Height: 9, Inputs: []wire.OutPoint{op}}
+	tx, err := BuildBlueprint(plan, view, p)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+	if len(tx.TxOut) < 2 || tx.TxOut[len(tx.TxOut)-1].Value != 0 {
+		t.Fatalf("expected marker output at tail")
+	}
+	if tx.TxOut[0].Value <= 0 {
+		t.Fatalf("refund should remain positive for large amount")
+	}
+}

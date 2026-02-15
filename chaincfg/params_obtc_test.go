@@ -324,3 +324,35 @@ func TestOBTCForkHeightValues(t *testing.T) {
 		t.Errorf("RegTest fork height %d should be low for development", ObtcRegTestForkHeight)
 	}
 }
+
+func TestGetExpiryParamsDirect(t *testing.T) {
+	if p := GetExpiryParams(&MainNetParams); p != nil {
+		t.Fatalf("bitcoin mainnet should not have OBTC expiry params")
+	}
+
+	for _, tc := range []struct {
+		name   string
+		params *Params
+	}{
+		{"obtc mainnet", &ObtcMainNetParams},
+		{"obtc testnet", &ObtcTestNetParams},
+		{"obtc regtest", &ObtcRegTestParams},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := GetExpiryParams(tc.params)
+			if p == nil {
+				t.Fatalf("expected non-nil expiry params")
+			}
+			if p.WindowBlocks == 0 {
+				t.Fatalf("expected positive WindowBlocks")
+			}
+		})
+	}
+}
+
+func TestCalculateExpiryKeyDirect(t *testing.T) {
+	p := &ExpiryParams{WindowBlocks: 144}
+	if got, want := p.CalculateExpiryKey(100), uint64(244); got != want {
+		t.Fatalf("CalculateExpiryKey mismatch: got %d want %d", got, want)
+	}
+}

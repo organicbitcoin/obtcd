@@ -2,12 +2,14 @@ package reap
 
 import (
 	"context"
+	"math"
 	"math/rand"
 	"testing"
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -136,6 +138,75 @@ func TestSelectCandidatesIntegrationFiltersMissingAndSpent(t *testing.T) {
 	}
 }
 
+func TestSelectCandidatesWithScannerWrapper(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	op := addUtxo(t, view, 1000, 300)
+	scanner := &stubScanner{items: []*expiryindex.ExpiringUTXO{{OutPoint: op, ExpiryKey: 1}}}
+	p := DefaultREAPParams(SortModeStrict)
+
+	plan, err := SelectCandidatesWithScanner(context.Background(), 10, scanner, view, p)
+	if err != nil {
+		t.Fatalf("wrapper select failed: %v", err)
+	}
+	if len(plan.Inputs) != 1 {
+		t.Fatalf("expected 1 input, got %d", len(plan.Inputs))
+	}
+}
+
+func TestSelectCandidatesWithScannerNilScanner(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	p := DefaultREAPParams(SortModeStrict)
+
+	_, err := SelectCandidatesWithScanner(context.Background(), 10, nil, view, p)
+	if err != ErrNilIndex {
+		t.Fatalf("expected ErrNilIndex, got %v", err)
+	}
+}
+
+func TestSortCandidatesByExpiryThenOutpoint(t *testing.T) {
+	h := func(b byte) chainhash.Hash { return chainhash.Hash{b} }
+	cs := []candidate{
+		{op: wire.OutPoint{Hash: h(0x02), Index: 3}, expiry: 2, amount: 100},
+		{op: wire.OutPoint{Hash: h(0x01), Index: 9}, expiry: 1, amount: 999},
+		{op: wire.OutPoint{Hash: h(0x01), Index: 1}, expiry: 1, amount: 111},
+		{op: wire.OutPoint{Hash: h(0x01), Index: 0}, expiry: 1, amount: 111},
+	}
+
+	sortCandidates(cs, SortModeSimple)
+
+	want := []wire.OutPoint{
+		{Hash: h(0x01), Index: 0},
+		{Hash: h(0x01), Index: 1},
+		{Hash: h(0x01), Index: 9},
+		{Hash: h(0x02), Index: 3},
+	}
+	for i := range want {
+		if cs[i].op != want[i] {
+			t.Fatalf("order mismatch at %d: got %v want %v", i, cs[i].op, want[i])
+		}
+	}
+}
+
+func TestSortCandidatesStrictUsesAmountTieBreaker(t *testing.T) {
+	h := func(b byte) chainhash.Hash { return chainhash.Hash{b} }
+	base := []candidate{
+		{op: wire.OutPoint{Hash: h(0x01), Index: 0}, expiry: 7, amount: 200},
+		{op: wire.OutPoint{Hash: h(0x02), Index: 0}, expiry: 7, amount: 100},
+	}
+
+	det := append([]candidate(nil), base...)
+	strict := append([]candidate(nil), base...)
+	sortCandidates(det, SortModeSimple)
+	sortCandidates(strict, SortModeStrict)
+
+	if det[0].amount != 200 {
+		t.Fatalf("deterministic mode should not prioritize amount; got first amount %d", det[0].amount)
+	}
+	if strict[0].amount != 100 {
+		t.Fatalf("strict mode should prioritize smaller amount; got first amount %d", strict[0].amount)
+	}
+}
+
 func TestTaxRoundingInvariant(t *testing.T) {
 	p := DefaultREAPParams(SortModeStrict)
 	r := rand.New(rand.NewSource(42))
@@ -146,6 +217,15 @@ func TestTaxRoundingInvariant(t *testing.T) {
 		if tax+refund != v {
 			t.Fatalf("invariant broken for %d", v)
 		}
+	}
+}
+
+func TestTaxForValueLargeValue(t *testing.T) {
+	p := DefaultREAPParams(SortModeStrict)
+	v := int64(math.MaxInt64 / 64)
+	tax := taxForValue(v, p)
+	if tax <= 0 || tax >= v {
+		t.Fatalf("unexpected tax for large value: v=%d tax=%d", v, tax)
 	}
 }
 

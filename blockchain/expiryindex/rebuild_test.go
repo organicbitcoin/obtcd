@@ -327,6 +327,53 @@ func TestRebuildErrorHandling(t *testing.T) {
 }
 
 // TestIndexConsistencyAfterRebuild tests that index remains consistent after rebuild attempts
+func TestFastRebuildFromUTXODirect(t *testing.T) {
+	db, teardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+
+	err = db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) })
+	if err != nil {
+		t.Fatalf("Failed to create index: %v", err)
+	}
+
+	err = idx.fastRebuildFromUTXO(200)
+	if err == nil {
+		t.Fatalf("expected fastRebuildFromUTXO to fail without blockchain UTXO access")
+	}
+}
+
+func TestIncrementalCatchUpDirect(t *testing.T) {
+	db, teardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+
+	// from >= to should be a no-op success path.
+	if err := idx.incrementalCatchUp(10, 10); err != nil {
+		t.Fatalf("expected no-op success, got %v", err)
+	}
+
+	// Real catch-up path currently relies on blockchain access helpers.
+	err = idx.incrementalCatchUp(0, 1)
+	if err == nil {
+		t.Fatalf("expected incrementalCatchUp to fail without blockchain access")
+	}
+}
+
 func TestIndexConsistencyAfterRebuild(t *testing.T) {
 	db, teardown, err := createRebuildTestDB()
 	if err != nil {
