@@ -18,7 +18,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-func createMiningTestExpiryIndex(t *testing.T) (*expiryindex.ExpiryIndex, func()) {
+func createMiningTestExpiryIndexWithOutputs(t *testing.T, createBuckets bool, outputs int) (*expiryindex.ExpiryIndex, func()) {
 	t.Helper()
 	tmpDir, err := os.MkdirTemp("", "mining_reap_test_")
 	if err != nil {
@@ -37,25 +37,31 @@ func createMiningTestExpiryIndex(t *testing.T) (*expiryindex.ExpiryIndex, func()
 		os.RemoveAll(tmpDir)
 		t.Fatalf("new index: %v", err)
 	}
-	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("index create: %v", err)
+	if createBuckets {
+		if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
+			db.Close()
+			os.RemoveAll(tmpDir)
+			t.Fatalf("index create: %v", err)
+		}
 	}
 
-	msgBlock := wire.NewMsgBlock(&wire.BlockHeader{})
-	cb := wire.NewMsgTx(1)
-	cb.AddTxIn(&wire.TxIn{PreviousOutPoint: *wire.NewOutPoint(&chainhash.Hash{}, wire.MaxPrevOutIndex)})
-	cb.AddTxOut(&wire.TxOut{Value: 1000, PkScript: []byte{txscript.OP_TRUE}})
-	if err := msgBlock.AddTransaction(cb); err != nil {
-		t.Fatalf("add tx: %v", err)
-	}
-	blk := btcutil.NewBlock(msgBlock)
-	blk.SetHeight(120)
-	if err := db.Update(func(dbTx database.Tx) error { return idx.ConnectBlock(dbTx, blk, nil) }); err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("connect block: %v", err)
+	if createBuckets && outputs > 0 {
+		msgBlock := wire.NewMsgBlock(&wire.BlockHeader{})
+		cb := wire.NewMsgTx(1)
+		cb.AddTxIn(&wire.TxIn{PreviousOutPoint: *wire.NewOutPoint(&chainhash.Hash{}, wire.MaxPrevOutIndex)})
+		for i := 0; i < outputs; i++ {
+			cb.AddTxOut(&wire.TxOut{Value: int64(1000 + i), PkScript: []byte{txscript.OP_TRUE}})
+		}
+		if err := msgBlock.AddTransaction(cb); err != nil {
+			t.Fatalf("add tx: %v", err)
+		}
+		blk := btcutil.NewBlock(msgBlock)
+		blk.SetHeight(120)
+		if err := db.Update(func(dbTx database.Tx) error { return idx.ConnectBlock(dbTx, blk, nil) }); err != nil {
+			db.Close()
+			os.RemoveAll(tmpDir)
+			t.Fatalf("connect block: %v", err)
+		}
 	}
 
 	teardown := func() {
@@ -63,6 +69,10 @@ func createMiningTestExpiryIndex(t *testing.T) (*expiryindex.ExpiryIndex, func()
 		os.RemoveAll(tmpDir)
 	}
 	return idx, teardown
+}
+
+func createMiningTestExpiryIndex(t *testing.T) (*expiryindex.ExpiryIndex, func()) {
+	return createMiningTestExpiryIndexWithOutputs(t, true, 1)
 }
 
 func TestMaybeBuildREAPTxDirectEarlyReturns(t *testing.T) {
@@ -76,6 +86,46 @@ func TestMaybeBuildREAPTxDirectEarlyReturns(t *testing.T) {
 	tx, fee, err = g.maybeBuildREAPTx(200)
 	if err != nil || tx != nil || fee != 0 {
 		t.Fatalf("expected clean early return with nil index, got tx=%v fee=%d err=%v", tx, fee, err)
+	}
+}
+
+func TestMaybeBuildREAPTxBeforeEnableHeight(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndex(t)
+	defer teardown()
+
+	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+	tx, fee, err := g.maybeBuildREAPTx(ep.EnableAtHeight - 1)
+	if err != nil || tx != nil || fee != 0 {
+		t.Fatalf("expected no REAP tx before enable height, got tx=%v fee=%d err=%v", tx, fee, err)
+	}
+}
+
+func TestMaybeBuildREAPTxNoCandidatesPath(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndexWithOutputs(t, true, 0)
+	defer teardown()
+	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
+
+	tx, fee, err := g.maybeBuildREAPTx(500)
+	if err != nil || tx != nil || fee != 0 {
+		t.Fatalf("expected no-candidate early return, got tx=%v fee=%d err=%v", tx, fee, err)
+	}
+}
+
+func TestMaybeBuildREAPTxCollectErrorPath(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndexWithOutputs(t, false, 0)
+	defer teardown()
+	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
+
+	tx, fee, err := g.maybeBuildREAPTx(500)
+	if err == nil {
+		t.Fatalf("expected collect error when index buckets are not created")
+	}
+	if tx != nil || fee != 0 {
+		t.Fatalf("unexpected tx/fee on error path: tx=%v fee=%d", tx, fee)
 	}
 }
 
@@ -95,28 +145,30 @@ func TestCollectExpiredOutpointsDirect(t *testing.T) {
 	}
 }
 
-func TestSetREAPIndexDirect(t *testing.T) {
-	idx, teardown := createMiningTestExpiryIndex(t)
+func TestCollectExpiredOutpointsErrorWhenBucketsMissing(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndexWithOutputs(t, false, 0)
 	defer teardown()
-	g := &BlkTmplGenerator{}
-	g.SetREAPIndex(idx)
-	if g.reapIndex != idx {
-		t.Fatalf("SetREAPIndex did not wire index")
+	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
+	p := reap.DefaultREAPParams(reap.SortModeStrict)
+	if _, err := g.collectExpiredOutpoints(500, p); err == nil {
+		t.Fatalf("expected error when index buckets are missing")
 	}
 }
 
-func TestMaybeBuildREAPTxBeforeEnableHeight(t *testing.T) {
-	idx, teardown := createMiningTestExpiryIndex(t)
+func TestCollectExpiredOutpointsRespectsMaxCandidates(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndexWithOutputs(t, true, 80)
 	defer teardown()
-
 	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
-	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
-	if ep == nil {
-		t.Fatalf("expected expiry params")
+	p := reap.DefaultREAPParams(reap.SortModeStrict)
+	p.MaxInputs = 2 // maxCandidates = MaxInputs*20 => 40
+	p.ScanBatch = 3
+
+	ops, err := g.collectExpiredOutpoints(500, p)
+	if err != nil {
+		t.Fatalf("collect failed: %v", err)
 	}
-	tx, fee, err := g.maybeBuildREAPTx(ep.EnableAtHeight - 1)
-	if err != nil || tx != nil || fee != 0 {
-		t.Fatalf("expected no REAP tx before enable height, got tx=%v fee=%d err=%v", tx, fee, err)
+	if len(ops) != 40 {
+		t.Fatalf("expected maxCandidates limit 40, got %d", len(ops))
 	}
 }
 
@@ -164,5 +216,15 @@ func TestCollectExpiredOutpointsIdempotentAndConcurrent(t *testing.T) {
 	close(errCh)
 	for err := range errCh {
 		t.Fatalf("concurrent collect failed: %v", err)
+	}
+}
+
+func TestSetREAPIndexDirect(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndex(t)
+	defer teardown()
+	g := &BlkTmplGenerator{}
+	g.SetREAPIndex(idx)
+	if g.reapIndex != idx {
+		t.Fatalf("SetREAPIndex did not wire index")
 	}
 }
