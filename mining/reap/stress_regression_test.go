@@ -129,3 +129,96 @@ func TestSelectCandidatesConcurrentRegression(t *testing.T) {
 		t.Fatalf("concurrent regression failure: %v", err)
 	}
 }
+
+func TestLongRunSelectionStableAcrossScannerOrder(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	baseItems := make([]*expiryindex.ExpiringUTXO, 0, 3000)
+	for i := 0; i < 3000; i++ {
+		op := addUtxo(t, view, int64(2000+(i%113)), uint32(40_000+i))
+		baseItems = append(baseItems, &expiryindex.ExpiringUTXO{OutPoint: op, ExpiryKey: uint64(20 + i/30)})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 500
+	p.ScanBatch = 10_000
+	p.WeightBudget = 0
+
+	forward := &stubScanner{items: append([]*expiryindex.ExpiringUTXO(nil), baseItems...)}
+	reversed := &stubScanner{items: append([]*expiryindex.ExpiringUTXO(nil), baseItems...)}
+	for l, r := 0, len(reversed.items)-1; l < r; l, r = l+1, r-1 {
+		reversed.items[l], reversed.items[r] = reversed.items[r], reversed.items[l]
+	}
+
+	planA, err := selectCandidatesWithScanner(context.Background(), 500, forward, view, p)
+	if err != nil {
+		t.Fatalf("forward select failed: %v", err)
+	}
+	planB, err := selectCandidatesWithScanner(context.Background(), 500, reversed, view, p)
+	if err != nil {
+		t.Fatalf("reverse select failed: %v", err)
+	}
+	if len(planA.Inputs) != len(planB.Inputs) {
+		t.Fatalf("length mismatch: %d != %d", len(planA.Inputs), len(planB.Inputs))
+	}
+	for i := range planA.Inputs {
+		if planA.Inputs[i] != planB.Inputs[i] {
+			t.Fatalf("order mismatch at idx=%d", i)
+		}
+	}
+}
+
+func TestLongRunContinuousSelectionAndBuild(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	scanner := &stubScanner{}
+
+	for i := 0; i < 2500; i++ {
+		op := addUtxo(t, view, int64(5000+(i%29)), uint32(50_000+i))
+		scanner.items = append(scanner.items, &expiryindex.ExpiringUTXO{OutPoint: op, ExpiryKey: uint64(10 + i/25)})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 300
+	p.ScanBatch = 33
+	p.WeightBudget = 0
+
+	nonEmptyRounds := 0
+	for round := 0; round < 120; round++ {
+		tip := int32(120 + round)
+		plan, err := selectCandidatesWithScanner(context.Background(), tip, scanner, view, p)
+		if err != nil {
+			t.Fatalf("round %d select failed: %v", round, err)
+		}
+		if len(plan.Inputs) > 0 {
+			nonEmptyRounds++
+			tx, err := BuildBlueprint(plan, view, p)
+			if err != nil {
+				t.Fatalf("round %d build failed: %v", round, err)
+			}
+			if tx.TxOut[len(tx.TxOut)-1].Value != 0 {
+				t.Fatalf("round %d marker value must be zero", round)
+			}
+
+			// Simulate confirmed REAP consumption: mark selected entries spent.
+			for _, op := range plan.Inputs {
+				if e := view.LookupEntry(op); e != nil && !e.IsSpent() {
+					e.Spend()
+				}
+			}
+		}
+
+		// Simulate new-chain growth and occasional reorg-like reintroduction via fresh outputs.
+		if round%6 == 0 {
+			for k := 0; k < 40; k++ {
+				nonce := uint32(80_000 + round*100 + k)
+				op := addUtxo(t, view, int64(7000+(k%17)), nonce)
+				// Keep newly appended keys moving forward with tip so they are not
+				// permanently skipped by scanner pagination fromKey advancement.
+				nextExpiryKey := uint64(tip + 1 + int32(k/20))
+				scanner.items = append(scanner.items, &expiryindex.ExpiringUTXO{OutPoint: op, ExpiryKey: nextExpiryKey})
+			}
+		}
+	}
+	if nonEmptyRounds < 5 {
+		t.Fatalf("expected substantial non-empty rounds, got %d", nonEmptyRounds)
+	}
+}
