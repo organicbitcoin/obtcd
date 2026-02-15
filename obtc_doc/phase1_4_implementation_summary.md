@@ -124,76 +124,142 @@ REAP（**Reclaim Expired Assets Protocol**）可以理解为 OBTC 的“到期�
 
 ## 7. 代码索引（按职责，含关键逻辑说明）
 
+> 这部分做两件事：
+> 1) 告诉你“应该看哪个文件”；
+> 2) 告诉你“看这个文件时重点盯哪段逻辑”。
+
 ### 网络与参数
 - `chaincfg/params_obtc.go`  
-  核心是 `ObtcMainNetParams / ObtcTestNetParams / ObtcRegTestParams` 与 `ExpiryParams`。它定义网络魔数、端口、地址前缀、分叉高度与到期窗口，是所有运行时行为的“总开关配置源”。
+  核心是 `ObtcMainNetParams / ObtcTestNetParams / ObtcRegTestParams` 与 `ExpiryParams`。它定义网络魔数、端口、地址前缀、分叉高度与到期窗口，是运行时行为的“全局配置根”。  
+  **重点看**：
+  - `IsOBTC`：决定哪些路径走 OBTC 专属逻辑；
+  - `GetExpiryParams`：决定是否启用到期索引与到期规则；
+  - `CalculateExpiryKey`：到期高度计算入口（高度制）。
 
 - `config.go`  
-  核心是节点启动参数解析与网络模式选择（例如 obtcmainnet/obtctestnet/obtcregtest），把命令行配置映射到运行时配置对象。
+  核心是命令行参数到运行时配置对象的映射。它决定节点到底跑在哪个网络、启用哪些服务。  
+  **重点看**：网络选择参数与默认值，确认 obtcmainnet/obtctestnet/obtcregtest 的落地路径。
 
 - `params.go`  
-  核心是把配置层选择映射到 chain params 实例，并在启动路径中统一注入，保证共识层、索引层、RPC 层读取到一致的网络参数。
+  核心是把配置层选择映射到 chain params 实例，并把同一份参数注入给区块链验证、索引、RPC。  
+  **重点看**：参数注入顺序，避免“验证层和索引层读到不同网络参数”的隐性配置错误。
 
 - `cmd/btcctl/config.go`  
-  核心是 CLI 侧网络与 RPC 参数解析，让工具请求与节点网络配置保持一致，避免“连错网/端口不匹配”。
+  核心是 CLI 侧网络与 RPC 参数解析，让工具请求与节点网络配置一致。  
+  **重点看**：端口和网络前缀是否匹配，避免调试时“命令发到错误网络”。
 
-### 到期索引
+### 到期索引（ExpiryIndex）
 - `blockchain/expiryindex/expiryindex.go`  
-  核心函数是 `NewExpiryIndex`、`Init`、`ConnectBlock`、`DisconnectBlock`、`ScanExpiringUTXOs`。核心算法是：在区块连接/回滚时维护双向索引，并按到期键范围做分页扫描。
+  核心函数：`NewExpiryIndex`、`Init`、`ConnectBlock`、`DisconnectBlock`、`ScanExpiringUTXOs`。  
+  核心机制：维护双向映射并支持分页扫描。
+  - 正向映射：`OutPoint -> ExpiryKey`（便于花费时快速删除）；
+  - 反向映射：`ExpiryKey -> []OutPoint`（便于按到期顺序扫描）。  
+  **重点看**：
+  - `ConnectBlock/DisconnectBlock` 的对称性（重组一致性关键）；
+  - `ScanExpiringUTXOs` 的分页游标逻辑（`fromKey/toKey/startAfter`）；
+  - `smartRebuild` 的重建策略选择（初次构建、落后追赶）。
 
 - `blockchain/expiryindex/buckets.go`  
-  核心是三桶结构：`bktOutpoint2Expiry`（正向映射）、`bktExpiry2Outpoints`（反向映射）、`bktExpiryMeta`（版本/进度）。关键逻辑是元数据版本化与 tip height 持久化，保证可恢复与可升级。
+  核心是 bucket 元数据与版本管理：`bktOutpoint2Expiry`、`bktExpiry2Outpoints`、`bktExpiryMeta`。  
+  **重点看**：
+  - `dbPutTipHeightIndexed / dbGetTipHeightIndexed`（索引进度）；
+  - 版本字段与初始化路径（升级兼容点）。
 
 - `blockchain/expiryindex/encode.go`  
-  核心算法是确定性编码：`encodeOutPoint`（36字节）、`encodeExpiryKey`（8字节大端，天然按时间序排序）、`encodeOutPointList`（稳定排序后编码），确保跨节点一致性。
+  核心是确定性编码：`encodeOutPoint`、`encodeExpiryKey`、`encodeOutPointList`。  
+  **重点看**：
+  - `ExpiryKey` 使用大端编码带来自然有序扫描；
+  - outpoint 列表编码/删除逻辑确保跨节点一致。
 
 - `blockchain/expiryindex/params.go`  
-  核心是把链参数转换成索引运行参数（窗口、批大小、启用高度），并统一提供“索引是否启用”的判断逻辑。
+  核心是把链参数转换成索引参数，并提供启用/校验辅助函数。  
+  **重点看**：`IsExpiryEnabled`、`IsIndexingEnabled`、`ValidateListParams`。
 
-### 查询接口
+### 查询接口（RPC）
 - `rpcserver.go`  
-  核心是 RPC handler（如 `listexpiring`），把外部请求转换成索引扫描条件，并返回分页结果。
+  核心是 `listexpiring` 等 handler，把外部请求映射到索引扫描参数并返回分页结果。  
+  **重点看**：参数约束、分页 continuation 的返回字段。
 
-- `btcjson/obtcextcmds.go`  
-  核心是扩展命令定义（请求结构），决定 RPC 参数格式与兼容行为。
-
-- `btcjson/obtcextresults.go`  
-  核心是返回结构定义（响应 schema），约束客户端可依赖的数据字段。
+- `btcjson/obtcextcmds.go` / `btcjson/obtcextresults.go`  
+  核心是命令与结果结构定义（协议契约层）。  
+  **重点看**：字段命名稳定性与向后兼容性。
 
 - `rpcserverhelp.go`  
-  核心是 RPC 文档与 help 文本，确保接口可发现、可调试、可自解释。
+  核心是对外帮助文本。  
+  **重点看**：参数含义与示例是否和真实行为一致。
 
-### REAP 核心
+### REAP 核心（选择 + 构造）
 - `mining/reap/selector.go`  
-  核心函数是 `SelectCandidates`。核心算法：扫描到期集合 → 过滤已花费 UTXO → 按稳定排序（expiry/amount/txid/vout）→ 在 `MaxInputs` 与 `WeightBudget` 下截断，计算 tax/refund。
+  核心函数：`SelectCandidates`、`SelectCandidatesWithScanner`。  
+  核心算法：扫描候选 -> 过滤不可用 UTXO -> 稳定排序 -> 按 `MaxInputs/WeightBudget` 截断。  
+  **重点看**：
+  - `sortCandidates` 的排序键（expiry/amount/hash/index）；
+  - `taxForValue` 的整数税额计算与不变量；
+  - 分页扫描 + `startAfter` 续扫正确性。
 
 - `mining/reap/packer.go`  
-  核心函数是 `BuildBlueprint`。核心逻辑：把计划输入组装成系统交易，按 `pkScript` 聚合 refund 输出，追加 marker 输出，并校验 `input = refund + tax` 不变量。
-
-- `mining/reap/weight.go`  
-  核心是蓝图交易权重估算函数，采用保守估计给选择器做预算截断，避免构造超重交易。
-
-- `mining/reap/params.go`  
-  核心是 `DefaultREAPParams`、`DefaultREAPParamsForNet`、`Validate`，把算法参数（税率、批量、上限）标准化并做合法性校验。
-
-- `mining/reap/types.go`  
-  核心是 `REAPPlan`、统计字段与错误类型定义，统一模块内外的数据契约。
+  核心函数：`BuildBlueprint`。  
+  核心逻辑：
+  - 把选中输入组装成系统交易输入；
+  - 按 `PkScript` 聚合 refund 输出；
+  - 追加 marker 输出；
+  - 校验 `sum(inputs) = refund + tax`。  
+  **重点看**：`markerScript` 负责编码可审计 payload。
 
 - `mining/reap/marker.go`  
-  核心函数是 `MarkerDigest`。核心算法：按固定字节序序列化 input outpoints 并计算 sha256，确保 marker 可重复验证。
+  核心函数：`MarkerDigest`。  
+  核心作用：把输入 outpoint 序列化后做哈希，用于 marker 校验与可复核性。
 
 - `mining/reap/dryrun.go`  
-  核心函数是 `BuildDryRunSummary`，输出 `picked/tax/refund/estWeight/markerHash`，用于上线前或调试时的可审计预览。
+  核心函数：`BuildDryRunSummary`。  
+  核心作用：输出 `picked/tax/refund/estWeight/markerHash`，用于上线前比对和调试。
 
-- `mining/reap/reaptx.go`  
-  核心函数是 `IsLikelyREAPTx`、`ExtractMarkerPayload`，通过版本号 + OP_RETURN marker 形态做策略级识别（非完整共识校验）。
+- `mining/reap/params.go` / `mining/reap/types.go` / `mining/reap/weight.go` / `mining/reap/reaptx.go`  
+  分别负责参数默认值与校验、数据结构契约、估重、策略级 REAP 识别。  
+  **重点看**：
+  - 参数跨网络默认值；
+  - 估重是否偏保守（避免模板超重）；
+  - `IsLikelyREAPTx` 仅为识别，不等于完整共识验证。
 
-### 闭环接线（待补齐）
+### 共识验证接线（已实现）
 - `blockchain/validation_reap.go`  
-  预期核心是 REAP 专用区块验证：输入集合一致性、税额与输出约束、普通交易禁止花费过期 UTXO。
+  已实现 REAP 专用验证组件：
+  - `isLikelyReapTx`：识别 REAP 交易形态；
+  - `checkReapMarker`：校验 marker 的高度、输入个数、digest 一致性；
+  - `checkExpirySpendRules`：约束“普通交易不得花费过期 UTXO，REAP 不得花费未过期 UTXO”。  
+  **重点看**：错误分支是否返回一致规则错误类型。
 
+- `blockchain/validate.go`  
+  `CheckTransactionInputs` 已挂入 REAP 校验流程。  
+  **重点看**：REAP 检查在常规输入校验中的调用顺序和失败短路行为。
+
+- `blockchain/scriptval.go`  
+  对 REAP 交易路径做脚本校验分流（避免按普通签名脚本路径处理）。  
+  **重点看**：分流条件是否与 `isLikelyReapTx` 保持一致。
+
+### 挖矿模板接线（已实现）
 - `mining/template_reap.go`  
-  预期核心是挖矿模板接线：自动生成并注入 REAP 交易，税额并入模板 fee/coinbase 统计。
+  核心函数：`maybeBuildREAPTx`、`collectExpiredOutpoints`。  
+  核心逻辑：
+  - 在满足网络/高度条件时扫描过期候选；
+  - 拉取 UTXO 视图并构造 REAP 蓝图；
+  - 返回系统交易与税额供模板计费。  
+  **重点看**：早退条件（非 OBTC、未到启用高度、空候选）与分页扫描上限。
+
+- `mining/mining.go`  
+  已在 `NewBlockTemplate` 尝试注入 REAP 交易，并把税额计入总 fee，影响 coinbase。  
+  **重点看**：
+  - 注入时机与重量/sigop 约束检查；
+  - `SetREAPIndex` wiring 是否在 server 启动阶段完成。
+
+- `server.go`  
+  负责把 expiry index 实例注入模板生成器（`SetREAPIndex`）。  
+  **重点看**：节点启动初始化顺序，避免模板路径拿到 nil index。
+
+### 还可继续补强的点（建议）
+- `mining/template_reap.go` 的深路径集成测试（含更多候选、截断、异常注入）；
+- REAP 交易构造与校验在高负载/并发下的压力回归；
+- 端到端文档样例补充更多“失败案例 -> 预期错误”。
 
 ---
 
@@ -202,9 +268,11 @@ REAP（**Reclaim Expired Assets Protocol**）可以理解为 OBTC 的“到期�
 | 模块 | 状态 | 说明 |
 |---|---|---|
 | 基础网络与参数 | ✅ 完成 | 可运行、可验证 |
-| 到期索引 | ✅ 完成 | 可索引、可扫描 |
-| REAP 选择与蓝图 | ✅ 完成 | 可选择、可构造、可审计 |
-| 共识验证与模板集成 | ⚠️ 进行中 | 闭环接线待完成 |
+| 到期索引 | ✅ 完成 | 可索引、可扫描（含重组与重建路径测试） |
+| REAP 选择与蓝图 | ✅ 完成 | 可选择、可构造、可审计（含排序/税额/marker 直接单测） |
+| 共识验证 | ✅ 已接线 | `CheckTransactionInputs` 已接入 REAP marker 与过期花费规则校验 |
+| 挖矿模板集成 | ✅ 已接线（持续增强中） | `NewBlockTemplate` 已尝试注入 REAP 系统交易并计入税费 |
+| 测试完备度（Phase1-4） | ⚠️ 持续提升中 | 主要函数已补直接单测；模板集成深路径与高强度场景仍在扩展 |
 
 ---
 
