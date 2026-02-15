@@ -53,6 +53,10 @@ type ExpiryIndex struct {
 // Returns an error if the network doesn't support OBTC expiry
 // (i.e., it's a Bitcoin network rather than an OBTC network).
 func NewExpiryIndex(db database.DB, params *chaincfg.Params) (*ExpiryIndex, error) {
+	if params == nil {
+		return nil, fmt.Errorf("chain params is nil")
+	}
+
 	// Get expiry parameters for this network
 	expiryParams := GetExpiryParams(params)
 

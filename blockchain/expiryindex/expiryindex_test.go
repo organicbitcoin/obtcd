@@ -46,6 +46,11 @@ func TestNewExpiryIndex(t *testing.T) {
 			params: &chaincfg.MainNetParams,
 			valid:  false,
 		},
+		{
+			name:   "nil params (should fail)",
+			params: nil,
+			valid:  false,
+		},
 	}
 
 	for _, test := range tests {
