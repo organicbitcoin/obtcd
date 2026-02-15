@@ -194,6 +194,10 @@ func ValidateTransactionScripts(tx *btcutil.Tx, utxoView *UtxoViewpoint,
 	flags txscript.ScriptFlags, sigCache *txscript.SigCache,
 	hashCache *txscript.HashCache) error {
 
+	if isLikelyReapTx(tx.MsgTx()) {
+		return nil
+	}
+
 	// First determine if segwit is active according to the scriptFlags. If
 	// it isn't then we don't need to interact with the HashCache.
 	segwitActive := flags&txscript.ScriptVerifyWitness == txscript.ScriptVerifyWitness
@@ -258,6 +262,11 @@ func checkBlockScripts(block *btcutil.Block, utxoView *UtxoViewpoint,
 	}
 	txValItems := make([]*txValidateItem, 0, numInputs)
 	for _, tx := range block.Transactions() {
+		if isLikelyReapTx(tx.MsgTx()) {
+			// REAP system transactions use dedicated validation rules and do
+			// not require standard input script execution.
+			continue
+		}
 		hash := tx.Hash()
 
 		// If the HashCache is present, and it doesn't yet contain the

@@ -969,6 +969,13 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 		return 0, nil
 	}
 
+	if err := checkReapMarker(tx.MsgTx(), txHeight); err != nil {
+		return 0, err
+	}
+	if err := checkExpirySpendRules(tx.MsgTx(), txHeight, utxoView, chainParams); err != nil {
+		return 0, err
+	}
+
 	var totalSatoshiIn int64
 	for txInIndex, txIn := range tx.MsgTx().TxIn {
 		// Ensure the referenced input transaction is available.

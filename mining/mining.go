@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -353,6 +354,7 @@ type BlkTmplGenerator struct {
 	timeSource  blockchain.MedianTimeSource
 	sigCache    *txscript.SigCache
 	hashCache   *txscript.HashCache
+	reapIndex   *expiryindex.ExpiryIndex
 }
 
 // NewBlkTmplGenerator returns a new block template generator for the given
@@ -376,6 +378,11 @@ func NewBlkTmplGenerator(policy *Policy, params *chaincfg.Params,
 		sigCache:    sigCache,
 		hashCache:   hashCache,
 	}
+}
+
+// SetREAPIndex wires the expiry index for REAP system transaction construction.
+func (g *BlkTmplGenerator) SetREAPIndex(idx *expiryindex.ExpiryIndex) {
+	g.reapIndex = idx
 }
 
 // NewBlockTemplate returns a new block template that is ready to be solved
@@ -782,6 +789,41 @@ mempoolLoop:
 			delete(item.dependsOn, *tx.Hash())
 			if len(item.dependsOn) == 0 {
 				heap.Push(priorityQueue, item)
+			}
+		}
+	}
+
+	// Try to include an internal REAP system transaction for expired UTXOs.
+	reapTx, reapFee, err := g.maybeBuildREAPTx(nextBlockHeight)
+	if err != nil {
+		log.Warnf("Skipping REAP tx due to build error: %v", err)
+	} else if reapTx != nil {
+		txWeight := uint32(blockchain.GetTransactionWeight(reapTx))
+		blockPlusTxWeight := blockWeight + txWeight
+		if blockPlusTxWeight < blockWeight || blockPlusTxWeight >= g.policy.BlockMaxWeight {
+			log.Tracef("Skipping REAP tx because it would exceed max block weight")
+		} else {
+			sigOpCost, err := blockchain.GetSigOpCost(reapTx, false, blockUtxos,
+				true, segwitActive)
+			if err != nil {
+				log.Warnf("Skipping REAP tx due to sigop calc error: %v", err)
+			} else if blockSigOpCost+int64(sigOpCost) < blockSigOpCost ||
+				blockSigOpCost+int64(sigOpCost) > blockchain.MaxBlockSigOpsCost {
+				log.Tracef("Skipping REAP tx because it would exceed max block sigops")
+			} else {
+				// Reuse canonical input checks against the current in-block utxo view.
+				if _, err := blockchain.CheckTransactionInputs(reapTx, nextBlockHeight, blockUtxos, g.chainParams); err != nil {
+					log.Warnf("Skipping REAP tx due to input checks: %v", err)
+				} else {
+					spendTransaction(blockUtxos, reapTx, nextBlockHeight)
+					blockTxns = append(blockTxns, reapTx)
+					blockWeight += txWeight
+					blockSigOpCost += int64(sigOpCost)
+					totalFees += reapFee
+					txFees = append(txFees, reapFee)
+					txSigOpCosts = append(txSigOpCosts, int64(sigOpCost))
+					log.Tracef("Added REAP tx %s (fee=%d)", reapTx.Hash(), reapFee)
+				}
 			}
 		}
 	}

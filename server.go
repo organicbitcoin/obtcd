@@ -3036,6 +3036,9 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	blockTemplateGenerator := mining.NewBlkTmplGenerator(&policy,
 		s.chainParams, s.txMemPool, s.chain, s.timeSource,
 		s.sigCache, s.hashCache)
+	if s.expiryIndex != nil {
+		blockTemplateGenerator.SetREAPIndex(s.expiryIndex)
+	}
 	s.cpuMiner = cpuminer.New(&cpuminer.Config{
 		ChainParams:            chainParams,
 		BlockTemplateGenerator: blockTemplateGenerator,

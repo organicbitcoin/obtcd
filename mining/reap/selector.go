@@ -29,6 +29,17 @@ func SelectCandidates(ctx context.Context, tip int32, idx *expiryindex.ExpiryInd
 	return selectCandidatesWithScanner(ctx, tip, idx, view, p)
 }
 
+// SelectCandidatesWithScanner is an integration-friendly variant that accepts
+// any scanner implementation with the ExpiringUTXO scan contract.
+func SelectCandidatesWithScanner(ctx context.Context, tip int32, scanner interface {
+	ScanExpiringUTXOs(fromKey, toKey uint64, maxResults int, startAfter *wire.OutPoint) ([]*expiryindex.ExpiringUTXO, bool, error)
+}, view *blockchain.UtxoViewpoint, p REAPParams) (REAPPlan, error) {
+	if scanner == nil {
+		return REAPPlan{}, ErrNilIndex
+	}
+	return selectCandidatesWithScanner(ctx, tip, scanner, view, p)
+}
+
 func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expiringScanner,
 	view *blockchain.UtxoViewpoint, p REAPParams) (REAPPlan, error) {
 	if view == nil {
