@@ -104,8 +104,10 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 		}
 		plan.Inputs = append(plan.Inputs, c.op)
 		tax := taxForValue(c.amount, p)
+		refund := c.amount - tax
+		refund, tax = applyDustRule(refund, tax, p.DustThresholdSat)
 		plan.TaxTotal += tax
-		plan.RefundTotal += c.amount - tax
+		plan.RefundTotal += refund
 	}
 
 	plan.Stats.Picked = len(plan.Inputs)

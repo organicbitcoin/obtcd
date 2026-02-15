@@ -45,3 +45,19 @@ func TestBuildDryRunSummaryMissingUTXO(t *testing.T) {
 		t.Fatalf("expected missing utxo error")
 	}
 }
+
+func TestBuildDryRunSummaryDustFoldingTotals(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	op := addUtxo(t, view, 700, 33) // tax=210 refund=490, dust-fold to tax
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.DustThresholdSat = 546
+
+	s, err := BuildDryRunSummary(REAPPlan{Inputs: []wire.OutPoint{op}}, view, p)
+	if err != nil {
+		t.Fatalf("dry run failed: %v", err)
+	}
+	if s.TaxTotal != 700 || s.RefundTotal != 0 {
+		t.Fatalf("dust folding mismatch tax=%d refund=%d", s.TaxTotal, s.RefundTotal)
+	}
+}

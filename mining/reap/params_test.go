@@ -28,4 +28,10 @@ func TestREAPParamsValidate(t *testing.T) {
 	if err := p.Validate(); err == nil {
 		t.Fatalf("expected invalid MaxInputs")
 	}
+
+	p = DefaultREAPParams(SortModeStrict)
+	p.DustThresholdSat = -1
+	if err := p.Validate(); err == nil {
+		t.Fatalf("expected invalid DustThresholdSat")
+	}
 }

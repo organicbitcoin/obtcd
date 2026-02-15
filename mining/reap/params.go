@@ -7,22 +7,24 @@ import (
 )
 
 type REAPParams struct {
-	Sort         SortMode
-	MaxInputs    int
-	WeightBudget int64
-	ScanBatch    int
-	TaxNum       int64
-	TaxDen       int64
+	Sort             SortMode
+	MaxInputs        int
+	WeightBudget     int64
+	ScanBatch        int
+	TaxNum           int64
+	TaxDen           int64
+	DustThresholdSat int64
 }
 
 func DefaultREAPParams(mode SortMode) REAPParams {
 	return REAPParams{
-		Sort:         mode,
-		MaxInputs:    1000,
-		WeightBudget: 400_000,
-		ScanBatch:    10_000,
-		TaxNum:       30,
-		TaxDen:       100,
+		Sort:             mode,
+		MaxInputs:        1000,
+		WeightBudget:     400_000,
+		ScanBatch:        10_000,
+		TaxNum:           30,
+		TaxDen:           100,
+		DustThresholdSat: 546,
 	}
 }
 
@@ -60,6 +62,9 @@ func (p REAPParams) Validate() error {
 	}
 	if p.TaxNum < 0 {
 		return fmt.Errorf("TaxNum must be >= 0")
+	}
+	if p.DustThresholdSat < 0 {
+		return fmt.Errorf("DustThresholdSat must be >= 0")
 	}
 	return nil
 }

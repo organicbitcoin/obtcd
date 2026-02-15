@@ -19,24 +19,22 @@ func BuildDryRunSummary(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPPar
 		return DryRunSummary{}, ErrNilView
 	}
 
-	var inTotal int64
+	taxTotal := int64(0)
+	refundTotal := int64(0)
 	for _, op := range plan.Inputs {
 		entry := view.LookupEntry(op)
 		if entry == nil || entry.IsSpent() {
 			return DryRunSummary{}, fmt.Errorf("missing utxo in view: %s", op.String())
 		}
-		inTotal += entry.Amount()
-	}
-
-	taxTotal := int64(0)
-	for _, op := range plan.Inputs {
-		entry := view.LookupEntry(op)
-		taxTotal += taxForValue(entry.Amount(), p)
-	}
-
-	refundTotal := inTotal - taxTotal
-	if refundTotal < 0 {
-		return DryRunSummary{}, fmt.Errorf("negative refund total")
+		amt := entry.Amount()
+		tax := taxForValue(amt, p)
+		refund := amt - tax
+		if refund < 0 {
+			return DryRunSummary{}, fmt.Errorf("negative refund total")
+		}
+		refund, tax = applyDustRule(refund, tax, p.DustThresholdSat)
+		taxTotal += tax
+		refundTotal += refund
 	}
 
 	return DryRunSummary{
