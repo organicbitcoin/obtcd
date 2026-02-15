@@ -1,4 +1,4 @@
-# Week 2 计划（到期 UTXO 索引：ExpiryIndex）— Go + btcd + Cursor
+# Phase 2 计划（到期 UTXO 索引：ExpiryIndex）— Go + btcd + Cursor
 
 ---
 
@@ -137,7 +137,7 @@ btcd/
 ## ✅ 本周交付物（Deliverables）
 
 * `expiryindex/` 目录与实现、单测 & 基准、`listexpiring` RPC。
-* `docs/week2-validation.md`：测试步骤与输出（含 reorg 用例）。
+* `docs/phase2-validation.md`：测试步骤与输出（含 reorg 用例）。
 * CI 增加 `./blockchain/expiryindex` 路径的测试与 `-race`。
 
 ---
@@ -180,7 +180,7 @@ btcd/
 | 单测：功能/边界/重组                                             |      4.0h |
 | 基准：10k/50k 场景                                           |      1.0h |
 | 集成：接入 `ProcessBlock` 钩子 + 冒烟（simnet）                    |      2.0h |
-| 文档：`docs/week2-validation.md`                           |      0.5h |
+| 文档：`docs/phase2-validation.md`                           |      0.5h |
 | **合计**                                                  | **19.0h** |
 
 > **缓冲**：如实现顺利，预留 1h 做一次“崩溃恢复测试”（中途 `kill -9` 后重启校验一致性）。

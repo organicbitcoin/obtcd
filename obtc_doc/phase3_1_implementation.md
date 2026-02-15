@@ -1,10 +1,10 @@
-# Week 3.1 修订计划（对 Week1-3 的补强）— REAP 工程化落地前置
+# Phase 3.1 修订计划（对 Week1-3 的补强）— REAP 工程化落地前置
 
 **时间预算：8–12 小时** ｜ **目标**：在进入 Week4 共识接线前，把 Week3 的“可工作原型”补强为“可被共识/模板稳定复用”的模块。
 
 ---
 
-## 为什么要做 Week3.1
+## 为什么要做 Phase3.1
 
 你现在的 Week3 代码已经完成核心骨架（选择器/蓝图/测试），但从工程化角度，进入 Week4 前还建议补三类能力：
 
@@ -25,7 +25,7 @@
   * `MaxInputs`、`WeightBudget`、`Tax cap`（若参数存在）的交互边界。
 * 增加一个 dry-run 入口（命令或调试 RPC 二选一）：
   * 输出 `picked/tax/refund/estWeight/markerHash`。
-* 文档化：`docs/week3.1-validation.md`。
+* 文档化：`docs/phase3.1-validation.md`。
 
 ---
 
@@ -39,7 +39,7 @@ mining/reap/
   selector_integration_test.go  # 新：模拟真实扫描+view 组合
   marker_vector_test.go          # 新：固定输入->固定 marker hash
 cmd/reap-dryrun/                 # 新（可选）
-docs/week3.1-validation.md       # 新
+docs/phase3.1-validation.md       # 新
 ```
 
 ---
@@ -61,12 +61,12 @@ docs/week3.1-validation.md       # 新
 
 * `go test ./mining/reap -v` 通过。
 * 全仓 `go test ./...` 通过。
-* `docs/week3.1-validation.md` 有真实输出样例。
+* `docs/phase3.1-validation.md` 有真实输出样例。
 * Week4 可直接复用，无需再改 REAP 核心数据结构。
 
 ---
 
 ## 风险控制
 
-* 不在 Week3.1 引入新的共识规则（避免范围失控）。
+* 不在 Phase3.1 引入新的共识规则（避免范围失控）。
 * 若 dry-run 命令来不及，先做 debug RPC 或内部函数打印，保留可审计输出即可。

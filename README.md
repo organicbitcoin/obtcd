@@ -5,7 +5,7 @@ OBTCD (Organic Bitcoin)
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
 
-> ⚠️ **Week 1 Development Status**: OBTC is currently in active development. This implementation includes basic network parameters and infrastructure. OBTC-specific consensus rules (REAP) will be implemented in Weeks 2-4.
+> ⚠️ **Phase 1 Development Status**: OBTC is currently in active development. This implementation includes basic network parameters and infrastructure. OBTC-specific consensus rules (REAP) will be implemented in Phases 2-4.
 
 OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements the **Resource Expiration and Allocation Protocol (REAP)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
 
@@ -78,9 +78,9 @@ recommended that `GOPATH` is set to a directory in your home directory such as
 
 - Run the following commands to obtain btcd, all dependencies, and install it:
 
-## 📊 OBTC Network Parameters (Week 1 Skeleton)
+## 📊 OBTC Network Parameters (Phase 1 Skeleton)
 
-> 🚧 **Note**: These parameters are placeholders for Week 1 skeleton implementation. **Final values will be frozen in Week 3** during the "freeze constants" phase.
+> 🚧 **Note**: These parameters are placeholders for Phase 1 skeleton implementation. **Final values will be frozen in Phase 3** during the "freeze constants" phase.
 
 | Parameter | MainNet | TestNet | RegTest |
 |-----------|---------|---------|---------|
@@ -88,15 +88,15 @@ recommended that `GOPATH` is set to a directory in your home directory such as
 | **Default Port** | `8555` | `18555` | `18666` |
 | **Fork Height** | `950000` (Q2 2026) | `2800000` | `100` |
 | **Bech32 HRP** | `obtc` | `obtct` | `obtcrt` |
-| **Address Prefixes** | *TBD Week 3* | *TBD Week 3* | *TBD Week 3* |
-| **HD Key Prefixes** | *TBD Week 3* | *TBD Week 3* | *TBD Week 3* |
-| **BIP44 Coin Type** | *TBD Week 3* | `1` (testnet) | `1` (regtest) |
+| **Address Prefixes** | *TBD Phase 3* | *TBD Phase 3* | *TBD Phase 3* |
+| **HD Key Prefixes** | *TBD Phase 3* | *TBD Phase 3* | *TBD Phase 3* |
+| **BIP44 Coin Type** | *TBD Phase 3* | `1` (testnet) | `1` (regtest) |
 
 ### Network Isolation Features
 
 - ✅ **Unique Magic Numbers**: Prevents cross-network communication
 - ✅ **Separate Ports**: Avoids conflicts with Bitcoin nodes  
-- ✅ **Custom Address Encoding**: Will use unique prefixes (Week 3)
+- ✅ **Custom Address Encoding**: Will use unique prefixes (Phase 3)
 - ✅ **Fork Height Detection**: `IsPostOBTCFork()` function available
 - ✅ **Network Detection**: `IsOBTC()` function for conditional logic
 
@@ -127,32 +127,32 @@ go test -race ./...
 
 ## 🗓️ Development Roadmap
 
-- **Week 1** ✅: Network parameters and infrastructure (COMPLETED)
-- **Week 2**: Expiry index implementation
-- **Week 3**: REAP selector and transaction construction
-- **Week 4**: Validation rules and mining integration
-- **Week 5**: Wallet extension and RPC
-- **Week 6**: TestNet deployment and monitoring
-- **Week 7**: Hardening and stress testing
-- **Week 8**: MainNet candidate release
+- **Phase 1** ✅: Network parameters and infrastructure (COMPLETED)
+- **Phase 2**: Expiry index implementation
+- **Phase 3**: REAP selector and transaction construction
+- **Phase 4**: Validation rules and mining integration
+- **Phase 5**: Wallet extension and RPC
+- **Phase 6**: TestNet deployment and monitoring
+- **Phase 7**: Hardening and stress testing
+- **Phase 8**: MainNet candidate release
 
 ## 📚 Documentation
 
-- [Development Roadmap](obtc_doc/obtc_roadmap_plan.md) - Complete 8-week development plan
-- [Week 1 Implementation](obtc_doc/week1_implementation.md) - Current week details
+- [Development Roadmap](obtc_doc/obtc_roadmap_plan.md) - Complete 8-phase development plan
+- [Phase 1 Implementation](obtc_doc/phase1_implementation.md) - Current week details
 - [Original btcd Documentation](docs/) - Inherited btcd documentation
 
 ## ⚠️ Important Notes
 
-- **Development Status**: Week 1 skeleton implementation
+- **Development Status**: Phase 1 skeleton implementation
 - **Network**: Currently simnet/regtest only (production networks TBD)
-- **Consensus Rules**: REAP protocol implementation starts Week 2
+- **Consensus Rules**: REAP protocol implementation starts Phase 2
 - **Compatibility**: Shares Bitcoin history up to fork height
-- **Production Use**: Not ready for production until Week 8
+- **Production Use**: Not ready for production until Phase 8
 
 ## 🤝 Contributing
 
-This project follows an 8-week development timeline with specific milestones. Please refer to the [development roadmap](obtc_doc/obtc_roadmap_plan.md) for current priorities.
+This project follows an 8-phase development timeline with specific milestones. Please refer to the [development roadmap](obtc_doc/obtc_roadmap_plan.md) for current priorities.
 
 ## 📜 License
 

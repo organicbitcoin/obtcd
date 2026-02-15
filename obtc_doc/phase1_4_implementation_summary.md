@@ -256,10 +256,11 @@ REAP（**Reclaim Expired Assets Protocol**）可以理解为 OBTC 的“到期�
   负责把 expiry index 实例注入模板生成器（`SetREAPIndex`）。  
   **重点看**：节点启动初始化顺序，避免模板路径拿到 nil index。
 
-### 还可继续补强的点（建议）
-- `mining/template_reap.go` 的深路径集成测试（含更多候选、截断、异常注入）；
-- REAP 交易构造与校验在高负载/并发下的压力回归；
-- 端到端文档样例补充更多“失败案例 -> 预期错误”。
+### 持续补强进展（最新）
+- ✅ 已补：`mining/template_reap.go` 深路径测试（更多候选、分页、截断、异常注入、并发/幂等回归）。
+- ✅ 已补：REAP 交易选择与构造的高负载/并发压力回归（新增 stress regression 测试）。
+- ✅ 已补：端到端验证文档中的“失败案例 -> 预期错误”对照（见 `docs/phase4-validation.md`）。
+- 🔄 继续建议：补充更接近真实节点运行的长时集成回归（例如更大样本、多轮重组与模板连续构造）。
 
 ---
 
@@ -272,7 +273,7 @@ REAP（**Reclaim Expired Assets Protocol**）可以理解为 OBTC 的“到期�
 | REAP 选择与蓝图 | ✅ 完成 | 可选择、可构造、可审计（含排序/税额/marker 直接单测） |
 | 共识验证 | ✅ 已接线 | `CheckTransactionInputs` 已接入 REAP marker 与过期花费规则校验 |
 | 挖矿模板集成 | ✅ 已接线（持续增强中） | `NewBlockTemplate` 已尝试注入 REAP 系统交易并计入税费 |
-| 测试完备度（Phase1-4） | ⚠️ 持续提升中 | 主要函数已补直接单测；模板集成深路径与高强度场景仍在扩展 |
+| 测试完备度（Phase1-4） | ✅ 明显提升（持续增强） | 主要函数已补直接单测；模板深路径、分页/截断异常、并发/高负载回归与失败案例文档已补齐一轮 |
 
 ---
 

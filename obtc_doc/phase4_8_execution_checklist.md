@@ -1,11 +1,11 @@
 # Week4–8 可执行任务清单（Execution Checklist）
 
-> 说明：按你的要求，这份文档只做“可执行化”，**不启动 Week3.1 实施**。
+> 说明：按你的要求，这份文档只做“可执行化”，**不启动 Phase3.1 实施**。
 > 约定：每周都以 `go test ./...` 通过作为收尾门槛之一。
 
 ---
 
-## Week 4（共识验证 & 挖矿模板集成）
+## Phase 4（共识验证 & 挖矿模板集成）
 
 ### 目标
 把 Week3 的 REAP 选择器/蓝图接入到区块验证与模板生成，先达到“端到端可跑 + 稳定”。
@@ -26,7 +26,7 @@
    - [ ] `template_reap_test.go`：有/无到期、截断、税额入账
    - [ ] reorg 集成用例
 5. 文档
-   - [ ] `docs/week4-validation.md` 写入 txid、块高、税额差值、reorg 结果
+   - [ ] `docs/phase4-validation.md` 写入 txid、块高、税额差值、reorg 结果
 
 ### 验证命令
 ```bash
@@ -43,7 +43,7 @@ go test ./...
 
 ---
 
-## Week 5（钱包续期 RPC，建议先做 5A）
+## Phase 5（钱包续期 RPC，建议先做 5A）
 
 ### 5A（本周建议范围）
 1. `obtc.getexpiry`
@@ -54,7 +54,7 @@ go test ./...
 3. 批量续期入口
    - [ ] CLI: `renew-all --before <days>`
 4. 测试与文档
-   - [ ] `docs/week5-validation.md` 记录批量续期样例
+   - [ ] `docs/phase5-validation.md` 记录批量续期样例
 
 ### 5B（可并入 Week6）
 - [ ] 自动续期（随机窗口 + max feerate + 每日预算）
@@ -72,7 +72,7 @@ go test ./...
 
 ---
 
-## Week 6（网络部署与观测，先稳后广）
+## Phase 6（网络部署与观测，先稳后广）
 
 ### 目标
 先做“可复现部署 + 小规模公网验证”，再扩展到三地域。
@@ -105,7 +105,7 @@ curl http://<node>:<status-port>/status.json
 
 ---
 
-## Week 7（硬化、故障注入、可复现构建）
+## Phase 7（硬化、故障注入、可复现构建）
 
 ### 目标
 把关键限制上升到共识硬约束，完成 RC 级质量门槛。
@@ -125,7 +125,7 @@ curl http://<node>:<status-port>/status.json
    - [ ] 固定依赖与镜像 digest
    - [ ] 产物哈希与 minisign 签名
 5. 文档
-   - [ ] `docs/week7-validation.md`
+   - [ ] `docs/phase7-validation.md`
    - [ ] `docs/repro-build.md`
 
 ### 验证命令（示例）
@@ -143,7 +143,7 @@ minisign -Vm SHA256SUMS -P <pubkey>
 
 ---
 
-## Week 8（发布候选里程碑）
+## Phase 8（发布候选里程碑）
 
 ### 建议目标
 优先“公开候选测试网里程碑”；若坚持主网候选，必须增加独立外部审计门槛。

@@ -1,4 +1,4 @@
-# Week 6 计划（加速 Testnet 部署与观测）— 网络上线、三地域种子、最小观测面
+# Phase 6 计划（加速 Testnet 部署与观测）— 网络上线、三地域种子、最小观测面
 
 > 修订（2026-02-11）：若 Week4/5 仍在稳定期，Week6 先做“私有 testnet + 单地域双节点 + 可复现部署”，三地域公网种子可顺延到 Week6.5，优先保证协议稳定性。
 
@@ -41,7 +41,7 @@
 * `cmd/obtc-status/`：最小只读状态页（JSON/HTML）部署在每台种子上
 * `infra/`：`systemd` 单元与防火墙脚本；`seed-userdata.sh` 云主机一键初始化
 * `docs/testnet-join.md`：对外接入指南（端口/参数/校验/常见故障）
-* `docs/week6-validation.md`：观测记录、同步用时、REAP 指标快照
+* `docs/phase6-validation.md`：观测记录、同步用时、REAP 指标快照
 
 ---
 
@@ -133,7 +133,7 @@
   * **REAP 覆盖率** = 被 REAP 的到期 UTXO / 到期总数
   * **REAP 积压** = 当前已过期但未被 REAP 的 UTXO 数
   * **孤块率** = orphan / (main+orphan)
-* **DoD**：跑一次审计脚本输出 CSV/Markdown 表格，纳入 `docs/week6-validation.md`
+* **DoD**：跑一次审计脚本输出 CSV/Markdown 表格，纳入 `docs/phase6-validation.md`
 
 ### 5) 外部接入指南与故障排查（2h）
 
@@ -184,7 +184,7 @@ go run tools/reap-audit.go --rpc=http://u:p@127.0.0.1:28556 --window=288 --out=d
 * [ ] 外部新节点 **< 2 小时** 同步到头
 * [ ] 公开**接入指南**（二进制+Docker+校验）
 * [ ] 72 小时内：**连续出块**、REAP 正常、审计脚本生成统计报告
-* [ ] `docs/week6-validation.md` 附：高度曲线、出块间隔箱线图、REAP 24h 汇总、孤块率、积压曲线
+* [ ] `docs/phase6-validation.md` 附：高度曲线、出块间隔箱线图、REAP 24h 汇总、孤块率、积压曲线
 
 ---
 

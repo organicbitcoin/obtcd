@@ -1,6 +1,6 @@
-# Week 4 计划（共识验证 & 挖矿集成）— Go + btcd + Cursor
+# Phase 4 计划（共识验证 & 挖矿集成）— Go + btcd + Cursor
 
-> 修订（2026-02-11）：本周前置依赖增加 `week3_1_implementation.md`。建议先完成 Week3.1 的 marker 向量测试、dry-run 与参数映射，再进行共识接线。
+> 修订（2026-02-11）：本周前置依赖增加 `phase3_1_implementation.md`。建议先完成 Phase3.1 的 marker 向量测试、dry-run 与参数映射，再进行共识接线。
 
 **时间预算：18–20 小时** ｜ **目标**：把第 3 周产出的 **REAP 选择器 + 蓝图**接入**共识验证路径**与**挖矿模板**，实现“到期→系统交易→矿工收税”的端到端闭环，并跑通 reorg/压力用例。
 
@@ -177,4 +177,4 @@ btcd/
 * `template_reap.go` + 测试
 * `mempool/policy.go` 小改
 * `chaincfg/params_obtc.go` 增：`MaxREAPInputsPerBlock`、`MaxReapTaxPerBlock`、`TaxRate`
-* `docs/week4-validation.md`：包含 txid、区块哈希、coinbase 费差、reorg 结果
+* `docs/phase4-validation.md`：包含 txid、区块哈希、coinbase 费差、reorg 结果

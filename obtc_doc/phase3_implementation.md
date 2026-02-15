@@ -1,4 +1,4 @@
-# Week 3 计划（REAP 选择器 & 系统交易构造）— Go + btcd + Cursor
+# Phase 3 计划（REAP 选择器 & 系统交易构造）— Go + btcd + Cursor
 
 **时间预算：18–20 小时** ｜ **目标**：在不改共识验证与挖矿模板的前提下，完成 **确定性 REAP 选择算法** 与 **系统交易（Blueprint）构造**，并通过属性测试/基准测试，为第 4 周“验证规则 & 挖矿集成”做好准备。
 
@@ -166,7 +166,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 ### 4) 集成“干跑”（simnet）
 
 * 用脚本批量造 UTXO（地址轮换、金额分布）；
-* 推进高度使其“到期”（利用 Week 2 的 ExpiryIndex 加速窗口）；
+* 推进高度使其“到期”（利用 Phase 2 的 ExpiryIndex 加速窗口）；
 * 调 `Select` + `BuildBlueprint`，打印统计：`picked/estWeight/tax/refund`；
 * 验证 Marker 输出里 `sha256(inputs)` 与计划一致。
 
@@ -202,7 +202,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 
 * `mining/reap/`: `selector.go`, `packer.go`, `params.go`, `weight.go`, `types.go`
 * 测试：`selector_test.go`, `packer_test.go`, `bench_test.go`
-* `docs/week3-validation.md`：干跑结果（picked/tax/refund/estWeight/marker 哈希）
+* `docs/phase3-validation.md`：干跑结果（picked/tax/refund/estWeight/marker 哈希）
 * （可选）`cmd/reap-dryrun/`：命令行小工具，便于在 simnet 交互查看计划与蓝图摘要
 
 ---

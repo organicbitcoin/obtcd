@@ -14,7 +14,7 @@
   - 本地双节点启动脚本（simnet）
 
 ### 3) 验证记录
-- `docs/week1-validation.md`
+- `docs/phase1-validation.md`
   - Week1 端到端验证记录（出块/转账等）
 
 ---
@@ -65,9 +65,9 @@
   - 配置样例
 
 ### 5) Week2 验证记录
-- `docs/week2-validation.md`
+- `docs/phase2-validation.md`
   - 本地验证记录
-- `docs/week2-summary.md`
+- `docs/phase2-summary.md`
   - Week2 设计与实现总结
 
 ---

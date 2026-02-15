@@ -1,4 +1,4 @@
-# Week 5 计划（钱包续期 RPC & 自动续期）— btcwallet + btcd
+# Phase 5 计划（钱包续期 RPC & 自动续期）— btcwallet + btcd
 
 > 修订（2026-02-11）：建议把 Week5 拆为 5A/5B，优先 5A（`getexpiry` + 手动 `renew` + 批量续期），自动续期与随机窗口放到 5B（可并入 Week6），降低跨仓联调风险。
 
@@ -47,7 +47,7 @@ btcwallet/
   cmd/btcctl/
     obtc_renew.go           # renew-all CLI
   docs/
-    week5-validation.md
+    phase5-validation.md
 ```
 
 ---
@@ -178,7 +178,7 @@ btcctl renew-all --before 180d --maxfeerate 5
 * `btcwallet`：`obtc.getexpiry` / `obtc.renew` RPC
 * `btcctl`：`renew-all` CLI
 * 自动续期开关（`--autorenew`、`--renew-before`、`--maxfeerate`）
-* `docs/week5-validation.md`：续期批量测试报告（含 txid/高度）
+* `docs/phase5-validation.md`：续期批量测试报告（含 txid/高度）
 
 ---
 

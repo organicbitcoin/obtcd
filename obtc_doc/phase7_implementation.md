@@ -1,4 +1,4 @@
-# Week 7 计划（硬化 & 封版）— 稳定性、可复现构建、发布候选
+# Phase 7 计划（硬化 & 封版）— 稳定性、可复现构建、发布候选
 
 **时间预算：18–20 小时** ｜ **目标**：在 Testnet 连续运行基础上完成**压力/模糊测试**与**参数冻结**，把“系统交易/税收/上限”等关键规则**上升到共识硬约束**；锁定依赖与构建流程，形成 **Mainnet-Candidate RC（发布候选）**。
 
@@ -28,7 +28,7 @@
   * `release.sh`（三平台构建、`-trimpath`、产出 `SHA256SUMS` 与 `.minisig`）
 * 文档：
 
-  * `docs/week7-validation.md`（压测与指标报告）
+  * `docs/phase7-validation.md`（压测与指标报告）
   * `docs/release-notes-rc.md`（RC 发布说明）
   * `docs/repro-build.md`（可复现构建步骤）
 

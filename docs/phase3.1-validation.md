@@ -1,4 +1,4 @@
-# Week 3.1 Validation (Kickoff)
+# Phase 3.1 Validation (Kickoff)
 
 ## Scope in this phase
 

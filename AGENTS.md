@@ -27,24 +27,24 @@ obtc/ (repo root)
     devnet-up.sh       # Week1: devnet 一键脚本
     validation/        # Week2: 验证脚本与工具
   docs/
-    week1-validation.md
-    week2-summary.md
-    week2-validation.md    # Week2: 验证记录（建议补齐）
-    week3-validation.md    # Week3: 计划/验证（规划）
-    week4-validation.md    # Week4: 计划/验证（规划）
+    phase1-validation.md
+    phase2-summary.md
+    phase2-validation.md    # Week2: 验证记录（建议补齐）
+    phase3-validation.md    # Week3: 计划/验证（规划）
+    phase4-validation.md    # Week4: 计划/验证（规划）
     testnet-join.md         # Week6: Testnet 接入指南（规划）
     mainnet-join.md         # Week8: Mainnet 接入指南（规划）
   obtc_doc/
     AGENTS.md
     obtc_roadmap_plan.md
-    week1_implementation.md
-    week2_implementation.md
-    week3_implementation.md
-    week4_implementation.md
-    week5_implementation.md
-    week6_implementation.md
-    week7_implementation.md
-    week8_implementation.md
+    phase1_implementation.md
+    phase2_implementation.md
+    phase3_implementation.md
+    phase4_implementation.md
+    phase5_implementation.md
+    phase6_implementation.md
+    phase7_implementation.md
+    phase8_implementation.md
 ```
 
 ## 说明

@@ -1,4 +1,4 @@
-# Week 3 Validation (REAP selector & blueprint)
+# Phase 3 Validation (REAP selector & blueprint)
 
 ## Implemented
 

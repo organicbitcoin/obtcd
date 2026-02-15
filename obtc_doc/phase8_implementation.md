@@ -1,4 +1,4 @@
-# Week 8 计划（主网候选发布 | Mainnet-Candidate）— 参数冻结、发布、72h 观察
+# Phase 8 计划（主网候选发布 | Mainnet-Candidate）— 参数冻结、发布、72h 观察
 
 > 修订（2026-02-11）：建议把“主网候选”改为“公开候选测试网里程碑”。若必须主网候选，需新增独立安全审计与外部回放验证门槛（至少 1 次外部审计）。
 
@@ -43,7 +43,7 @@
   * `chaincfg/params_obtc.go`：`OBTCMainNetParams` 填实并 `Register()`
   * `cmd/gengenesis/` & `cmd/checkgenesis/`：用于生成/校验创世（输出常量、再计算校验）
   * `build/release.sh` & `Dockerfile.release`：三平台产物、校验与签名
-  * `cmd/obtc-status/`：状态页构建与服务（沿用 Week 6）
+  * `cmd/obtc-status/`：状态页构建与服务（沿用 Phase 6）
 * 基础设施：
 
   * `infra/mainnet-userdata.sh`：一键初始化种子节点（systemd、UFW、日志轮转）
@@ -53,7 +53,7 @@
   * `docs/mainnet-params.md`（冻结参数表）
   * `docs/mainnet-join.md`（下载/校验/运行/排错）
   * `docs/release-notes-v1.0.0-candidate.md`（发布说明）
-  * `docs/week8-validation.md`（72h 观察记录与指标快照）
+  * `docs/phase8-validation.md`（72h 观察记录与指标快照）
 
 ---
 
@@ -68,7 +68,7 @@
 
 ### 2) 发布构建与签名（3h）
 
-* 锁 `go.mod`（Week 7 已做）；
+* 锁 `go.mod`（Phase 7 已做）；
 * 容器化构建三平台产物（`-trimpath -ldflags "-s -w -buildid="`），生成 `SHA256SUMS`；
 * 用 `minisign` 对 `SHA256SUMS` 签名（私钥离线保存）；
 * 构建 `obtc/node:mainnet` Docker 镜像（包含 `btcd` 与 `obtc-status`）。
@@ -104,7 +104,7 @@
   * 每 1–2 小时采集：高度、出块间隔中位数（近 50/288 块）、孤块率、REAP 税总额、REAP 积压（到期未清理量）。
   * 外部新节点自零同步一次，记录总时长（目标 **<2h**）。
   * 如出现异常：**仅做最小热修**（非共识），例如状态页/日志/阈值微调；共识问题则**保持候选状态**、发布修复说明。
-* 将结果持续写入 `docs/week8-validation.md`。
+* 将结果持续写入 `docs/phase8-validation.md`。
 
 ### 6) 宣布与标签（1h）
 
@@ -193,6 +193,6 @@ services:
 * `docs/mainnet-params.md`（参数冻结表）
 * `docs/mainnet-join.md`（一键接入指南）
 * `docs/release-notes-v1.0.0-candidate.md`（发布说明）
-* `docs/week8-validation.md`（72h 观察与指标）
+* `docs/phase8-validation.md`（72h 观察与指标）
 
 ---

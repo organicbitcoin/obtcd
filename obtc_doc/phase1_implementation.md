@@ -1,4 +1,4 @@
-# Week 1 计划（基线 & 链参数）— Go + btcd + Cursor
+# Phase 1 计划（基线 & 链参数）— Go + btcd + Cursor
 
 ## 🎯 本周目标（Definition of Done）
 
@@ -31,7 +31,7 @@ scripts/
 .github/
   workflows/ci.yml
 docs/
-  week1-validation.md   # 出块/转账/测试的记录与截图
+  phase1-validation.md   # 出块/转账/测试的记录与截图
 ```
 
 ---
@@ -109,7 +109,7 @@ sleep 1
   3. `generate 1` 或等待出块
   4. 在节点2 `gettransaction <txid>` 确认
 
-将命令与结果记录到 `docs/week1-validation.md`（高度、hash、txid）。
+将命令与结果记录到 `docs/phase1-validation.md`（高度、hash、txid）。
 
 **验收**：出现至少 1 笔**已确认**转账，截图/日志齐全。
 
@@ -169,7 +169,7 @@ jobs:
 * [ ] 完成 1 笔从节点1 → 节点2 的已确认转账（记录 txid）
 * [ ] `go vet`、`go test -race`、`go build` 均通过（本地与 CI）
 * [ ] `params_obtc.go` 骨架提交并通过单测（含 `Register()`、`IsOBTC()`）
-* [ ] `docs/week1-validation.md` 填好高度、hash、txid、截图
+* [ ] `docs/phase1-validation.md` 填好高度、hash、txid、截图
 
 ---
 
@@ -182,7 +182,7 @@ jobs:
 
 ---
 
-## 🔜 Week 2 预告（到期索引 ExpiryIndex）
+## 🔜 Phase 2 预告（到期索引 ExpiryIndex）
 
 * 设计键空间与推进策略（按高度/时间窗）
 * 持久化与恢复（含重组一致性）
