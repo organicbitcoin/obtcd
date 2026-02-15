@@ -115,9 +115,10 @@ func TestSelectCandidatesConcurrentRegression(t *testing.T) {
 				errCh <- fmt.Errorf("length mismatch")
 				return
 			}
-			if len(plan.Inputs) > 0 {
-				if plan.Inputs[0] != base.Inputs[0] || plan.Inputs[len(plan.Inputs)-1] != base.Inputs[len(base.Inputs)-1] {
-					errCh <- fmt.Errorf("edge input mismatch")
+			for i := range base.Inputs {
+				if plan.Inputs[i] != base.Inputs[i] {
+					errCh <- fmt.Errorf("input mismatch at idx=%d", i)
+					return
 				}
 			}
 		}()
