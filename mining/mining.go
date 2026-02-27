@@ -618,8 +618,17 @@ mempoolLoop:
 
 	witnessIncluded := false
 
+	var plannedREAPTx *btcutil.Tx
+	var plannedREAPFee int64
+	if reapTx, reapFee, err := g.maybeBuildREAPTx(nextBlockHeight); err != nil {
+		log.Warnf("Skipping REAP tx due to build error: %v", err)
+	} else {
+		plannedREAPTx = reapTx
+		plannedREAPFee = reapFee
+	}
+
 	// Choose which transactions make it into the block.
-	normalTxWeightLimit := g.normalTxWeightLimit(nextBlockHeight)
+	normalTxWeightLimit := g.normalTxWeightLimit(nextBlockHeight, plannedREAPTx != nil)
 	for priorityQueue.Len() > 0 {
 		// Grab the highest priority (or highest fee per kilobyte
 		// depending on the sort order) transaction.
@@ -795,16 +804,13 @@ mempoolLoop:
 	}
 
 	// Try to include an internal REAP system transaction for expired UTXOs.
-	reapTx, reapFee, err := g.maybeBuildREAPTx(nextBlockHeight)
-	if err != nil {
-		log.Warnf("Skipping REAP tx due to build error: %v", err)
-	} else if reapTx != nil {
-		txWeight := uint32(blockchain.GetTransactionWeight(reapTx))
+	if plannedREAPTx != nil {
+		txWeight := uint32(blockchain.GetTransactionWeight(plannedREAPTx))
 		blockPlusTxWeight := blockWeight + txWeight
 		if blockPlusTxWeight < blockWeight || blockPlusTxWeight >= g.policy.BlockMaxWeight {
 			log.Tracef("Skipping REAP tx because it would exceed max block weight")
 		} else {
-			sigOpCost, err := blockchain.GetSigOpCost(reapTx, false, blockUtxos,
+			sigOpCost, err := blockchain.GetSigOpCost(plannedREAPTx, false, blockUtxos,
 				true, segwitActive)
 			if err != nil {
 				log.Warnf("Skipping REAP tx due to sigop calc error: %v", err)
@@ -815,22 +821,22 @@ mempoolLoop:
 				// Reuse canonical input checks against the current in-block utxo view.
 				// blockUtxos only contains entries fetched during template assembly,
 				// so prime missing/nil entries for REAP inputs before validation.
-				reapInputView, err := g.chain.FetchUtxoView(reapTx)
+				reapInputView, err := g.chain.FetchUtxoView(plannedREAPTx)
 				if err != nil {
 					log.Warnf("Skipping REAP tx due to input fetch error: %v", err)
 				} else {
 					mergeUtxoEntriesIfMissing(blockUtxos, reapInputView)
-					if _, err := blockchain.CheckTransactionInputs(reapTx, nextBlockHeight, blockUtxos, g.chainParams); err != nil {
+					if _, err := blockchain.CheckTransactionInputs(plannedREAPTx, nextBlockHeight, blockUtxos, g.chainParams); err != nil {
 						log.Warnf("Skipping REAP tx due to input checks: %v", err)
 					} else {
-						spendTransaction(blockUtxos, reapTx, nextBlockHeight)
-						blockTxns = append(blockTxns, reapTx)
+						spendTransaction(blockUtxos, plannedREAPTx, nextBlockHeight)
+						blockTxns = append(blockTxns, plannedREAPTx)
 						blockWeight += txWeight
 						blockSigOpCost += int64(sigOpCost)
-						totalFees += reapFee
-						txFees = append(txFees, reapFee)
+						totalFees += plannedREAPFee
+						txFees = append(txFees, plannedREAPFee)
 						txSigOpCosts = append(txSigOpCosts, int64(sigOpCost))
-						log.Tracef("Added REAP tx %s (fee=%d)", reapTx.Hash(), reapFee)
+						log.Tracef("Added REAP tx %s (fee=%d)", plannedREAPTx.Hash(), plannedREAPFee)
 					}
 				}
 			}
