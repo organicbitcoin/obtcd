@@ -20,10 +20,12 @@ var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 // ExpiryParams defines parameters for UTXO expiry calculation
 // OBTC uses height-based expiry for deterministic and consensus-friendly behavior
 type ExpiryParams struct {
-	WindowBlocks    uint64 // Expiry window in blocks
-	ListBatchLimit  int    // Max items returned in one RPC scan
-	StartScanHeight int32  // Height to start building index
-	EnableAtHeight  int32  // Height to enable expiry enforcement (Week 3+)
+	WindowBlocks          uint64 // Expiry window in blocks
+	ListBatchLimit        int    // Max items returned in one RPC scan
+	StartScanHeight       int32  // Height to start building index
+	EnableAtHeight        int32  // Height to enable expiry enforcement (Week 3+)
+	ReapConsensusAtHeight int32  // Height to enforce canonical REAP ordering / limits
+	ReapMaxInputs         int    // Consensus max REAP inputs per transaction (0 = disabled)
 }
 
 // OBTC Hard Fork Heights
@@ -395,26 +397,32 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 	switch params.Net {
 	case wire.ObtcMainNet:
 		return &ExpiryParams{
-			WindowBlocks:    3679200, // ~7 years at 10min blocks (144 * 365 * 7)
-			ListBatchLimit:  10000,
-			StartScanHeight: ObtcMainNetForkHeight,
-			EnableAtHeight:  ObtcMainNetForkHeight + 100000, // Week 3+
+			WindowBlocks:          3679200, // ~7 years at 10min blocks (144 * 365 * 7)
+			ListBatchLimit:        10000,
+			StartScanHeight:       ObtcMainNetForkHeight,
+			EnableAtHeight:        ObtcMainNetForkHeight + 100000, // Week 3+
+			ReapConsensusAtHeight: ObtcMainNetForkHeight + 110000, // staged consensus hardening
+			ReapMaxInputs:         256,
 		}
 
 	case wire.ObtcTestNet:
 		return &ExpiryParams{
-			WindowBlocks:    1008, // ~1 week for testing (144 * 7)
-			ListBatchLimit:  5000,
-			StartScanHeight: ObtcTestNetForkHeight,
-			EnableAtHeight:  ObtcTestNetForkHeight + 100,
+			WindowBlocks:          1008, // ~1 week for testing (144 * 7)
+			ListBatchLimit:        5000,
+			StartScanHeight:       ObtcTestNetForkHeight,
+			EnableAtHeight:        ObtcTestNetForkHeight + 100,
+			ReapConsensusAtHeight: ObtcTestNetForkHeight + 120,
+			ReapMaxInputs:         500,
 		}
 
 	case wire.ObtcRegNet:
 		return &ExpiryParams{
-			WindowBlocks:    144, // ~1 day for development
-			ListBatchLimit:  1000,
-			StartScanHeight: ObtcRegTestForkHeight,
-			EnableAtHeight:  ObtcRegTestForkHeight + 10,
+			WindowBlocks:          144, // ~1 day for development
+			ListBatchLimit:        1000,
+			StartScanHeight:       ObtcRegTestForkHeight,
+			EnableAtHeight:        ObtcRegTestForkHeight + 10,
+			ReapConsensusAtHeight: ObtcRegTestForkHeight + 12,
+			ReapMaxInputs:         200,
 		}
 
 	default:
