@@ -3,8 +3,10 @@ package reap
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -33,6 +35,22 @@ func TestBuildBlueprintTotalsAndMarker(t *testing.T) {
 	}
 	if tx.TxOut[1].Value != 0 {
 		t.Fatalf("marker output must be zero value")
+	}
+}
+
+func TestBuildBlueprintIsFinalizedAtTargetHeight(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	op := addUtxo(t, view, 1000, 1)
+
+	p := DefaultREAPParams(SortModeStrict)
+	plan := REAPPlan{Height: 123, Inputs: []wire.OutPoint{op}}
+	tx, err := BuildBlueprint(plan, view, p)
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	if !blockchain.IsFinalizedTransaction(btcutil.NewTx(tx), plan.Height, time.Now()) {
+		t.Fatalf("expected REAP blueprint tx to be finalized at target height")
 	}
 }
 

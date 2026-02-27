@@ -325,15 +325,22 @@ out:
 					connReq.conn.Close()
 				}
 
+				// All internal state has been cleaned up, if
+				// this connection is being removed, we will
+				// make no further attempts with this request.
+				//
+				// Update state before firing the disconnection
+				// callback so observers see a stable terminal
+				// state for non-retry removals.
+				if !msg.retry {
+					connReq.updateState(ConnDisconnected)
+				}
+
 				if cm.cfg.OnDisconnection != nil {
 					go cm.cfg.OnDisconnection(connReq)
 				}
 
-				// All internal state has been cleaned up, if
-				// this connection is being removed, we will
-				// make no further attempts with this request.
 				if !msg.retry {
-					connReq.updateState(ConnDisconnected)
 					continue
 				}
 

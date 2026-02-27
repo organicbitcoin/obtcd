@@ -3,6 +3,7 @@ package mining
 import (
 	"context"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/mining/reap"
@@ -85,4 +86,21 @@ func (g *BlkTmplGenerator) collectExpiredOutpoints(nextBlockHeight int32, p reap
 		startAfter = &op
 	}
 	return out, nil
+}
+
+// mergeUtxoEntriesIfMissing copies UTXO entries from src into dst only when
+// dst doesn't already have an entry for the outpoint (or has a nil placeholder).
+// This preserves any in-template spends already reflected in dst.
+func mergeUtxoEntriesIfMissing(dst, src *blockchain.UtxoViewpoint) {
+	if dst == nil || src == nil {
+		return
+	}
+
+	dstEntries := dst.Entries()
+	for outpoint, srcEntry := range src.Entries() {
+		cur, exists := dstEntries[outpoint]
+		if !exists || cur == nil {
+			dstEntries[outpoint] = srcEntry
+		}
+	}
 }

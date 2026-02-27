@@ -267,9 +267,12 @@ func TestRetryPermanent(t *testing.T) {
 		t.Fatalf("retry: %v - want ID %v, got ID %v", cr.Addr, wantID, gotID)
 	}
 	gotState = cr.State()
-	wantState = ConnPending
-	if gotState != wantState {
-		t.Fatalf("retry: %v - want state %v, got state %v", cr.Addr, wantState, gotState)
+	// A permanent peer transitions to pending before reconnect, but under
+	// race scheduling it may already be re-established by the time we inspect
+	// the state after the disconnection callback is observed.
+	if gotState != ConnPending && gotState != ConnEstablished {
+		t.Fatalf("retry: %v - want state %v or %v, got state %v", cr.Addr,
+			ConnPending, ConnEstablished, gotState)
 	}
 
 	gotConnReq = <-connected
