@@ -1,7 +1,9 @@
 package blockchain
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -143,6 +145,70 @@ func TestCheckReapMarkerCountMismatch(t *testing.T) {
 	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: bad})
 	if err := checkReapMarker(tx, 100); err == nil {
 		t.Fatalf("expected marker count mismatch error")
+	}
+}
+
+func TestREAPCanonicalInputOrderEnforced(t *testing.T) {
+	view := NewUtxoViewpoint()
+	highAmount := addUtxoToView(t, view, 2000, 1)
+	lowAmount := addUtxoToView(t, view, 1000, 1)
+
+	tx := wire.NewMsgTx(reapTxVersion)
+	// Wrong strict order: same expiry but larger amount comes first.
+	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: highAmount})
+	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: lowAmount})
+	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams)
+	if err == nil || !strings.Contains(err.Error(), "canonical order") {
+		t.Fatalf("expected canonical order rejection, got: %v", err)
+	}
+}
+
+func TestREAPCanonicalInputOrderAcceptedWhenSorted(t *testing.T) {
+	view := NewUtxoViewpoint()
+	highAmount := addUtxoToView(t, view, 2000, 1)
+	lowAmount := addUtxoToView(t, view, 1000, 1)
+
+	tx := wire.NewMsgTx(reapTxVersion)
+	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: lowAmount})
+	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: highAmount})
+	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("expected sorted reap tx to pass, got: %v", err)
+	}
+}
+
+func TestREAPInputCountConsensusLimit(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if ep == nil || ep.ReapMaxInputs <= 0 {
+		t.Fatalf("expected positive reap max input consensus limit")
+	}
+
+	view := NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs+1)
+	for i := 0; i < ep.ReapMaxInputs+1; i++ {
+		inputs = append(inputs, addUtxoToView(t, view, 1000, 1))
+	}
+
+	sort.Slice(inputs, func(i, j int) bool {
+		hcmp := bytes.Compare(inputs[i].Hash[:], inputs[j].Hash[:])
+		if hcmp != 0 {
+			return hcmp < 0
+		}
+		return inputs[i].Index < inputs[j].Index
+	})
+
+	tx := wire.NewMsgTx(reapTxVersion)
+	for _, op := range inputs {
+		tx.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
+	}
+	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams)
+	if err == nil || !strings.Contains(err.Error(), "exceeds consensus limit") {
+		t.Fatalf("expected reap input count limit rejection, got: %v", err)
 	}
 }
 

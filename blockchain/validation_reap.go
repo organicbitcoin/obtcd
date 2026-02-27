@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -89,6 +90,99 @@ func checkReapMarker(tx *wire.MsgTx, txHeight int32) error {
 	if digest != reapInputDigest(tx) {
 		return ruleError(ErrBadTxInput, "reap marker digest mismatch")
 	}
+	return nil
+}
+
+type reapInputOrderKey struct {
+	expiry uint64
+	amount int64
+	op     wire.OutPoint
+}
+
+func compareReapInputOrderKey(a, b reapInputOrderKey) int {
+	if a.expiry != b.expiry {
+		if a.expiry < b.expiry {
+			return -1
+		}
+		return 1
+	}
+
+	if a.amount != b.amount {
+		if a.amount < b.amount {
+			return -1
+		}
+		return 1
+	}
+
+	hcmp := bytes.Compare(a.op.Hash[:], b.op.Hash[:])
+	if hcmp != 0 {
+		return hcmp
+	}
+
+	switch {
+	case a.op.Index < b.op.Index:
+		return -1
+	case a.op.Index > b.op.Index:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func makeReapInputOrderKey(outpoint wire.OutPoint, utxoView *UtxoViewpoint,
+	expiryParams *chaincfg.ExpiryParams) (reapInputOrderKey, error) {
+
+	utxo := utxoView.LookupEntry(outpoint)
+	if utxo == nil || utxo.IsSpent() {
+		return reapInputOrderKey{}, fmt.Errorf("missing utxo for reap input %s", outpoint.String())
+	}
+
+	return reapInputOrderKey{
+		expiry: expiryParams.CalculateExpiryKey(utxo.BlockHeight()),
+		amount: utxo.Amount(),
+		op:     outpoint,
+	}, nil
+}
+
+func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
+	utxoView *UtxoViewpoint, chainParams *chaincfg.Params) error {
+
+	if chainParams == nil || utxoView == nil || !isLikelyReapTx(tx) {
+		return nil
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(chainParams)
+	if expiryParams == nil || txHeight < expiryParams.ReapConsensusAtHeight {
+		return nil
+	}
+
+	if expiryParams.ReapMaxInputs > 0 && len(tx.TxIn) > expiryParams.ReapMaxInputs {
+		return ruleError(ErrBadTxInput, fmt.Sprintf(
+			"reap transaction input count %d exceeds consensus limit %d",
+			len(tx.TxIn), expiryParams.ReapMaxInputs,
+		))
+	}
+
+	if len(tx.TxIn) <= 1 {
+		return nil
+	}
+
+	prevKey, err := makeReapInputOrderKey(tx.TxIn[0].PreviousOutPoint, utxoView, expiryParams)
+	if err != nil {
+		return ruleError(ErrMissingTxOut, err.Error())
+	}
+
+	for i := 1; i < len(tx.TxIn); i++ {
+		curKey, err := makeReapInputOrderKey(tx.TxIn[i].PreviousOutPoint, utxoView, expiryParams)
+		if err != nil {
+			return ruleError(ErrMissingTxOut, err.Error())
+		}
+		if compareReapInputOrderKey(prevKey, curKey) > 0 {
+			return ruleError(ErrBadTxInput, "reap transaction inputs out of canonical order")
+		}
+		prevKey = curKey
+	}
+
 	return nil
 }
 

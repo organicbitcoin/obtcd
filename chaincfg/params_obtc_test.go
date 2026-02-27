@@ -346,6 +346,12 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			if p.WindowBlocks == 0 {
 				t.Fatalf("expected positive WindowBlocks")
 			}
+			if p.ReapConsensusAtHeight < p.EnableAtHeight {
+				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
+			}
+			if p.ReapMaxInputs <= 0 {
+				t.Fatalf("expected positive ReapMaxInputs: %+v", p)
+			}
 		})
 	}
 }

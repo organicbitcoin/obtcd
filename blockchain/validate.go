@@ -975,6 +975,9 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 	if err := checkExpirySpendRules(tx.MsgTx(), txHeight, utxoView, chainParams); err != nil {
 		return 0, err
 	}
+	if err := checkReapConsensusHardening(tx.MsgTx(), txHeight, utxoView, chainParams); err != nil {
+		return 0, err
+	}
 
 	var totalSatoshiIn int64
 	for txInIndex, txIn := range tx.MsgTx().TxIn {
