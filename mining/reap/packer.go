@@ -25,7 +25,11 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 	}
 
 	tx := wire.NewMsgTx(reapTxVersion)
-	tx.LockTime = uint32(plan.Height)
+	// Keep the tx final for inclusion at plan.Height while preserving a
+	// height-tied locktime hint.
+	if plan.Height > 0 {
+		tx.LockTime = uint32(plan.Height - 1)
+	}
 
 	var inTotal int64
 	taxTotal := int64(0)

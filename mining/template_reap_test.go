@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -226,5 +227,61 @@ func TestSetREAPIndexDirect(t *testing.T) {
 	g.SetREAPIndex(idx)
 	if g.reapIndex != idx {
 		t.Fatalf("SetREAPIndex did not wire index")
+	}
+}
+
+func TestMergeUtxoEntriesIfMissing(t *testing.T) {
+	mkTx := func(value int64) *btcutil.Tx {
+		msg := wire.NewMsgTx(1)
+		msg.AddTxOut(&wire.TxOut{Value: value, PkScript: []byte{txscript.OP_TRUE}})
+		return btcutil.NewTx(msg)
+	}
+
+	dst := blockchain.NewUtxoViewpoint()
+	src := blockchain.NewUtxoViewpoint()
+
+	// Missing entry in dst should be copied from src.
+	tx1 := mkTx(1000)
+	op1 := wire.OutPoint{Hash: *tx1.Hash(), Index: 0}
+	src.AddTxOut(tx1, 0, 100)
+	mergeUtxoEntriesIfMissing(dst, src)
+	if dst.LookupEntry(op1) == nil {
+		t.Fatalf("expected missing entry to be copied")
+	}
+
+	// Existing (spent) entry in dst should not be overwritten by src.
+	tx2 := mkTx(2000)
+	op2 := wire.OutPoint{Hash: *tx2.Hash(), Index: 0}
+	dst.AddTxOut(tx2, 0, 110)
+	existing := dst.LookupEntry(op2)
+	existing.Spend()
+	src.AddTxOut(tx2, 0, 120)
+	mergeUtxoEntriesIfMissing(dst, src)
+	if !dst.LookupEntry(op2).IsSpent() {
+		t.Fatalf("expected spent dst entry to remain spent")
+	}
+	if dst.LookupEntry(op2) != existing {
+		t.Fatalf("expected existing dst entry pointer to be preserved")
+	}
+}
+
+func TestMergeUtxoEntriesIfMissingReplacesNilPlaceholder(t *testing.T) {
+	mkTx := func(value int64) *btcutil.Tx {
+		msg := wire.NewMsgTx(1)
+		msg.AddTxOut(&wire.TxOut{Value: value, PkScript: []byte{txscript.OP_TRUE}})
+		return btcutil.NewTx(msg)
+	}
+
+	dst := blockchain.NewUtxoViewpoint()
+	src := blockchain.NewUtxoViewpoint()
+
+	tx := mkTx(3000)
+	op := wire.OutPoint{Hash: *tx.Hash(), Index: 0}
+	src.AddTxOut(tx, 0, 100)
+	dst.Entries()[op] = nil
+
+	mergeUtxoEntriesIfMissing(dst, src)
+	if dst.LookupEntry(op) == nil {
+		t.Fatalf("expected nil placeholder to be replaced")
 	}
 }
