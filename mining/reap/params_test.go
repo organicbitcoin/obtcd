@@ -13,13 +13,25 @@ func TestDefaultREAPParamsForNet(t *testing.T) {
 	}
 
 	obtcMain := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
-	if obtcMain.MaxInputs != 256 || obtcMain.WeightBudget != 200_000 {
+	if obtcMain.MaxInputs != 256 || obtcMain.ScanBatch != 10_000 || obtcMain.WeightBudget != 200_000 {
 		t.Fatalf("unexpected obtc mainnet defaults: %+v", obtcMain)
 	}
 
 	reg := DefaultREAPParamsForNet(&chaincfg.ObtcRegTestParams, SortModeStrict)
 	if reg.MaxInputs != 200 || reg.ScanBatch != 2_000 {
 		t.Fatalf("unexpected regtest defaults: %+v", reg)
+	}
+}
+
+func TestOBTCMainnetConsensusAndTemplateMaxInputsAligned(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params for obtc mainnet")
+	}
+
+	p := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
+	if p.MaxInputs != ep.ReapMaxInputs {
+		t.Fatalf("obtc mainnet max input mismatch: template=%d consensus=%d", p.MaxInputs, ep.ReapMaxInputs)
 	}
 }
 
