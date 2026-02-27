@@ -242,3 +242,163 @@ func addUtxoWithScript(t testing.TB, view *blockchain.UtxoViewpoint, amount int6
 	view.AddTxOut(tx, 0, 100)
 	return wire.OutPoint{Hash: *tx.Hash(), Index: 0}
 }
+
+func addManualUtxo(view *blockchain.UtxoViewpoint, op wire.OutPoint, amount int64) {
+	view.Entries()[op] = blockchain.NewUtxoEntry(&wire.TxOut{Value: amount, PkScript: []byte{0x51}}, 100, false)
+}
+
+func TestSelectCandidatesSortModesDivergeOnSameExpiry(t *testing.T) {
+	mkOutPoint := func(hashPrefix byte, index uint32) wire.OutPoint {
+		var h chainhash.Hash
+		h[0] = hashPrefix
+		return wire.OutPoint{Hash: h, Index: index}
+	}
+
+	view := blockchain.NewUtxoViewpoint()
+	scanner := &stubScanner{}
+
+	// In simple mode, deterministic outpoint order prefers opLowHash first.
+	// In strict mode, amount tie-break should prefer opHighHashLowerAmount first.
+	opLowHashHigherAmount := mkOutPoint(0x01, 0)
+	opHighHashLowerAmount := mkOutPoint(0x02, 0)
+	addManualUtxo(view, opLowHashHigherAmount, 5_000)
+	addManualUtxo(view, opHighHashLowerAmount, 1_000)
+	scanner.items = []*expiryindex.ExpiringUTXO{
+		{OutPoint: opHighHashLowerAmount, ExpiryKey: 10},
+		{OutPoint: opLowHashHigherAmount, ExpiryKey: 10},
+	}
+
+	p := DefaultREAPParams(SortModeSimple)
+	p.ScanBatch = 1
+	p.MaxInputs = 10
+	p.WeightBudget = 0
+
+	simplePlan, err := selectCandidatesWithScanner(context.Background(), 20, scanner, view, p)
+	if err != nil {
+		t.Fatalf("simple mode selection failed: %v", err)
+	}
+	if len(simplePlan.Inputs) != 2 {
+		t.Fatalf("simple mode expected 2 inputs, got %d", len(simplePlan.Inputs))
+	}
+	if simplePlan.Inputs[0] != opLowHashHigherAmount {
+		t.Fatalf("simple mode should prioritize deterministic outpoint order")
+	}
+
+	p.Sort = SortModeStrict
+	strictPlan, err := selectCandidatesWithScanner(context.Background(), 20, scanner, view, p)
+	if err != nil {
+		t.Fatalf("strict mode selection failed: %v", err)
+	}
+	if len(strictPlan.Inputs) != 2 {
+		t.Fatalf("strict mode expected 2 inputs, got %d", len(strictPlan.Inputs))
+	}
+	if strictPlan.Inputs[0] != opHighHashLowerAmount {
+		t.Fatalf("strict mode should prioritize lower amount when expiry ties")
+	}
+}
+
+func TestSelectCandidatesTipCutoffAndStats(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	scanner := &stubScanner{}
+	expiryByOutpoint := make(map[wire.OutPoint]uint64)
+
+	for i := 1; i <= 6; i++ {
+		op := addUtxo(t, view, 1_000, uint32(600+i))
+		expiry := uint64(i)
+		scanner.items = append(scanner.items, &expiryindex.ExpiringUTXO{OutPoint: op, ExpiryKey: expiry})
+		expiryByOutpoint[op] = expiry
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.ScanBatch = 2
+	p.MaxInputs = 10
+	p.WeightBudget = 0
+
+	tip := int32(3)
+	plan, err := selectCandidatesWithScanner(context.Background(), tip, scanner, view, p)
+	if err != nil {
+		t.Fatalf("selection failed: %v", err)
+	}
+	if plan.Stats.Candidates != 3 {
+		t.Fatalf("expected 3 candidates under tip cutoff, got %d", plan.Stats.Candidates)
+	}
+	if plan.Stats.Picked != 3 || len(plan.Inputs) != 3 {
+		t.Fatalf("expected 3 picked inputs, got stats=%d len=%d", plan.Stats.Picked, len(plan.Inputs))
+	}
+	if plan.Stats.Skipped != 0 {
+		t.Fatalf("expected no skipped candidates, got %d", plan.Stats.Skipped)
+	}
+	for i, op := range plan.Inputs {
+		if expiryByOutpoint[op] > uint64(tip) {
+			t.Fatalf("picked unexpired outpoint at %d with expiry=%d", i, expiryByOutpoint[op])
+		}
+	}
+}
+
+func TestSelectCandidatesSkippedStatsForLimitScenarios(t *testing.T) {
+	setup := func(tb testing.TB, n int) (*blockchain.UtxoViewpoint, *stubScanner) {
+		tb.Helper()
+		view := blockchain.NewUtxoViewpoint()
+		scanner := &stubScanner{}
+		for i := 0; i < n; i++ {
+			op := addUtxo(tb, view, 1_000, uint32(1_000+i))
+			scanner.items = append(scanner.items, &expiryindex.ExpiringUTXO{OutPoint: op, ExpiryKey: 1})
+		}
+		return view, scanner
+	}
+
+	tests := []struct {
+		name       string
+		maxInputs  int
+		budget     int64
+		wantPicked int
+	}{
+		{name: "max_inputs", maxInputs: 4, budget: 0, wantPicked: 4},
+		{name: "weight_budget_strictly_less_than_3_inputs", maxInputs: 10, budget: EstimateBlueprintWeight(3) - 1, wantPicked: 2},
+		{name: "weight_budget_exactly_3_inputs", maxInputs: 10, budget: EstimateBlueprintWeight(3), wantPicked: 3},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			view, scanner := setup(t, 10)
+			p := DefaultREAPParams(SortModeStrict)
+			p.ScanBatch = 3
+			p.MaxInputs = tc.maxInputs
+			p.WeightBudget = tc.budget
+
+			plan, err := selectCandidatesWithScanner(context.Background(), 10, scanner, view, p)
+			if err != nil {
+				t.Fatalf("selection failed: %v", err)
+			}
+
+			if plan.Stats.Candidates != 10 {
+				t.Fatalf("expected 10 candidates, got %d", plan.Stats.Candidates)
+			}
+			if got := len(plan.Inputs); got != tc.wantPicked {
+				t.Fatalf("picked count mismatch: got %d want %d", got, tc.wantPicked)
+			}
+			if plan.Stats.Picked != tc.wantPicked {
+				t.Fatalf("stats picked mismatch: got %d want %d", plan.Stats.Picked, tc.wantPicked)
+			}
+			wantSkipped := 10 - tc.wantPicked
+			if plan.Stats.Skipped != wantSkipped {
+				t.Fatalf("skipped count mismatch: got %d want %d", plan.Stats.Skipped, wantSkipped)
+			}
+		})
+	}
+}
+
+func TestSelectCandidatesRespectsCanceledContext(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	op := addUtxo(t, view, 1_000, 777)
+	scanner := &stubScanner{items: []*expiryindex.ExpiringUTXO{{OutPoint: op, ExpiryKey: 1}}}
+	p := DefaultREAPParams(SortModeStrict)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := selectCandidatesWithScanner(ctx, 10, scanner, view, p)
+	if err != context.Canceled {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}

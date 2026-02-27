@@ -283,6 +283,90 @@ func TestNormalTxWeightLimitNoReserveWithoutREAP(t *testing.T) {
 	}
 }
 
+func TestReservedREAPWeightScenarios(t *testing.T) {
+	mainEP := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if mainEP == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+	regEP := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if regEP == nil {
+		t.Fatalf("expected regtest expiry params")
+	}
+
+	tests := []struct {
+		name         string
+		blockMax     uint32
+		chainParams  *chaincfg.Params
+		withIndex    bool
+		nextHeight   int32
+		wantReserved uint32
+	}{
+		{name: "nil_index", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: false, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "nil_chain_params", blockMax: 1_000_000, chainParams: nil, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "non_obtc_network", blockMax: 1_000_000, chainParams: &chaincfg.MainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "before_enable_height", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight - 1, wantReserved: 0},
+		{name: "enabled_obtc_mainnet", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 200_000},
+		{name: "enabled_obtc_regtest", blockMax: 1_000_000, chainParams: &chaincfg.ObtcRegTestParams, withIndex: true, nextHeight: regEP.EnableAtHeight, wantReserved: 400_000},
+		{name: "reserve_equals_block_max", blockMax: 200_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "reserve_exceeds_block_max", blockMax: 199_999, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "zero_block_max", blockMax: 0, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &BlkTmplGenerator{
+				policy:      &Policy{BlockMaxWeight: tc.blockMax},
+				chainParams: tc.chainParams,
+			}
+			if tc.withIndex {
+				g.reapIndex = new(expiryindex.ExpiryIndex)
+			}
+
+			if got := g.reservedREAPWeight(tc.nextHeight); got != tc.wantReserved {
+				t.Fatalf("reserved weight mismatch: got %d want %d", got, tc.wantReserved)
+			}
+		})
+	}
+}
+
+func TestNormalTxWeightLimitScenarioMatrix(t *testing.T) {
+	mainEP := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if mainEP == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	tests := []struct {
+		name            string
+		blockMax        uint32
+		chainParams     *chaincfg.Params
+		withIndex       bool
+		nextHeight      int32
+		reserveForREAP  bool
+		wantNormalLimit uint32
+	}{
+		{name: "reserve_flag_off_even_if_reap_possible", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: false, wantNormalLimit: 1_000_000},
+		{name: "reserve_flag_on_and_reap_possible", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 800_000},
+		{name: "reserve_flag_on_but_pre_enable", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight - 1, reserveForREAP: true, wantNormalLimit: 1_000_000},
+		{name: "reserve_flag_on_but_non_obtc", blockMax: 1_000_000, chainParams: &chaincfg.MainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 1_000_000},
+		{name: "reserve_flag_on_but_block_too_small", blockMax: 150_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 150_000},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &BlkTmplGenerator{
+				policy:      &Policy{BlockMaxWeight: tc.blockMax},
+				chainParams: tc.chainParams,
+			}
+			if tc.withIndex {
+				g.reapIndex = new(expiryindex.ExpiryIndex)
+			}
+			if got := g.normalTxWeightLimit(tc.nextHeight, tc.reserveForREAP); got != tc.wantNormalLimit {
+				t.Fatalf("normal tx weight limit mismatch: got %d want %d", got, tc.wantNormalLimit)
+			}
+		})
+	}
+}
+
 func TestMergeUtxoEntriesIfMissing(t *testing.T) {
 	mkTx := func(value int64) *btcutil.Tx {
 		msg := wire.NewMsgTx(1)
