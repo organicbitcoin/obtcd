@@ -356,3 +356,27 @@ func TestCalculateExpiryKeyDirect(t *testing.T) {
 		t.Fatalf("CalculateExpiryKey mismatch: got %d want %d", got, want)
 	}
 }
+
+func TestOBTCDeploymentsConfigured(t *testing.T) {
+	tests := []struct {
+		name   string
+		params *Params
+	}{
+		{"obtc mainnet", &ObtcMainNetParams},
+		{"obtc testnet", &ObtcTestNetParams},
+		{"obtc regtest", &ObtcRegTestParams},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for i, dep := range tc.params.Deployments {
+				if dep.DeploymentStarter == nil {
+					t.Fatalf("deployment %d starter is nil", i)
+				}
+				if dep.DeploymentEnder == nil {
+					t.Fatalf("deployment %d ender is nil", i)
+				}
+			}
+		})
+	}
+}

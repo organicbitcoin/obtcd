@@ -114,6 +114,14 @@ var ObtcMainNetParams = Params{
 			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
+		DeploymentTestDummyMinActivation: {
+			BitNumber:                 22,
+			CustomActivationThreshold: 0,
+			MinActivationHeight:       0,
+			AlwaysActiveHeight:        0,
+			DeploymentStarter:         NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:           NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
 		DeploymentCSV: {
 			BitNumber:          0,
 			AlwaysActiveHeight: 1, // Already active in Bitcoin at fork point
@@ -129,6 +137,12 @@ var ObtcMainNetParams = Params{
 		DeploymentTaproot: {
 			BitNumber:          2,
 			AlwaysActiveHeight: 1, // Already active in Bitcoin at fork point
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTestDummyAlwaysActive: {
+			BitNumber:          30,
+			AlwaysActiveHeight: 1,
 			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
@@ -197,6 +211,52 @@ var ObtcTestNetParams = Params{
 	HDPublicKeyID:           [4]byte{0x04, 0x35, 0x87, 0xCF}, // "tpub" equivalent
 	HDCoinType:              1,                               // Testnet coin type
 
+	// Consensus deployments for OBTC testnet.
+	// Keep existing soft forks explicitly configured to avoid nil deployment
+	// starters/enders on threshold checks.
+	RuleChangeActivationThreshold: 1512, // 75% of MinerConfirmationWindow
+	MinerConfirmationWindow:       2016,
+	Deployments: [DefinedDeployments]ConsensusDeployment{
+		DeploymentTestDummy: {
+			BitNumber:          28,
+			AlwaysActiveHeight: 0,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTestDummyMinActivation: {
+			BitNumber:                 22,
+			CustomActivationThreshold: 0,
+			MinActivationHeight:       0,
+			AlwaysActiveHeight:        0,
+			DeploymentStarter:         NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:           NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentCSV: {
+			BitNumber:          0,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentSegwit: {
+			BitNumber:          1,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTaproot: {
+			BitNumber:          2,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTestDummyAlwaysActive: {
+			BitNumber:          30,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+	},
+
 	// TODO: Complete remaining testnet-specific fields in Week 3
 }
 
@@ -235,6 +295,46 @@ var ObtcRegTestParams = Params{
 	// Consensus deployments always active
 	RuleChangeActivationThreshold: 108, // 75% of MinerConfirmationWindow
 	MinerConfirmationWindow:       144, // Faster than normal
+	Deployments: [DefinedDeployments]ConsensusDeployment{
+		DeploymentTestDummy: {
+			BitNumber:          28,
+			AlwaysActiveHeight: 0,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTestDummyMinActivation: {
+			BitNumber:                 22,
+			CustomActivationThreshold: 0,
+			MinActivationHeight:       0,
+			AlwaysActiveHeight:        0,
+			DeploymentStarter:         NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:           NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentCSV: {
+			BitNumber:          0,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentSegwit: {
+			BitNumber:          1,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTaproot: {
+			BitNumber:          2,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+		DeploymentTestDummyAlwaysActive: {
+			BitNumber:          30,
+			AlwaysActiveHeight: 1,
+			DeploymentStarter:  NewMedianTimeDeploymentStarter(time.Unix(0, 0)),
+			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
+		},
+	},
 
 	// Address encoding for regtest
 	Bech32HRPSegwit:         "obtcrt",                        // "obtc regtest"
