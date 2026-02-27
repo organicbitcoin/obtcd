@@ -73,6 +73,14 @@ func TestSelectCandidatesStaircasePressureCapsAndOrder(t *testing.T) {
 				t.Fatalf("tip=%d picked unexpired input[%d] expiry=%d", tip, i, m.expiry)
 			}
 
+			entry := view.LookupEntry(op)
+			if entry == nil || entry.IsSpent() {
+				t.Fatalf("tip=%d picked stale/spent input[%d]=%s", tip, i, op.String())
+			}
+			if entry.Amount() != m.amount {
+				t.Fatalf("tip=%d picked input[%d] amount mismatch: view=%d meta=%d", tip, i, entry.Amount(), m.amount)
+			}
+
 			if i == 0 {
 				continue
 			}
