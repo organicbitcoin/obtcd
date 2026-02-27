@@ -619,6 +619,7 @@ mempoolLoop:
 	witnessIncluded := false
 
 	// Choose which transactions make it into the block.
+	normalTxWeightLimit := g.normalTxWeightLimit(nextBlockHeight)
 	for priorityQueue.Len() > 0 {
 		// Grab the highest priority (or highest fee per kilobyte
 		// depending on the sort order) transaction.
@@ -671,10 +672,10 @@ mempoolLoop:
 		txWeight := uint32(blockchain.GetTransactionWeight(tx))
 		blockPlusTxWeight := blockWeight + txWeight
 		if blockPlusTxWeight < blockWeight ||
-			blockPlusTxWeight >= g.policy.BlockMaxWeight {
+			blockPlusTxWeight >= normalTxWeightLimit {
 
 			log.Tracef("Skipping tx %s because it would exceed "+
-				"the max block weight", tx.Hash())
+				"the normal-tx weight limit", tx.Hash())
 			logSkippedDeps(tx, deps)
 			continue
 		}

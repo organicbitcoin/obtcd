@@ -7,9 +7,14 @@ import (
 )
 
 func TestDefaultREAPParamsForNet(t *testing.T) {
-	main := DefaultREAPParamsForNet(&chaincfg.MainNetParams, SortModeStrict)
-	if main.MaxInputs != 1000 || main.ScanBatch != 10_000 {
-		t.Fatalf("unexpected main defaults: %+v", main)
+	btcMain := DefaultREAPParamsForNet(&chaincfg.MainNetParams, SortModeStrict)
+	if btcMain.MaxInputs != 1000 || btcMain.ScanBatch != 10_000 || btcMain.WeightBudget != 400_000 {
+		t.Fatalf("unexpected bitcoin mainnet defaults: %+v", btcMain)
+	}
+
+	obtcMain := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
+	if obtcMain.MaxInputs != 256 || obtcMain.WeightBudget != 200_000 {
+		t.Fatalf("unexpected obtc mainnet defaults: %+v", obtcMain)
 	}
 
 	reg := DefaultREAPParamsForNet(&chaincfg.ObtcRegTestParams, SortModeStrict)
