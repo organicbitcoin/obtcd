@@ -50,6 +50,44 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 	return btcutil.NewTx(tx), plan.TaxTotal, nil
 }
 
+// normalTxWeightLimit returns the weight cap used while selecting regular
+// mempool transactions before attempting to append a REAP system tx.
+//
+// When REAP is active, we reserve up to REAP's weight budget so heavily loaded
+// mempools still leave headroom for expiry processing.
+func (g *BlkTmplGenerator) normalTxWeightLimit(nextBlockHeight int32) uint32 {
+	limit := g.policy.BlockMaxWeight
+	reserve := g.reservedREAPWeight(nextBlockHeight)
+	if reserve > 0 && reserve < limit {
+		return limit - reserve
+	}
+	return limit
+}
+
+func (g *BlkTmplGenerator) reservedREAPWeight(nextBlockHeight int32) uint32 {
+	if g.reapIndex == nil || g.chainParams == nil || !chaincfg.IsOBTC(g.chainParams) {
+		return 0
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(g.chainParams)
+	if expiryParams == nil || nextBlockHeight < expiryParams.EnableAtHeight {
+		return 0
+	}
+
+	p := reap.DefaultREAPParamsForNet(g.chainParams, reap.SortModeStrict)
+	if p.WeightBudget <= 0 {
+		return 0
+	}
+
+	maxWeight := uint64(g.policy.BlockMaxWeight)
+	reserve := uint64(p.WeightBudget)
+	if maxWeight == 0 || reserve >= maxWeight {
+		return 0
+	}
+
+	return uint32(reserve)
+}
+
 func (g *BlkTmplGenerator) collectExpiredOutpoints(nextBlockHeight int32, p reap.REAPParams) ([]wire.OutPoint, error) {
 	fromKey := uint64(0)
 	toKey := uint64(nextBlockHeight)

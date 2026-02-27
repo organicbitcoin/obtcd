@@ -230,6 +230,59 @@ func TestSetREAPIndexDirect(t *testing.T) {
 	}
 }
 
+func TestNormalTxWeightLimitReservePolicy(t *testing.T) {
+	const blockMax = uint32(1_000_000)
+
+	g := &BlkTmplGenerator{
+		policy:      &Policy{BlockMaxWeight: blockMax},
+		chainParams: &chaincfg.ObtcMainNetParams,
+		reapIndex:   new(expiryindex.ExpiryIndex),
+	}
+
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+
+	// Before enable height, do not reserve weight.
+	if got := g.normalTxWeightLimit(ep.EnableAtHeight - 1); got != blockMax {
+		t.Fatalf("unexpected pre-enable weight limit: got %d want %d", got, blockMax)
+	}
+
+	// At/after enable height, reserve REAP budget from normal tx area.
+	want := blockMax - 200_000
+	if got := g.normalTxWeightLimit(ep.EnableAtHeight); got != want {
+		t.Fatalf("unexpected post-enable weight limit: got %d want %d", got, want)
+	}
+}
+
+func TestNormalTxWeightLimitNoReserveWhenBudgetExceedsBlock(t *testing.T) {
+	g := &BlkTmplGenerator{
+		policy:      &Policy{BlockMaxWeight: 150_000},
+		chainParams: &chaincfg.ObtcMainNetParams,
+		reapIndex:   new(expiryindex.ExpiryIndex),
+	}
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+
+	if got := g.normalTxWeightLimit(ep.EnableAtHeight); got != 150_000 {
+		t.Fatalf("reserve should be disabled when over block max, got %d", got)
+	}
+}
+
+func TestNormalTxWeightLimitNoReserveWithoutREAP(t *testing.T) {
+	const blockMax = uint32(1_000_000)
+	g := &BlkTmplGenerator{
+		policy:      &Policy{BlockMaxWeight: blockMax},
+		chainParams: &chaincfg.ObtcMainNetParams,
+	}
+	if got := g.normalTxWeightLimit(1_000_000); got != blockMax {
+		t.Fatalf("expected no reserve without reap index, got %d", got)
+	}
+}
+
 func TestMergeUtxoEntriesIfMissing(t *testing.T) {
 	mkTx := func(value int64) *btcutil.Tx {
 		msg := wire.NewMsgTx(1)
