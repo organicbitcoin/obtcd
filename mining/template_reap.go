@@ -55,8 +55,12 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 //
 // When REAP is active, we reserve up to REAP's weight budget so heavily loaded
 // mempools still leave headroom for expiry processing.
-func (g *BlkTmplGenerator) normalTxWeightLimit(nextBlockHeight int32) uint32 {
+func (g *BlkTmplGenerator) normalTxWeightLimit(nextBlockHeight int32, reserveForREAP bool) uint32 {
 	limit := g.policy.BlockMaxWeight
+	if !reserveForREAP {
+		return limit
+	}
+
 	reserve := g.reservedREAPWeight(nextBlockHeight)
 	if reserve > 0 && reserve < limit {
 		return limit - reserve

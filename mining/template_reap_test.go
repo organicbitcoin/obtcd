@@ -245,13 +245,13 @@ func TestNormalTxWeightLimitReservePolicy(t *testing.T) {
 	}
 
 	// Before enable height, do not reserve weight.
-	if got := g.normalTxWeightLimit(ep.EnableAtHeight - 1); got != blockMax {
+	if got := g.normalTxWeightLimit(ep.EnableAtHeight-1, true); got != blockMax {
 		t.Fatalf("unexpected pre-enable weight limit: got %d want %d", got, blockMax)
 	}
 
 	// At/after enable height, reserve REAP budget from normal tx area.
 	want := blockMax - 200_000
-	if got := g.normalTxWeightLimit(ep.EnableAtHeight); got != want {
+	if got := g.normalTxWeightLimit(ep.EnableAtHeight, true); got != want {
 		t.Fatalf("unexpected post-enable weight limit: got %d want %d", got, want)
 	}
 }
@@ -267,7 +267,7 @@ func TestNormalTxWeightLimitNoReserveWhenBudgetExceedsBlock(t *testing.T) {
 		t.Fatalf("expected expiry params")
 	}
 
-	if got := g.normalTxWeightLimit(ep.EnableAtHeight); got != 150_000 {
+	if got := g.normalTxWeightLimit(ep.EnableAtHeight, true); got != 150_000 {
 		t.Fatalf("reserve should be disabled when over block max, got %d", got)
 	}
 }
@@ -278,8 +278,8 @@ func TestNormalTxWeightLimitNoReserveWithoutREAP(t *testing.T) {
 		policy:      &Policy{BlockMaxWeight: blockMax},
 		chainParams: &chaincfg.ObtcMainNetParams,
 	}
-	if got := g.normalTxWeightLimit(1_000_000); got != blockMax {
-		t.Fatalf("expected no reserve without reap index, got %d", got)
+	if got := g.normalTxWeightLimit(1_000_000, false); got != blockMax {
+		t.Fatalf("expected no reserve without planned reap, got %d", got)
 	}
 }
 
