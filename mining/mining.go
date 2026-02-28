@@ -355,6 +355,10 @@ type BlkTmplGenerator struct {
 	sigCache    *txscript.SigCache
 	hashCache   *txscript.HashCache
 	reapIndex   *expiryindex.ExpiryIndex
+
+	// Optional REAP hooks for deterministic testing of rare append branches.
+	reapSigOpCostFn      func(tx *btcutil.Tx, utxoView *blockchain.UtxoViewpoint, segwitActive bool) (int, error)
+	reapFetchInputViewFn func(tx *btcutil.Tx) (*blockchain.UtxoViewpoint, error)
 }
 
 // NewBlkTmplGenerator returns a new block template generator for the given
@@ -810,8 +814,13 @@ mempoolLoop:
 		if blockPlusTxWeight < blockWeight || blockPlusTxWeight >= g.policy.BlockMaxWeight {
 			log.Tracef("Skipping REAP tx because it would exceed max block weight")
 		} else {
-			sigOpCost, err := blockchain.GetSigOpCost(plannedREAPTx, false, blockUtxos,
-				true, segwitActive)
+			reapSigOpCostFn := g.reapSigOpCostFn
+			if reapSigOpCostFn == nil {
+				reapSigOpCostFn = func(tx *btcutil.Tx, utxoView *blockchain.UtxoViewpoint, segwit bool) (int, error) {
+					return blockchain.GetSigOpCost(tx, false, utxoView, true, segwit)
+				}
+			}
+			sigOpCost, err := reapSigOpCostFn(plannedREAPTx, blockUtxos, segwitActive)
 			if err != nil {
 				log.Warnf("Skipping REAP tx due to sigop calc error: %v", err)
 			} else if blockSigOpCost+int64(sigOpCost) < blockSigOpCost ||
@@ -821,7 +830,11 @@ mempoolLoop:
 				// Reuse canonical input checks against the current in-block utxo view.
 				// blockUtxos only contains entries fetched during template assembly,
 				// so prime missing/nil entries for REAP inputs before validation.
-				reapInputView, err := g.chain.FetchUtxoView(plannedREAPTx)
+				reapFetchInputViewFn := g.reapFetchInputViewFn
+				if reapFetchInputViewFn == nil {
+					reapFetchInputViewFn = g.chain.FetchUtxoView
+				}
+				reapInputView, err := reapFetchInputViewFn(plannedREAPTx)
 				if err != nil {
 					log.Warnf("Skipping REAP tx due to input fetch error: %v", err)
 				} else {
