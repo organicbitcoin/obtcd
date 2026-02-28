@@ -53,6 +53,7 @@ func (s *staticTxSource) HaveTransaction(hash *chainhash.Hash) bool {
 type boundaryHarness struct {
 	params    *chaincfg.Params
 	chain     *blockchain.BlockChain
+	db        database.DB
 	reapIndex *expiryindex.ExpiryIndex
 	generator *BlkTmplGenerator
 	spendable map[int32]wire.OutPoint
@@ -160,6 +161,7 @@ func setupBoundaryHarness(t *testing.T) *boundaryHarness {
 	return &boundaryHarness{
 		params:    &params,
 		chain:     chain,
+		db:        db,
 		reapIndex: idx,
 		generator: generator,
 		spendable: spendable,
