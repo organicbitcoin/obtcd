@@ -8,7 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 )
 
-func TestNewBlockTemplateP1PriorityFeeSwitchWithREAPBoundary(t *testing.T) {
+func TestNewBlockTemplatePriorityFeeSwitchWithREAPBoundary(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 
@@ -89,7 +89,7 @@ func TestNewBlockTemplateP1PriorityFeeSwitchWithREAPBoundary(t *testing.T) {
 	})
 }
 
-func TestNewBlockTemplateP1LowFeePolicyWithREAPReserveMatrix(t *testing.T) {
+func TestNewBlockTemplateLowFeePolicyWithREAPReserveMatrix(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 
@@ -144,7 +144,7 @@ func TestNewBlockTemplateP1LowFeePolicyWithREAPReserveMatrix(t *testing.T) {
 	}
 }
 
-func TestNewBlockTemplateP1REAPAppendExceptionBranches(t *testing.T) {
+func TestNewBlockTemplateREAPAppendExceptionBranches(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 

@@ -394,7 +394,7 @@ func injectCoinbaseIntoExpiryIndexAtHeight(t *testing.T, h *boundaryHarness,
 	}
 }
 
-func TestNewBlockTemplateP0REAPConflictWithNormalSkipsREAP(t *testing.T) {
+func TestNewBlockTemplateREAPConflictWithNormalSkipsREAP(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 
@@ -437,7 +437,7 @@ func TestNewBlockTemplateP0REAPConflictWithNormalSkipsREAP(t *testing.T) {
 	}
 }
 
-func TestNewBlockTemplateP0NoPlannedREAPNoReserve(t *testing.T) {
+func TestNewBlockTemplateNoPlannedREAPNoReserve(t *testing.T) {
 	h := setupBoundaryHarnessAtHeight(t, 109, []int32{10})
 	defer h.cleanup()
 
@@ -479,7 +479,7 @@ func TestNewBlockTemplateP0NoPlannedREAPNoReserve(t *testing.T) {
 	}
 }
 
-func TestNewBlockTemplateP0DependencyBoundaryBehavior(t *testing.T) {
+func TestNewBlockTemplateDependencyBoundaryBehavior(t *testing.T) {
 	h := setupBoundaryHarnessAtHeight(t, 109, []int32{9, 10})
 	defer h.cleanup()
 
