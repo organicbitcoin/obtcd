@@ -131,45 +131,113 @@ func TestOBTCNetworkUniqueness(t *testing.T) {
 	}
 }
 
-// TestOBTCAddressParameters verifies that OBTC uses unique address parameters.
+// TestOBTCAddressParameters verifies that OBTC uses isolated address/key
+// namespaces versus Bitcoin networks and across OBTC networks.
 func TestOBTCAddressParameters(t *testing.T) {
-	// Test that OBTC uses different address prefixes than Bitcoin
-	tests := []struct {
-		name          string
-		obtcParams    *Params
-		bitcoinParams *Params
-	}{
-		{
-			name:          "OBTC MainNet vs Bitcoin MainNet",
-			obtcParams:    &ObtcMainNetParams,
-			bitcoinParams: &MainNetParams,
-		},
+	type namedParams struct {
+		name   string
+		params *Params
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Verify HRP is different
-			if test.obtcParams.Bech32HRPSegwit == test.bitcoinParams.Bech32HRPSegwit {
-				t.Errorf("OBTC and Bitcoin use same Bech32 HRP: %s",
-					test.obtcParams.Bech32HRPSegwit)
-			}
+	obtcNets := []namedParams{
+		{name: "obtc mainnet", params: &ObtcMainNetParams},
+		{name: "obtc testnet", params: &ObtcTestNetParams},
+		{name: "obtc regtest", params: &ObtcRegTestParams},
+	}
+	btcNets := []namedParams{
+		{name: "bitcoin mainnet", params: &MainNetParams},
+		{name: "bitcoin testnet3", params: &TestNet3Params},
+		{name: "bitcoin testnet4", params: &TestNet4Params},
+		{name: "bitcoin regtest", params: &RegressionNetParams},
+		{name: "bitcoin simnet", params: &SimNetParams},
+		{name: "bitcoin signet", params: &SigNetParams},
+	}
 
-			// Verify address IDs are different
-			if test.obtcParams.PubKeyHashAddrID == test.bitcoinParams.PubKeyHashAddrID {
-				t.Errorf("OBTC and Bitcoin use same PubKeyHashAddrID: %x",
-					test.obtcParams.PubKeyHashAddrID)
+	checkByteField := func(field string, getter func(*Params) byte) {
+		t.Helper()
+		seen := make(map[byte]string)
+		for _, net := range obtcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("%s collision within OBTC: %s and %s both use 0x%02x", field, prev, net.name, v)
 			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("%s collision between %s and %s: 0x%02x", field, prev, net.name, v)
+			}
+		}
+	}
 
-			if test.obtcParams.ScriptHashAddrID == test.bitcoinParams.ScriptHashAddrID {
-				t.Errorf("OBTC and Bitcoin use same ScriptHashAddrID: %x",
-					test.obtcParams.ScriptHashAddrID)
+	checkStringField := func(field string, getter func(*Params) string) {
+		t.Helper()
+		seen := make(map[string]string)
+		for _, net := range obtcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("%s collision within OBTC: %s and %s both use %q", field, prev, net.name, v)
 			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("%s collision between %s and %s: %q", field, prev, net.name, v)
+			}
+		}
+	}
 
-			if test.obtcParams.PrivateKeyID == test.bitcoinParams.PrivateKeyID {
-				t.Errorf("OBTC and Bitcoin use same PrivateKeyID: %x",
-					test.obtcParams.PrivateKeyID)
+	checkHDField := func(field string, getter func(*Params) [4]byte) {
+		t.Helper()
+		seen := make(map[[4]byte]string)
+		for _, net := range obtcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("%s collision within OBTC: %s and %s both use %x", field, prev, net.name, v)
 			}
-		})
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("%s collision between %s and %s: %x", field, prev, net.name, v)
+			}
+		}
+	}
+
+	checkCoinType := func() {
+		t.Helper()
+		seen := make(map[uint32]string)
+		for _, net := range obtcNets {
+			v := net.params.HDCoinType
+			if prev, ok := seen[v]; ok {
+				t.Fatalf("HDCoinType collision within OBTC: %s and %s both use %d", prev, net.name, v)
+			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			if prev, ok := seen[net.params.HDCoinType]; ok {
+				t.Fatalf("HDCoinType collision between %s and %s: %d", prev, net.name, net.params.HDCoinType)
+			}
+		}
+	}
+
+	checkStringField("Bech32HRPSegwit", func(p *Params) string { return p.Bech32HRPSegwit })
+	checkByteField("PubKeyHashAddrID", func(p *Params) byte { return p.PubKeyHashAddrID })
+	checkByteField("ScriptHashAddrID", func(p *Params) byte { return p.ScriptHashAddrID })
+	checkByteField("PrivateKeyID", func(p *Params) byte { return p.PrivateKeyID })
+	checkByteField("WitnessPubKeyHashAddrID", func(p *Params) byte { return p.WitnessPubKeyHashAddrID })
+	checkByteField("WitnessScriptHashAddrID", func(p *Params) byte { return p.WitnessScriptHashAddrID })
+	checkHDField("HDPrivateKeyID", func(p *Params) [4]byte { return p.HDPrivateKeyID })
+	checkHDField("HDPublicKeyID", func(p *Params) [4]byte { return p.HDPublicKeyID })
+	checkCoinType()
+
+	for _, net := range obtcNets {
+		if net.params.HDPrivateKeyID == net.params.HDPublicKeyID {
+			t.Fatalf("%s has identical HD private/public ids: %x", net.name, net.params.HDPrivateKeyID)
+		}
 	}
 }
 
@@ -384,5 +452,11 @@ func TestOBTCDeploymentsConfigured(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestValidateOBTCNamespaceIsolationDirect(t *testing.T) {
+	if err := validateOBTCNamespaceIsolation(); err != nil {
+		t.Fatalf("namespace isolation validation failed: %v", err)
 	}
 }
