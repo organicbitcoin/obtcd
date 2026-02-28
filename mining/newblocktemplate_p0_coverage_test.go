@@ -123,6 +123,7 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 	return &boundaryHarness{
 		params:    &params,
 		chain:     chain,
+		db:        db,
 		reapIndex: idx,
 		generator: generator,
 		spendable: spendable,
@@ -211,6 +212,7 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 	return &boundaryHarness{
 		params:    &params,
 		chain:     chain,
+		db:        db,
 		generator: generator,
 		spendable: spendable,
 		values:    values,
@@ -364,9 +366,42 @@ func mineBlockWithTxsNoPoW(t *testing.T, chain *blockchain.BlockChain,
 	return block
 }
 
+func injectCoinbaseIntoExpiryIndexAtHeight(t *testing.T, h *boundaryHarness,
+	sourceHeight int32, fakeCreateHeight int32) {
+	t.Helper()
+
+	if h == nil || h.db == nil || h.reapIndex == nil {
+		t.Fatalf("harness is missing db/index for expiry injection")
+	}
+
+	sourceBlock, err := h.chain.BlockByHeight(sourceHeight)
+	if err != nil {
+		t.Fatalf("BlockByHeight(%d): %v", sourceHeight, err)
+	}
+	coinbase := sourceBlock.MsgBlock().Transactions[0]
+
+	fakeMsg := wire.NewMsgBlock(&wire.BlockHeader{})
+	if err := fakeMsg.AddTransaction(coinbase.Copy()); err != nil {
+		t.Fatalf("add copied coinbase tx: %v", err)
+	}
+	fakeBlock := btcutil.NewBlock(fakeMsg)
+	fakeBlock.SetHeight(fakeCreateHeight)
+
+	if err := h.db.Update(func(dbTx database.Tx) error {
+		return h.reapIndex.ConnectBlock(dbTx, fakeBlock, nil)
+	}); err != nil {
+		t.Fatalf("inject forged expiry mapping failed: %v", err)
+	}
+}
+
 func TestNewBlockTemplateP0REAPConflictWithNormalSkipsREAP(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
+
+	// Forge one non-expired coinbase output (height 120) into an "expired" index row
+	// so the REAP planner selects it. This allows us to validate that a regular
+	// mempool tx consuming that outpoint can block REAP append in NewBlockTemplate.
+	injectCoinbaseIntoExpiryIndexAtHeight(t, h, 120, 100)
 
 	nextHeight := h.chain.BestSnapshot().Height + 1
 	reapTx, _, err := h.generator.maybeBuildREAPTx(nextHeight)
@@ -376,29 +411,29 @@ func TestNewBlockTemplateP0REAPConflictWithNormalSkipsREAP(t *testing.T) {
 	if reapTx == nil {
 		t.Fatalf("expected planned REAP tx at height %d", nextHeight)
 	}
-	if !txHasInput(reapTx, h.spendable[100]) {
-		t.Fatalf("expected planned REAP tx to consume outpoint at height 100")
+	if !txHasInput(reapTx, h.spendable[120]) {
+		t.Fatalf("expected planned REAP tx to include forged-expiry outpoint at height 120")
 	}
 
 	fee := int64(10_000)
-	mempoolREAP := btcutil.NewTx(reapTx.MsgTx().Copy())
+	conflictNormalTx := buildOPTrueSpendTx(h.spendable[120], h.values[120], fee, 0)
 	baseWeight := initialTemplateWeight(t, h.params, nextHeight)
-	mempoolREAPWeight := uint32(blockchain.GetTransactionWeight(mempoolREAP))
+	conflictWeight := uint32(blockchain.GetTransactionWeight(conflictNormalTx))
 	reserve := h.generator.reservedREAPWeight(nextHeight)
 
-	h.generator.policy.BlockMaxWeight = baseWeight + mempoolREAPWeight + reserve + 1024
-	h.generator.txSource = newStaticTxSource([]*TxDesc{makeTxDesc(mempoolREAP, fee, 10_000)})
+	h.generator.policy.BlockMaxWeight = baseWeight + conflictWeight + reserve + 1024
+	h.generator.txSource = newStaticTxSource([]*TxDesc{makeTxDesc(conflictNormalTx, fee, 10_000)})
 
 	tmpl, err := h.generator.NewBlockTemplate(nil)
 	if err != nil {
 		t.Fatalf("NewBlockTemplate failed: %v", err)
 	}
 
-	if !templateContainsTx(tmpl, mempoolREAP.Hash()) {
-		t.Fatalf("expected mempool REAP tx to be included")
+	if !templateContainsTx(tmpl, conflictNormalTx.Hash()) {
+		t.Fatalf("expected conflicting normal tx to be included")
 	}
-	if got := countREAPTxInTemplate(tmpl); got != 1 {
-		t.Fatalf("expected exactly one REAP tx (from txSource), got %d", got)
+	if templateHasREAPTx(tmpl) {
+		t.Fatalf("expected REAP tx to be skipped after normal tx consumed a planned REAP input")
 	}
 }
 
@@ -445,7 +480,7 @@ func TestNewBlockTemplateP0NoPlannedREAPNoReserve(t *testing.T) {
 }
 
 func TestNewBlockTemplateP0DependencyBoundaryBehavior(t *testing.T) {
-	h := setupBoundaryHarnessAtHeight(t, 109, []int32{10, 11})
+	h := setupBoundaryHarnessAtHeight(t, 109, []int32{9, 10})
 	defer h.cleanup()
 
 	nextHeight := h.chain.BestSnapshot().Height + 1
@@ -486,8 +521,8 @@ func TestNewBlockTemplateP0DependencyBoundaryBehavior(t *testing.T) {
 	})
 
 	t.Run("parent-at-boundary-skipped-child-never-enqueued", func(t *testing.T) {
-		parent := buildOPTrueSpendTx(h.spendable[11], h.values[11], fee, 0)
-		parentOutValue := h.values[11] - fee
+		parent := buildOPTrueSpendTx(h.spendable[9], h.values[9], fee, 0)
+		parentOutValue := h.values[9] - fee
 		child := buildOPTrueSpendTx(
 			wire.OutPoint{Hash: *parent.Hash(), Index: 0},
 			parentOutValue,
