@@ -11,7 +11,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-func TestNewBlockTemplateP2FeeAccountingConsistency(t *testing.T) {
+func TestNewBlockTemplateFeeAccountingConsistency(t *testing.T) {
 	t.Run("with_reap_and_normal_tx", func(t *testing.T) {
 		h := setupBoundaryHarness(t)
 		defer h.cleanup()
@@ -134,7 +134,7 @@ func TestNewBlockTemplateP2FeeAccountingConsistency(t *testing.T) {
 	})
 }
 
-func TestNewBlockTemplateP2FinalConnectFailurePath(t *testing.T) {
+func TestNewBlockTemplateFinalConnectFailurePath(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 
@@ -160,7 +160,7 @@ func TestNewBlockTemplateP2FinalConnectFailurePath(t *testing.T) {
 	}
 }
 
-func TestNewBlockTemplateP2HelperFunctions(t *testing.T) {
+func TestNewBlockTemplateHelperFunctions(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 
