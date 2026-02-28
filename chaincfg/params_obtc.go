@@ -7,6 +7,7 @@
 package chaincfg
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
@@ -153,24 +154,24 @@ var ObtcMainNetParams = Params{
 	// Mempool parameters
 	RelayNonStdTxs: false,
 
-	// Address encoding parameters - CRITICAL: These MUST be unique to OBTC
-	// TODO: Generate cryptographically unique values in Week 3 to prevent
-	// address reuse and replay attacks between Bitcoin and OBTC networks
+	// Address encoding parameters - CRITICAL: These are intentionally isolated
+	// from Bitcoin namespaces to reduce replay/mis-transfer risk.
 	Bech32HRPSegwit:         "obtc", // Human-readable part for bech32 addresses
-	PubKeyHashAddrID:        0x47,   // TODO: Generate unique value (currently placeholder)
-	ScriptHashAddrID:        0x32,   // TODO: Generate unique value (currently placeholder)
-	PrivateKeyID:            0xEF,   // TODO: Generate unique value (currently placeholder)
-	WitnessPubKeyHashAddrID: 0x06,   // TODO: Generate unique value (currently placeholder)
-	WitnessScriptHashAddrID: 0x0A,   // TODO: Generate unique value (currently placeholder)
+	PubKeyHashAddrID:        0x47,
+	ScriptHashAddrID:        0x32,
+	PrivateKeyID:            0x9A,
+	WitnessPubKeyHashAddrID: 0x2A,
+	WitnessScriptHashAddrID: 0x2B,
 
-	// BIP32 hierarchical deterministic extended key parameters
-	// TODO: Generate cryptographically unique values in Week 3
-	// These MUST NOT conflict with Bitcoin's xpub/xprv prefixes
-	HDPrivateKeyID: [4]byte{0x04, 0x88, 0xB2, 0x1E}, // TODO: Generate unique "oprv" prefix
-	HDPublicKeyID:  [4]byte{0x04, 0x88, 0xAD, 0xE4}, // TODO: Generate unique "opub" prefix
+	// BIP32 hierarchical deterministic extended key parameters.
+	// These version bytes are unique to OBTC and must not overlap with
+	// Bitcoin xpub/xprv/tpub/tprv/spub/sprv namespaces.
+	HDPrivateKeyID: [4]byte{0x0B, 0x47, 0xB0, 0x1E},
+	HDPublicKeyID:  [4]byte{0x0B, 0x47, 0xB5, 0xD4},
 
-	// BIP44 coin type - TODO: Register official coin type for OBTC
-	HDCoinType: 1, // Using testnet coin type temporarily
+	// BIP44 coin type. Temporary project-local allocation until official
+	// SLIP-0044 assignment is obtained.
+	HDCoinType: 20260,
 }
 
 // ObtcTestNetParams defines the network parameters for OBTC test network.
@@ -181,7 +182,7 @@ var ObtcMainNetParams = Params{
 var ObtcTestNetParams = Params{
 	Name:        "obtctestnet",
 	Net:         wire.ObtcTestNet,
-	DefaultPort: "18555", // Different from Bitcoin testnet's 18333
+	DefaultPort: "28555", // Different from Bitcoin testnet/simnet defaults
 
 	// Use Bitcoin testnet's genesis and history up to fork point
 	GenesisBlock: &testNet3GenesisBlock,
@@ -202,16 +203,17 @@ var ObtcTestNetParams = Params{
 	TargetTimePerBlock:       time.Minute * 10,
 	RetargetAdjustmentFactor: 4,
 
-	// Address encoding parameters - unique to OBTC testnet
+	// Address/HD namespaces are isolated from Bitcoin testnet/regtest to
+	// prevent cross-chain mis-transfer during testing.
 	Bech32HRPSegwit:         "obtct", // "obtc testnet"
-	PubKeyHashAddrID:        0x6F,    // Different from mainnet
-	ScriptHashAddrID:        0xC4,    // Different from mainnet
-	PrivateKeyID:            0xEF,
-	WitnessPubKeyHashAddrID: 0x03,
-	WitnessScriptHashAddrID: 0x28,
-	HDPrivateKeyID:          [4]byte{0x04, 0x35, 0x83, 0x94}, // "tprv" equivalent
-	HDPublicKeyID:           [4]byte{0x04, 0x35, 0x87, 0xCF}, // "tpub" equivalent
-	HDCoinType:              1,                               // Testnet coin type
+	PubKeyHashAddrID:        0x71,
+	ScriptHashAddrID:        0xD1,
+	PrivateKeyID:            0xF1,
+	WitnessPubKeyHashAddrID: 0x2C,
+	WitnessScriptHashAddrID: 0x2D,
+	HDPrivateKeyID:          [4]byte{0x0B, 0x48, 0xB0, 0x1E},
+	HDPublicKeyID:           [4]byte{0x0B, 0x48, 0xB5, 0xD4},
+	HDCoinType:              20261,
 
 	// Consensus deployments for OBTC testnet.
 	// Keep existing soft forks explicitly configured to avoid nil deployment
@@ -270,7 +272,7 @@ var ObtcTestNetParams = Params{
 var ObtcRegTestParams = Params{
 	Name:        "obtcregtest",
 	Net:         wire.ObtcRegNet, // Use separate magic for regtest isolation
-	DefaultPort: "18666",         // Different from Bitcoin regtest's 18444 for development isolation
+	DefaultPort: "28666",         // Different from Bitcoin regtest defaults for development isolation
 
 	// Use Bitcoin regtest genesis for shared development environment
 	GenesisBlock: &regTestGenesisBlock,
@@ -338,16 +340,17 @@ var ObtcRegTestParams = Params{
 		},
 	},
 
-	// Address encoding for regtest
-	Bech32HRPSegwit:         "obtcrt",                        // "obtc regtest"
-	PubKeyHashAddrID:        0x6F,                            // Same as Bitcoin regtest
-	ScriptHashAddrID:        0xC4,                            // Same as Bitcoin regtest
-	PrivateKeyID:            0xEF,                            // Same as Bitcoin regtest
-	WitnessPubKeyHashAddrID: 0x03,                            // Same as Bitcoin regtest
-	WitnessScriptHashAddrID: 0x28,                            // Same as Bitcoin regtest
-	HDPrivateKeyID:          [4]byte{0x04, 0x35, 0x83, 0x94}, // Same as Bitcoin regtest
-	HDPublicKeyID:           [4]byte{0x04, 0x35, 0x87, 0xCF}, // Same as Bitcoin regtest
-	HDCoinType:              1,                               // Regtest coin type
+	// Regtest also uses isolated namespaces (instead of reusing Bitcoin
+	// test/reg prefixes) to avoid accidental cross-network key/address usage.
+	Bech32HRPSegwit:         "obtcrt", // "obtc regtest"
+	PubKeyHashAddrID:        0x72,
+	ScriptHashAddrID:        0xD2,
+	PrivateKeyID:            0xF2,
+	WitnessPubKeyHashAddrID: 0x2E,
+	WitnessScriptHashAddrID: 0x2F,
+	HDPrivateKeyID:          [4]byte{0x0B, 0x49, 0xB0, 0x1E},
+	HDPublicKeyID:           [4]byte{0x0B, 0x49, 0xB5, 0xD4},
+	HDCoinType:              20262,
 
 	// TODO: Complete remaining fields in Week 3
 }
@@ -435,9 +438,145 @@ func (p *ExpiryParams) CalculateExpiryKey(createHeight int32) uint64 {
 	return uint64(createHeight) + p.WindowBlocks
 }
 
+func validateOBTCNamespaceIsolation() error {
+	type namedParams struct {
+		name   string
+		params *Params
+	}
+
+	obtcNets := []namedParams{
+		{name: "obtc mainnet", params: &ObtcMainNetParams},
+		{name: "obtc testnet", params: &ObtcTestNetParams},
+		{name: "obtc regtest", params: &ObtcRegTestParams},
+	}
+	btcNets := []namedParams{
+		{name: "bitcoin mainnet", params: &MainNetParams},
+		{name: "bitcoin testnet3", params: &TestNet3Params},
+		{name: "bitcoin testnet4", params: &TestNet4Params},
+		{name: "bitcoin regtest", params: &RegressionNetParams},
+		{name: "bitcoin simnet", params: &SimNetParams},
+		{name: "bitcoin signet", params: &SigNetParams},
+	}
+
+	checkByteField := func(field string, getter func(*Params) byte) error {
+		seen := make(map[byte]string)
+		for _, net := range obtcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("%s collision within OBTC: %s and %s both use 0x%02x", field, prev, net.name, v)
+			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("%s collision between %s and %s: 0x%02x", field, prev, net.name, v)
+			}
+		}
+		return nil
+	}
+
+	checkStringField := func(field string, getter func(*Params) string) error {
+		seen := make(map[string]string)
+		for _, net := range obtcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("%s collision within OBTC: %s and %s both use %q", field, prev, net.name, v)
+			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("%s collision between %s and %s: %q", field, prev, net.name, v)
+			}
+		}
+		return nil
+	}
+
+	checkHDField := func(field string, getter func(*Params) [4]byte) error {
+		seen := make(map[[4]byte]string)
+		for _, net := range obtcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("%s collision within OBTC: %s and %s both use %x", field, prev, net.name, v)
+			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := getter(net.params)
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("%s collision between %s and %s: %x", field, prev, net.name, v)
+			}
+		}
+		return nil
+	}
+
+	checkCoinType := func() error {
+		seen := make(map[uint32]string)
+		for _, net := range obtcNets {
+			v := net.params.HDCoinType
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("HDCoinType collision within OBTC: %s and %s both use %d", prev, net.name, v)
+			}
+			seen[v] = net.name
+		}
+		for _, net := range btcNets {
+			v := net.params.HDCoinType
+			if prev, ok := seen[v]; ok {
+				return fmt.Errorf("HDCoinType collision between %s and %s: %d", prev, net.name, v)
+			}
+		}
+		return nil
+	}
+
+	for _, net := range obtcNets {
+		if net.params.HDPrivateKeyID == net.params.HDPublicKeyID {
+			return fmt.Errorf("%s has identical HD private/public version bytes: %x", net.name, net.params.HDPrivateKeyID)
+		}
+	}
+
+	if err := checkStringField("Bech32 HRP", func(p *Params) string { return p.Bech32HRPSegwit }); err != nil {
+		return err
+	}
+	if err := checkStringField("DefaultPort", func(p *Params) string { return p.DefaultPort }); err != nil {
+		return err
+	}
+	if err := checkByteField("PubKeyHashAddrID", func(p *Params) byte { return p.PubKeyHashAddrID }); err != nil {
+		return err
+	}
+	if err := checkByteField("ScriptHashAddrID", func(p *Params) byte { return p.ScriptHashAddrID }); err != nil {
+		return err
+	}
+	if err := checkByteField("PrivateKeyID", func(p *Params) byte { return p.PrivateKeyID }); err != nil {
+		return err
+	}
+	if err := checkByteField("WitnessPubKeyHashAddrID", func(p *Params) byte { return p.WitnessPubKeyHashAddrID }); err != nil {
+		return err
+	}
+	if err := checkByteField("WitnessScriptHashAddrID", func(p *Params) byte { return p.WitnessScriptHashAddrID }); err != nil {
+		return err
+	}
+	if err := checkHDField("HDPrivateKeyID", func(p *Params) [4]byte { return p.HDPrivateKeyID }); err != nil {
+		return err
+	}
+	if err := checkHDField("HDPublicKeyID", func(p *Params) [4]byte { return p.HDPublicKeyID }); err != nil {
+		return err
+	}
+	if err := checkCoinType(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // init registers the OBTC network parameters so they can be used with the
 // network selection functions.
 func init() {
+	if err := validateOBTCNamespaceIsolation(); err != nil {
+		panic("invalid OBTC namespace isolation: " + err.Error())
+	}
+
 	// Register OBTC networks
 	err := Register(&ObtcMainNetParams)
 	if err != nil {

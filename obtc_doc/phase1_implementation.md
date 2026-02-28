@@ -13,7 +13,7 @@
 ## 📦 本周可交付物（Deliverables）
 
 * `scripts/devnet-up.sh`：一键起 2 节点（simnet）脚本
-* `chaincfg/params_obtc.go`：OBTC 参数骨架（含 `Register()`、`IsOBTC()`、TODO: 唯一常量占位）
+* `chaincfg/params_obtc.go`：OBTC 参数骨架（含 `Register()`、`IsOBTC()` 与命名空间隔离校验）
 * `.github/workflows/ci.yml`：最小 CI（Linux + vet + -race）
 * `README.md`：一页快速上手
 * 端到端验证记录：高度、出块日志、转账 **txid**、测试通过截图（可放到 `docs/`）
@@ -58,7 +58,7 @@ git push -u origin obtc-main
 > 本周**不切换到新网络**，只**落骨架**，避免超时；第 3 周再替换创世与端口。
 
 * 在 `chaincfg/params_obtc.go` 新建 **占位参数**、`init() { Register(&OBTCMainNetParams) }`。
-* 定义 **唯一的** `wire.OBTCNet`（四字节魔数）**占位常量**（暂不启用），并补充 **WIF/BIP32/HRP** **TODO 注释**：**不得复用**比特币的版本字节与 xpub/xprv。
+* 定义 **唯一的** `wire.OBTCNet`（四字节魔数）**占位常量**（暂不启用），并为 **WIF/BIP32/HRP** 预留独立命名空间：**不得复用**比特币版本字节与 xpub/xprv。
 * 提供 `func IsOBTC(p *Params) bool { return p.Net == wire.OBTCNet }`。
 
 > **注意**：仅写骨架，不影响现有网络行为；同时在 README 放一张“参数表占位”，下周/第 3 周填实并冻结。
@@ -176,7 +176,7 @@ jobs:
 ## 🧭 风险与规避
 
 * **花时间在自定义创世** → 本周避免；先用 **simnet** 起链达成目标。
-* **WIF/BIP32/HRP 复用 BTC** → 本周只做占位，下周/第 3 周**生成唯一常量并冻结**。
+* **WIF/BIP32/HRP 配置漂移** → 保持与 Bitcoin 命名空间隔离；主网前做最终常量冻结与双人复核。
 * **CI 环境卡住** → 先跑 Linux；Mac/Win 推后。
 * **P2P v2（BIP324）扰动** → 默认 v1 保守设置，后续再跟进。
 
