@@ -179,7 +179,7 @@ jobs:
         run: go build -o btcd .
 
       - name: Run rpctest integration
-        run: go test -tags=rpctest ./integration/... -count=1 -v
+        run: go test -p 1 -tags=rpctest ./integration/... -count=1 -v
 
   vet:
     name: Code Quality

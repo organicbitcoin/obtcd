@@ -71,6 +71,8 @@ btcwallet/
 **DUST 预警**：
 - 若未续期，未来 REAP 返还可能不足 DUST → `dust_risk=true`。
 - 提示建议“合并/续期”。
+- 注意当前 REAP dust 逻辑按**单输入**执行，存在阈值 cliff（如 778/779）与“TaxNum=0 仍可能因 dust 折叠产生有效损失”的语义；钱包侧展示请按实现口径解释。
+- 详见：`obtc_doc/reap_dust_behavior.md`。
 
 ### 2) 一键续期（renew）
 
