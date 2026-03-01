@@ -50,16 +50,16 @@ const (
 		ControlBlockMaxNodeCount)
 )
 
-// VerifyTaprootKeySpend attempts to verify a top-level taproot key spend,
+// verifyTaprootKeySpend attempts to verify a top-level taproot key spend,
 // returning a non-nil error if the passed signature is invalid.  If a sigCache
 // is passed in, then the sig cache will be consulted to skip full verification
 // of a signature that has already been seen. Witness program here should be
 // the 32-byte x-only schnorr output public key.
 //
 // NOTE: The TxSigHashes MUST be passed in and fully populated.
-func VerifyTaprootKeySpend(witnessProgram []byte, rawSig []byte, tx *wire.MsgTx,
+func verifyTaprootKeySpend(witnessProgram []byte, rawSig []byte, tx *wire.MsgTx,
 	inputIndex int, prevOuts PrevOutputFetcher, hashCache *TxSigHashes,
-	sigCache *SigCache) error {
+	sigCache *SigCache, allowOBTCReplayProtection bool) error {
 
 	// First, we'll need to extract the public key from the witness
 	// program.
@@ -78,7 +78,7 @@ func VerifyTaprootKeySpend(witnessProgram []byte, rawSig []byte, tx *wire.MsgTx,
 	// specifics for us.
 	keySpendVerifier, err := newTaprootSigVerifier(
 		rawKey, rawSig, tx, inputIndex, prevOuts, sigCache,
-		hashCache, annex,
+		hashCache, annex, allowOBTCReplayProtection,
 	)
 	if err != nil {
 		return err
@@ -90,6 +90,18 @@ func VerifyTaprootKeySpend(witnessProgram []byte, rawSig []byte, tx *wire.MsgTx,
 	}
 
 	return scriptError(ErrTaprootSigInvalid, "")
+}
+
+// VerifyTaprootKeySpend verifies a top-level taproot key spend using the
+// standard Bitcoin taproot sighash domain semantics.
+func VerifyTaprootKeySpend(witnessProgram []byte, rawSig []byte, tx *wire.MsgTx,
+	inputIndex int, prevOuts PrevOutputFetcher, hashCache *TxSigHashes,
+	sigCache *SigCache) error {
+
+	return verifyTaprootKeySpend(
+		witnessProgram, rawSig, tx, inputIndex, prevOuts, hashCache,
+		sigCache, false,
+	)
 }
 
 // ControlBlock houses the structured witness input for a taproot spend. This

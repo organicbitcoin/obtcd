@@ -102,6 +102,13 @@ func stripOBTCReplayProtection(hashType SigHashType) SigHashType {
 	return hashType &^ SigHashOBTCReplayProtection
 }
 
+func shouldUseOBTCReplayProtectionDomain(hashType SigHashType,
+	replayProtectionActive bool) bool {
+
+	return replayProtectionActive &&
+		isOBTCReplayProtectedSigHashType(hashType)
+}
+
 // CalcSignatureHash will, given a script and hash type for the current script
 // engine instance, calculate the signature hash to be used for signing and
 // verification.
@@ -121,6 +128,19 @@ func CalcSignatureHash(script []byte, hashType SigHashType, tx *wire.MsgTx, idx 
 // calcSignatureHash computes the signature hash for the specified input of the
 // target transaction observing the desired signature hash type.
 func calcSignatureHash(sigScript []byte, hashType SigHashType, tx *wire.MsgTx, idx int) []byte {
+	return calcSignatureHashWithReplayProtection(
+		sigScript, hashType, tx, idx, true,
+	)
+}
+
+// calcSignatureHashWithReplayProtection computes the signature hash for the
+// specified input of the target transaction observing the desired signature
+// hash type. When replayProtectionActive is true and the signature hash type
+// is an OBTC replay-protected variant, an OBTC-specific domain tag is prefixed
+// before hashing.
+func calcSignatureHashWithReplayProtection(sigScript []byte,
+	hashType SigHashType, tx *wire.MsgTx, idx int,
+	replayProtectionActive bool) []byte {
 	// The SigHashSingle signature type signs only the corresponding input
 	// and output (the output with the same index number as the input).
 	//
@@ -205,7 +225,9 @@ func calcSignatureHash(sigScript []byte, hashType SigHashType, tx *wire.MsgTx, i
 	// value) appended. For OBTC replay-protected hash types, prepend a fixed
 	// OBTC domain tag so the digest diverges from Bitcoin.
 	sigHashBytes := chainhash.DoubleHashRaw(func(w io.Writer) error {
-		if isOBTCReplayProtectedSigHashType(hashType) {
+		if shouldUseOBTCReplayProtectionDomain(
+			hashType, replayProtectionActive,
+		) {
 			if _, err := w.Write(obtcReplaySighashTagV0); err != nil {
 				return err
 			}
@@ -238,6 +260,19 @@ func calcSignatureHash(sigScript []byte, hashType SigHashType, tx *wire.MsgTx, i
 func calcWitnessSignatureHashRaw(subScript []byte, sigHashes *TxSigHashes,
 	hashType SigHashType, tx *wire.MsgTx, idx int, amt int64) ([]byte, error) {
 
+	return calcWitnessSignatureHashRawWithReplayProtection(
+		subScript, sigHashes, hashType, tx, idx, amt, true,
+	)
+}
+
+// calcWitnessSignatureHashRawWithReplayProtection computes the sighash digest
+// for segwit-v0 signatures. When replayProtectionActive is true and the
+// signature hash type is an OBTC replay-protected variant, an OBTC-specific
+// domain tag is prefixed before hashing.
+func calcWitnessSignatureHashRawWithReplayProtection(subScript []byte,
+	sigHashes *TxSigHashes, hashType SigHashType, tx *wire.MsgTx, idx int,
+	amt int64, replayProtectionActive bool) ([]byte, error) {
+
 	// As a sanity check, ensure the passed input index for the transaction
 	// is valid.
 	//
@@ -249,7 +284,9 @@ func calcWitnessSignatureHashRaw(subScript []byte, sigHashes *TxSigHashes,
 	sigHashBytes := chainhash.DoubleHashRaw(func(w io.Writer) error {
 		var scratch [8]byte
 
-		if isOBTCReplayProtectedSigHashType(hashType) {
+		if shouldUseOBTCReplayProtectionDomain(
+			hashType, replayProtectionActive,
+		) {
 			if _, err := w.Write(obtcReplaySighashTagV1); err != nil {
 				return err
 			}
@@ -409,6 +446,10 @@ type taprootSigHashOptions struct {
 	// codeSepPos is the op code position of the last code separator. This
 	// is used for the BIP 342 sighash message extension.
 	codeSepPos uint32
+
+	// allowOBTCReplayProtection indicates whether OBTC replay-protected
+	// taproot sighash types are valid in this context.
+	allowOBTCReplayProtection bool
 }
 
 // writeDigestExtensions writes out the sighash message extension defined by the
@@ -476,11 +517,17 @@ func WithBaseTapscriptVersion(codeSepPos uint32,
 	}
 }
 
+// WithOBTCReplayProtectionSighash is a functional option that enables
+// OBTC replay-protected taproot sighash types in this hashing context.
+func WithOBTCReplayProtectionSighash() TaprootSigHashOption {
+	return func(o *taprootSigHashOptions) {
+		o.allowOBTCReplayProtection = true
+	}
+}
+
 // isValidTaprootSigHash returns true if the passed sighash is a valid taproot
 // sighash.
 func isValidTaprootSigHash(hashType SigHashType) bool {
-	hashType = stripOBTCReplayProtection(hashType)
-
 	switch hashType {
 	case SigHashDefault, SigHashAll, SigHashNone, SigHashSingle:
 		fallthrough
@@ -506,8 +553,18 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 		sigHashOpt(opts)
 	}
 
+	replayProtectedSigHash := isOBTCReplayProtectedSigHashType(hType)
+	normalizedHashType := hType
+	if replayProtectedSigHash {
+		if !opts.allowOBTCReplayProtection {
+			return nil, fmt.Errorf("invalid taproot sighash type: %v", hType)
+		}
+
+		normalizedHashType = stripOBTCReplayProtection(hType)
+	}
+
 	// If a valid sighash type isn't passed in, then we'll exit early.
-	if !isValidTaprootSigHash(hType) {
+	if !isValidTaprootSigHash(normalizedHashType) {
 		// TODO(roasbeef): use actual errr here
 		return nil, fmt.Errorf("invalid taproot sighash type: %v", hType)
 	}
@@ -544,7 +601,7 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 
 	// If sighash isn't anyone can pay, then we'll include all the
 	// pre-computed midstate digests in the sighash.
-	if hType&SigHashAnyOneCanPay != SigHashAnyOneCanPay {
+	if normalizedHashType&SigHashAnyOneCanPay != SigHashAnyOneCanPay {
 		sigMsg.Write(sigHashes.HashPrevOutsV1[:])
 		sigMsg.Write(sigHashes.HashInputAmountsV1[:])
 		sigMsg.Write(sigHashes.HashInputScriptsV1[:])
@@ -554,8 +611,8 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 	// If this is sighash all, or its taproot alias (sighash default),
 	// then we'll also include the pre-computed digest of all the outputs
 	// of the transaction.
-	if hType&SigHashSingle != SigHashSingle &&
-		hType&SigHashSingle != SigHashNone {
+	if normalizedHashType&SigHashSingle != SigHashSingle &&
+		normalizedHashType&SigHashSingle != SigHashNone {
 
 		sigMsg.Write(sigHashes.HashOutputsV1[:])
 	}
@@ -580,7 +637,7 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 	// If anyone can pay is active, then we'll write out just the specific
 	// information about this input, given we skipped writing all the
 	// information of all the inputs above.
-	if hType&SigHashAnyOneCanPay == SigHashAnyOneCanPay {
+	if normalizedHashType&SigHashAnyOneCanPay == SigHashAnyOneCanPay {
 		// We'll start out with writing this input specific information by
 		// first writing the entire previous output.
 		err = wire.WriteOutPoint(&sigMsg, 0, 0, &input.PreviousOutPoint)
@@ -615,7 +672,7 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 
 	// Finally, if this is sighash single, then we'll write out the
 	// information for this given output.
-	if hType&sigHashMask == SigHashSingle {
+	if normalizedHashType&sigHashMask == SigHashSingle {
 		// If this output doesn't exist, then we'll return with an error
 		// here as this is an invalid sighash type for this input.
 		if idx >= len(tx.TxOut) {
@@ -651,7 +708,7 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 	// extra allocations. OBTC replay-protected hash types use a dedicated
 	// tag so signatures are domain-separated from Bitcoin.
 	tag := chainhash.TagTapSighash
-	if isOBTCReplayProtectedSigHashType(hType) {
+	if replayProtectedSigHash && opts.allowOBTCReplayProtection {
 		tag = obtcReplayTapSighashTag
 	}
 	sigHash := chainhash.TaggedHash(tag, sigMsg.Bytes())

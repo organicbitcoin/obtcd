@@ -161,8 +161,9 @@ func (b *baseSigVerifier) Verify() verifyResult {
 	// to sign itself.
 	subScript, match := removeOpcodeByData(b.subScript, b.fullSigBytes)
 
-	sigHash := calcSignatureHash(
+	sigHash := calcSignatureHashWithReplayProtection(
 		subScript, b.hashType, &b.vm.tx, b.vm.txIdx,
+		b.vm.hasFlag(ScriptVerifyOBTCReplayProtection),
 	)
 
 	return verifyResult{
@@ -208,9 +209,10 @@ func (s *baseSegwitSigVerifier) Verify() verifyResult {
 		sigHashes = NewTxSigHashes(&s.vm.tx, s.vm.prevOutFetcher)
 	}
 
-	sigHash, err := calcWitnessSignatureHashRaw(
+	sigHash, err := calcWitnessSignatureHashRawWithReplayProtection(
 		s.subScript, sigHashes, s.hashType, &s.vm.tx, s.vm.txIdx,
 		s.vm.inputAmount,
+		s.vm.hasFlag(ScriptVerifyOBTCReplayProtection),
 	)
 	if err != nil {
 		// TODO(roasbeef): this doesn't need to return an error, should
@@ -238,6 +240,8 @@ type taprootSigVerifier struct {
 	sig          *schnorr.Signature
 
 	hashType SigHashType
+
+	allowOBTCReplayProtection bool
 
 	sigCache  *SigCache
 	hashCache *TxSigHashes
@@ -313,7 +317,7 @@ func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
 func newTaprootSigVerifier(pkBytes []byte, fullSigBytes []byte,
 	tx *wire.MsgTx, inputIndex int, prevOuts PrevOutputFetcher,
 	sigCache *SigCache, hashCache *TxSigHashes,
-	annex []byte) (*taprootSigVerifier, error) {
+	annex []byte, allowOBTCReplayProtection bool) (*taprootSigVerifier, error) {
 
 	pubKey, sig, sigHashType, err := parseTaprootSigAndPubKey(
 		pkBytes, fullSigBytes,
@@ -323,17 +327,18 @@ func newTaprootSigVerifier(pkBytes []byte, fullSigBytes []byte,
 	}
 
 	return &taprootSigVerifier{
-		pubKey:       pubKey,
-		pkBytes:      pkBytes,
-		sig:          sig,
-		fullSigBytes: fullSigBytes,
-		hashType:     sigHashType,
-		tx:           tx,
-		inputIndex:   inputIndex,
-		prevOuts:     prevOuts,
-		sigCache:     sigCache,
-		hashCache:    hashCache,
-		annex:        annex,
+		pubKey:                    pubKey,
+		pkBytes:                   pkBytes,
+		sig:                       sig,
+		fullSigBytes:              fullSigBytes,
+		hashType:                  sigHashType,
+		allowOBTCReplayProtection: allowOBTCReplayProtection,
+		tx:                        tx,
+		inputIndex:                inputIndex,
+		prevOuts:                  prevOuts,
+		sigCache:                  sigCache,
+		hashCache:                 hashCache,
+		annex:                     annex,
 	}, nil
 }
 
@@ -374,6 +379,9 @@ func (t *taprootSigVerifier) Verify() verifyResult {
 	var opts []TaprootSigHashOption
 	if t.annex != nil {
 		opts = append(opts, WithAnnex(t.annex))
+	}
+	if t.allowOBTCReplayProtection {
+		opts = append(opts, WithOBTCReplayProtectionSighash())
 	}
 
 	// Before we attempt to verify the signature, we'll need to first
@@ -422,6 +430,7 @@ func newBaseTapscriptSigVerifier(pkBytes, rawSig []byte,
 		baseTaprootVerifier, err := newTaprootSigVerifier(
 			pkBytes, rawSig, &vm.tx, vm.txIdx, vm.prevOutFetcher,
 			vm.sigCache, vm.hashCache, vm.taprootCtx.annex,
+			vm.hasFlag(ScriptVerifyOBTCReplayProtection),
 		)
 		if err != nil {
 			return nil, err
@@ -478,6 +487,9 @@ func (b *baseTapscriptSigVerifier) Verify() verifyResult {
 
 	if b.vm.taprootCtx.annex != nil {
 		opts = append(opts, WithAnnex(b.vm.taprootCtx.annex))
+	}
+	if b.allowOBTCReplayProtection {
+		opts = append(opts, WithOBTCReplayProtectionSighash())
 	}
 
 	// Otherwise, we'll compute the sighash using the tapscript message

@@ -673,9 +673,10 @@ func (vm *Engine) verifyWitnessProgram(witness wire.TxWitness) error {
 				}
 			}
 
-			err := VerifyTaprootKeySpend(
+			err := verifyTaprootKeySpend(
 				vm.witnessProgram, rawSig, &vm.tx, vm.txIdx,
 				vm.prevOutFetcher, vm.hashCache, vm.sigCache,
+				vm.hasFlag(ScriptVerifyOBTCReplayProtection),
 			)
 			if err != nil {
 				// TODO(roasbeef): proper error
