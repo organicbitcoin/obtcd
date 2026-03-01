@@ -1,88 +1,141 @@
-# 有机比特币（Organic Bitcoin, OBTC）白皮书 V1（实现对齐融合版）
+# 有机比特币（Organic Bitcoin, OBTC）白皮书 V1（实现对齐 · 易读扩展版）
 
-**版本**：1.0（实现对齐草案）  
+**版本**：1.0  
 **状态**：征求意见稿（RFC）  
-**读者**：协议工程师、钱包开发者、矿池、交易所、研究人员、运维团队
+**读者**：协议工程师、钱包开发者、矿池、交易所、研究人员、运维团队、社区建设者
 
 ---
 
-## 版本说明
+## 0. 阅读指南（先看这里）
 
-本版本在不删除既有设计细节的前提下，将“V0 设计叙述”与“2025-10 至今已落地实现”融合为一体化文档：
+这份白皮书的目标是：**讲清楚**，而不是“堆术语”。
 
-- 保留 V0 的核心理念、数学框架、治理边界与路线图；
-- 纳入当前实现中的参数、激活时序、校验行为与运行约束；
-- 对存在“提案值 vs 当前实现值”的条目明确并列说明。
+为了降低阅读门槛，建议按下面顺序读：
 
-本文档目标不是宣传，而是作为“可讨论、可实现、可验证”的技术规范底稿。
+- **3 分钟版**：看 Section 1、Section 2、Section 5.1（参数总表）
+- **产品/运营版**：再看 Section 6（生命周期）、Section 11（钱包）、Section 14（运维）
+- **工程实现版**：重点看 Section 7（索引）、Section 8（REAP）、Section 9（回放保护）、Section 13（安全）
+- **经济与治理版**：看 Section 12（经济）、Section 15（治理）
 
----
-
-## 摘要（Abstract）
-
-有机比特币（OBTC）是一条从 Bitcoin 分叉演进的区块链，它将币视作**有生命周期的 UTXO**：UTXO 必须在规则窗口内被重新激活（移动/续期），否则进入到期状态。核心机制包括：
-
-1. **Expiry（到期机制）**：每个 UTXO 基于创建高度计算到期高度。  
-2. **REAP（系统回收）**：到期后，协议允许系统交易回收该 UTXO；其中 **30%** 计入矿工安全预算，**70%** 返还至原始锁定脚本，并重置计时。  
-3. **Replay Protection（回放保护）**：通过命名空间隔离与签名域隔离双层防护，降低跨链重放风险。  
-4. **轻节点运行导向**：普通全节点可采用滚动窗口剪枝；归档节点保留全历史。  
-
-OBTC 的目标是把“长期不动资产”从被动沉淀转化为可度量的安全预算来源，同时保持协议可验证性、可预测性与工程可运营性。
+文中会直接使用 English 专业术语（例如 UTXO、Replay Protection、Mempool、Coinbase），
+但每个术语都在 **Section 19（术语表）**给出中文解释。
 
 ---
 
-## 1. 理念与动机（Philosophy & Rationale）
+## 1. 一句话理解 OBTC
 
-### 1.1 有机货币观
+OBTC 是一条从 Bitcoin 分叉演进的链：
 
-传统 Bitcoin 强调“币可无限静止”。OBTC 引入另一种视角：
+- 币仍以 **UTXO** 形式存在；
+- 但每个 UTXO 都有“生命周期”；
+- 到期后可由系统机制 **REAP** 回收：
+  - **70%** 返还到原脚本（Refund）
+  - **30%** 进入矿工安全预算（Tax）
+- 同时通过 **Namespace Isolation + Replay Protection** 降低跨链重放与误转风险。
 
-- 长期静止常对应熵增（私钥遗失、主体失联、输出遗忘）；
-- 协议可以把这类“死亡供给”逐步代谢为网络安全预算；
-- 对活跃持有者而言，规则可简化为：**到期前主动续期**。
+换成用户视角就是：
 
-### 1.2 设计目标
-
-- **持续安全预算**：把沉睡/丢失供给部分转化为矿工收益。  
-- **状态卫生（State Hygiene）**：推动 UTXO 周期性整理，抑制长期僵尸状态。  
-- **运行轻量化**：支持滚动窗口剪枝与可验证快照同步。  
-- **规则可预期**：用确定性排序、硬边界参数降低实现分歧。  
-- **脚本中立**：到期后对脚本类型一视同仁。
-
-### 1.3 非目标
-
-- 不追求无限期冷存与超长期锁定（>7 年）兼容。  
-- 不要求所有节点永久保存完整历史交易体（归档节点承担该职责）。
+> 你的资产不是“永远静止自动安全”，而是“需要周期性维护、可被系统持续保障”。
 
 ---
 
-## 2. 货币机制（Monetary Mechanism）
+## 2. 为什么要做这件事（动机）
 
-设到期年限 `T = 7` 年，返还比例 `ρ = 0.70`（税率 `τ = 1 - ρ = 0.30`）。
+## 2.1 现实问题
 
-对“永久不再移动”的 UTXO，其余额在每个到期周期经历几何衰减，对应连续年化衰减率：
+传统 UTXO 模型有一个长期问题：
 
-\[
-p = -\frac{\ln \rho}{T}
-\]
+- 一部分资产会永久沉睡（遗失私钥、遗产失联、备份损坏）；
+- 这些资产名义在链上，实际上不再参与经济流通；
+- 同时网络安全预算长期依赖补贴递减 + 手续费，不确定性提升。
 
-代入 `T=7, ρ=0.7`，得 `p ≈ 5.1%/年`（仅作用于永久丢失部分）。
+## 2.2 OBTC 的回答
 
-若丢失供给占比为 `L`，则每年回流到安全预算的大致比例：
+OBTC 不把“永久静止”当成默认最优，而是引入“有机代谢”模型：
 
-\[
-B \approx L \cdot p = L \cdot \left(-\ln\rho/T\right)
-\]
+1. **到期机制**让长期不动资产进入可治理状态；
+2. **系统回收**把沉睡供给的一部分回流到安全预算；
+3. **返还机制**避免“一刀切没收”；
+4. **钱包侧续期工具**让活跃持有者以较低成本保持资产活性。
 
-当 `L ∈ [20%, 30%]` 时，长期安全预算可约为 `~1.0%–1.5%/年`。
+## 2.3 设计目标
+
+- 持续安全预算（Security Budget）
+- 明确资产生命周期（Lifecycle Clarity）
+- 可预测规则（Deterministic Behavior）
+- 可运营系统（Operability）
+- 脚本中立（Script Neutrality）
+
+## 2.4 非目标
+
+- 不追求“无限期无需维护”的资产模型；
+- 不要求所有节点永久保存完整历史交易体；
+- 不引入复杂治理金库或人工裁量分配逻辑。
 
 ---
 
-## 3. 协议参数与激活时序（Constants & Activation）
+## 3. 系统全景：三层架构
 
-参数是行为开关，不是注释。以下为当前实现对齐值。
+OBTC 实现可以分为三层，每层职责不同。
 
-### 3.1 三网激活矩阵（当前实现）
+## 3.1 Consensus Layer（共识层）
+
+负责回答：**什么是合法的交易和区块**。
+
+核心能力：
+
+- Expiry 到期判定
+- REAP 合法性判定
+- Replay Protection 激活后签名语义强制
+
+## 3.2 Mining & Policy Layer（出块与策略层）
+
+负责回答：**在合法集合里，如何组块更稳**。
+
+核心能力：
+
+- REAP 候选选择与构造
+- 模板中 REAP 权重预留
+- Mempool 与系统交易隔离
+
+## 3.3 Wallet Execution Layer（钱包执行层）
+
+负责回答：**用户如何知道风险、如何执行动作**。
+
+核心能力：
+
+- `obtc.getexpiry`：看到期风险
+- `obtc.renew`：手动续期
+- `renewall`：批量续期
+- Auto-Renew：自动续期（含失败退避与预算上限）
+
+---
+
+## 4. 核心机制（先讲人话）
+
+先用一个最直观例子。
+
+假设你有一个 1 BTC 的 UTXO：
+
+1. 它在高度 `h_create` 创建；
+2. 到高度 `h_create + E`（E 是到期窗口）变为 expired；
+3. 若你在此之前续期：资产继续由你主动控制；
+4. 若你一直不处理，系统可在区块内执行 REAP：
+   - 返还 `0.7 BTC`（到原脚本）
+   - 税额 `0.3 BTC` 计入矿工收益
+   - 新返还输出重新开始计时
+
+关键点：
+
+- 不是“直接归零”；
+- 不是“随意处置”；
+- 是规则化、可验证、可预期的链上行为。
+
+---
+
+## 5. 参数与激活时序（当前实现值）
+
+## 5.1 三网激活矩阵
 
 | 网络 | Fork Height | Expiry Index Start | Expiry Enable | REAP Hardening | Replay Protection |
 |---|---:|---:|---:|---:|---:|
@@ -90,16 +143,14 @@ B \approx L \cdot p = L \cdot \left(-\ln\rho/T\right)
 | Testnet | 2800000 | 2800000 | 2800100 | 2800120 | 2800130 |
 | Regtest | 100 | 100 | 110 | 112 | 114 |
 
-说明：
+解释：
 
-- `Fork Height`：链身份规则分歧点；此前与 Bitcoin 保持一致。  
-- `Expiry Enable`：普通交易与 REAP 的到期花费约束开始生效。  
-- `REAP Hardening`：REAP 输入顺序与上限变为共识强制。  
-- `Replay Protection`：签名域隔离语义变为共识强制。
+- **Fork Height**：从这一高度开始进入 OBTC 独立规则域。
+- **Expiry Enable**：到期花费约束开始生效。
+- **REAP Hardening**：REAP 输入顺序与输入上限变为共识强制。
+- **Replay Protection**：签名域隔离语义变为共识强制。
 
-> 历史说明：V0 草案中出现过以高度 `600,000` 为分叉基线的提案表达；当前实现采用上表参数。
-
-### 3.2 Expiry 参数（当前实现）
+## 5.2 Expiry 参数
 
 | 网络 | WindowBlocks | ListBatchLimit | ReapMaxInputs |
 |---|---:|---:|---:|
@@ -107,14 +158,12 @@ B \approx L \cdot p = L \cdot \left(-\ln\rho/T\right)
 | Testnet | 1,008 | 5,000 | 500 |
 | Regtest | 144 | 1,000 | 200 |
 
-说明：
+解释：
 
-- Mainnet `WindowBlocks = 3,679,200` 对应约 7 年窗口；
-- Testnet/Regtest 缩短窗口以提升验证和回归效率。
+- Mainnet `3,679,200` 块约等于 7 年；
+- Testnet/Regtest 窗口更短用于快速验证。
 
-### 3.3 Namespace Isolation（当前实现）
-
-OBTC 已与 Bitcoin 在以下维度做硬隔离：
+## 5.3 Namespace Isolation 参数
 
 - Network magic：
   - Main `0x4F425443`
@@ -122,25 +171,25 @@ OBTC 已与 Bitcoin 在以下维度做硬隔离：
   - Reg `0x4F524547`
 - Default port：`8555 / 28555 / 28666`
 - Bech32 HRP：`obtc / obtct / obtcrt`
-- 地址前缀（P2PKH/P2SH/Witness）
-- HD 扩展键版本（pub/prv）
+- 地址前缀（P2PKH/P2SH/Witness）隔离
+- HD key version 隔离
 - BIP44 coin type：`20260 / 20261 / 20262`
 
-实现要求：启动期执行冲突校验，若与 BTC 命名空间碰撞则拒绝启动。
+实现要求：启动阶段会做冲突校验，碰撞即拒绝启动。
 
-### 3.4 REAP 策略默认值（当前实现）
+## 5.4 REAP 默认策略参数（实现）
 
 - Sort mode：`Strict`
-- Max inputs（Mainnet）：`256`
-- Weight budget（Mainnet）：`200,000`
+- Mainnet Max inputs：`256`
+- Mainnet Weight budget：`200,000`
 - Tax ratio：`30%`
 - Dust threshold：`546 sat`
 
-### 3.5 Auto-Renew 默认值（当前实现）
+## 5.5 Auto-Renew 默认参数（实现）
 
 - Enabled：`false`
 - Interval：`30m`
-- Failure backoff：`15m`（可设 `0` 关闭）
+- Failure backoff：`15m`（可为 0）
 - Window：`window_end <= blocks_to_expiry <= window_start`
   - `window_start=52560`
   - `window_end=25920`
@@ -151,422 +200,361 @@ OBTC 已与 Bitcoin 在以下维度做硬隔离：
 
 ---
 
-## 4. 共识规则（Consensus Rules，规范性）
+## 6. UTXO 生命周期（Lifecycle）
 
-**范围**：相对 Bitcoin 的硬分叉规则集。
+## 6.1 关键公式
 
-### 4.1 到期定义（Expiry Definition）
+设：
 
-时间基准采用区块高度。定义每年区块数：
+- `T = 7` 年
+- 每年块数 `Y = 52,560`
+- 到期窗口 `E = T × Y = 367,920`
 
-`Y = 52,560`（10 分钟目标）
+任意 UTXO：
 
-到期距离：
+`h_expiry = h_create + E`
 
-`E = T × Y = 7 × 52,560 = 367,920`
+当 `h_tip >= h_expiry`，该 UTXO 进入 expired。
 
-对任一 UTXO：
+## 6.2 状态分层（钱包侧）
 
-- `h_exp = h_create + E`
-- 当 `h_tip >= h_exp` 时，该 UTXO 进入 expired 状态。
+为了让用户易懂，钱包通常将状态展示为：
 
-### 4.2 收割许可（Reaping Permission）
+- `ok`：离到期还远
+- `expiring`：临近到期，建议处理
+- `expired`：已到期
 
-到期后，矿工可在区块中加入系统交易花费该 UTXO，无需满足原脚本常规执行路径。该系统交易类型称为 **EUTXO-REAP**。
+说明：`ok/expiring` 是 UX 分层；真正共识判定是“是否已到期”。
 
-### 4.3 返还与征税（Refund & Tax）
+## 6.3 生命周期中的两条路径
 
-对每个被收割 UTXO（面值 `v`）：
+1. **主动路径（用户）**：到期前续期，继续保持资产活性；
+2. **系统路径（协议）**：到期后可被 REAP 规则化处理。
 
-- `v_ret = floor(ρ × v)`：返还额，回原始 `scriptPubKey`，并重置计时；
-- `v_tax = v - v_ret`：计入当块矿工奖励池。
+## 6.4 一个完整示例
 
-尘埃规则：若 `v_ret < DUST(h)`，不创建返还输出，令 `v_ret=0, v_tax=v`。
-
-### 4.4 Coinbase 限值与成熟期
-
-令：
-
-- `BaseSubsidy(h)`：区块补贴
-- `Fees(h)`：手续费总和
-- `ReapTax(h)`：本块所有 REAP 的税额总和
-
-则 coinbase 总额上限：
-
-`BaseSubsidy(h) + Fees(h) + ReapTax(h)`
-
-`ReapTax` 与 coinbase 同步适用成熟期（如 100 块）后可花费。
-
-### 4.5 确定性选择与节流
-
-V0 设计要求每块受 `N` 与 `R` 双上限约束，并按全局顺序选取到期 UTXO：
-
-- V0 提案顺序：`(create_height asc, txid asc, vout asc)`；
-- 在仍有容量时跳过应选项去选后项，区块应视为无效（反择优约束）。
-
-当前实现在工程上把“确定性 + 资源上限”具体化为：
-
-- 确定性排序（落地到 canonical order 约束链路）；
-- 输入上限（`ReapMaxInputs`）；
-- 交易权重预算（weight budget）；
-- marker 一致性校验（高度/计数/摘要）。
-
-### 4.6 REAP Hardening（当前实现增强）
-
-在 `REAP Hardening` 激活后，REAP 额外满足：
-
-1. 输入顺序必须是 canonical order（`expiry -> amount -> outpoint`）；
-2. 输入数量不得超过 `ReapMaxInputs`。
-
-### 4.7 REAP Marker 绑定校验
-
-REAP marker 形如：
-
-`REAP:<height>:<count>:<digest>`
-
-共识校验以下一致性：
-
-- marker 高度与区块上下文一致；
-- marker count 与输入个数一致；
-- marker digest 与输入序列摘要一致。
-
-### 4.8 Expiry 生效后的花费约束（当前实现）
-
-`Expiry Enable` 后：
-
-- 非 REAP 交易花费 expired UTXO -> reject
-- REAP 交易花费 non-expired UTXO -> reject
-
-### 4.9 脚本中立
-
-到期后脚本类型不构成特权：多签、P2SH、P2TR、时间锁等在到期语义下同等处理。
-
-### 4.10 Replay Protection（规范与实现）
-
-为避免跨链重放，采用双层防线：
-
-1. Namespace isolation（地址/端口/HD/coin type）；
-2. Replay-protected sighash domain（可理解为 `chain_id` 风格的签名域隔离）。
-
-当前实现中：
-
-- replay bit：`0x40`
-- domain tag：
-  - `OBTC/SigHashV0/v1`
-  - `OBTC/SigHashV1/v1`
-  - `OBTC/TapSighash/v1`
-- 激活门控：
-  - 激活前：兼容路径可用
-  - 激活后：不满足 replay-protected 语义的签名将失败
-- 路径覆盖：Legacy / SegWit v0 / Taproot（key path + script path）
+- UTXO 金额：`10,000,000 sat`（0.1 BTC）
+- 到期后进入 REAP：
+  - `tax = floor(10,000,000 × 30%) = 3,000,000 sat`
+  - `refund = 7,000,000 sat`
+- 若 `refund` 小于 DUST 阈值，则不创建 refund 输出，全部进入 tax。
 
 ---
 
-## 5. 数据结构与节点行为（Node Behavior）
+## 7. Expiry Index：如何高效追踪到期资产
 
-### 5.1 Expiry Index
+## 7.1 为什么必须有索引
 
-全节点维护到期索引，核心映射可抽象为：
+如果每个新区块都全历史扫描“谁到期了”，成本不可接受。  
+因此需要专门的到期索引。
+
+## 7.2 双向映射结构
+
+实现上可抽象为：
 
 1. `OutPoint -> ExpiryKey`
 2. `ExpiryKey -> OutPoint set`
 
-连接区块时：
+优势：
 
-- 新输出写入对应到期桶；
-- 被花费输入从索引移除。
+- 删除快：花费时快速反查并移除；
+- 扫描快：按 ExpiryKey 区间顺序遍历。
 
-### 5.2 Connect/Disconnect 与 Reorg
+## 7.3 区块连接与回滚
 
-- Connect：正向更新索引；
-- Disconnect：逆向回滚索引；
+- ConnectBlock：新增输出入索引，被花费输入出索引；
+- DisconnectBlock：反向恢复。
 
-以保证 reorg 下索引与主链状态一致。
+因此在 reorg 下，索引可与主链状态一致。
 
-### 5.3 分页扫描与续扫
+## 7.4 分页扫描与续扫
 
-扫描接口可支持 `(fromKey, toKey, maxResults, startAfter)` 语义，避免全量拉取导致的大事务与大内存占用。
+支持语义：`(fromKey, toKey, maxResults, startAfter)`
 
-### 5.4 剪枝与归档
-
-- 可剪枝全节点：保留完整 UTXO + 最近滚动窗口区块（及全区块头）；
-- 归档节点：保留全历史区块与交易体。
-
-不变量：历史不可改写；剪枝仅改变存储保留策略。
-
-### 5.5 UTXO 快照承诺
-
-可周期发布 UTXO commitment（Merkle/Verkle/Utreexo 风格），新节点可通过“快照 + 证明 + 多源一致性校验”加速同步并降低单一信任源风险。
+- `maxResults` 控制单页大小；
+- `startAfter` 支持断点续扫；
+- 适合大规模查询，避免一次性返回过大结果。
 
 ---
 
-## 6. REAP 交易结构与挖矿执行（Mining & Policy）
+## 8. REAP：系统回收交易的完整规则
 
-### 6.1 出块模板流程
+## 8.1 REAP 是什么
 
-合规矿工可按以下步骤组块：
+REAP 是 block-internal system transaction：
 
-1. 选择常规交易；
-2. 按确定性规则构造 REAP 候选并受上限约束；
-3. 计算 `ReapTax` 并应用 coinbase 上限。
+- 目标：处理 expired UTXO；
+- 特点：不是普通用户交易模板，不依赖 mempool relay。
 
-当前实现采用“预评估 + 条件预留 + 追加校验”的两阶段模板策略：
+## 8.2 合法性前提
 
-- 先判断 REAP 是否可构建；
-- 可构建才预留 REAP weight；
-- 常规交易选完后再尝试追加 REAP，并做输入可行性复检。
+REAP 要合法，至少满足：
 
-### 6.2 Mempool 策略
+- 输入必须是 expired UTXO；
+- 交易结构满足 REAP 特征；
+- marker 一致性校验通过；
+- 激活后满足 hardening 约束（顺序与上限）。
 
-REAP 被定义为 block-internal system transaction，mempool 不接收。
+## 8.3 Tax / Refund / Dust 规则
 
-### 6.3 EUTXO-REAP 编码（设计与实现对齐）
+对每个输入金额 `v`：
 
-V0 设计草图中给出以下协议特征：
+- `tax = floor(v × 30 / 100)`
+- `refund = v - tax`
 
-- `nVersion = 3`
-- `nType = REAP`
-- 输入为到期 outpoints
-- 输出为返还输出 + marker 输出
-- 输入不依赖常规 `scriptsig/witness` 路径
-- `locktime/sequence` 固定化（提案中为 0）
-- REAP 交易重量纳入区块 weight 计量，并受 `N/R` 上限约束
+Dust fold：若 `0 < refund < dust_threshold`，则
 
-当前实现中可观察到的关键特征与之保持一致：
+- `refund -> 0`
+- `tax += refund`
 
-- 交易版本使用 `version=3`
-- 末尾含 marker 输出（`OP_RETURN`）
-- refund 按 script 聚合，tax 通过 coinbase accounting 体现
-- REAP 不走常规 mempool relay，而是区块模板内系统追加路径
+## 8.4 Marker 绑定
 
-### 6.4 取整与金额守恒
+marker 形如：
 
-- `v_ret = floor(ρ × v)`
-- `v_tax = v - v_ret`
+`REAP:<height>:<count>:<digest>`
 
-并维持守恒不变量：
+共识校验：
+
+- `height` 一致；
+- `count` 一致；
+- `digest` 一致。
+
+## 8.5 Hardening（激活后）
+
+REAP 输入必须按 canonical order：
+
+`expiry -> amount -> outpoint`
+
+并满足输入数量上限 `ReapMaxInputs`。
+
+## 8.6 Coinbase Accounting
+
+定义：
+
+- `ReapTax(h)`：当块 REAP 税额总和
+
+coinbase 总额上限：
+
+`BaseSubsidy(h) + Fees(h) + ReapTax(h)`
+
+`ReapTax` 与 coinbase 一样受成熟期约束。
+
+## 8.7 不变量（Invariant）
+
+必须始终成立：
 
 `sum(inputs) = sum(refunds) + sum(tax)`
 
-### 6.5 资源边界控制
-
-通过以下组合边界降低资源攻击面：
-
-- 输入数上限
-- 交易权重预算
-- 确定性排序
-- marker 一致性校验
+这是审计和回归验证的核心检查项。
 
 ---
 
-## 7. 钱包与交互体验（Wallet & UX）
+## 9. Replay Protection：如何防跨链重放
 
-### 7.1 核心能力
+## 9.1 两层防线
 
-#### `obtc.getexpiry`
+1. **Namespace Isolation**：从地址、端口、HD、coin type 等入口隔离。  
+2. **Replay-protected sighash domain**：从签名消息域隔离。
 
-面向用户和自动化流程输出到期风险字段：
+## 9.2 实现要点
 
-- outpoint / amount
-- create_height / expiry_height
+- replay bit：`0x40`
+- domain tag：分别覆盖 Legacy 路径、Witness 路径、Taproot 路径（三套独立标签）
+
+## 9.3 激活门控
+
+- 激活前：兼容语义仍可运行；
+- 激活后：缺失 replay-protected 语义的签名直接失败。
+
+## 9.4 路径覆盖
+
+- Legacy
+- SegWit（版本 0）
+- Taproot（key path + script path）
+
+---
+
+## 10. 节点运行模型（Node Operation Model）
+
+## 10.1 Pruned Full Node 与 Archive Node
+
+- **Pruned Full Node**：保留完整 UTXO + 滚动窗口区块体 + 全区块头。
+- **Archive Node**：保留全历史区块与交易体。
+
+## 10.2 不变量
+
+- 历史不可改写；
+- 剪枝只改变“存储保留”，不改变“共识可验证性”。
+
+## 10.3 快照同步（UTXO Commitment）
+
+可通过快照 + 证明 + 多源一致性校验提升初始同步效率。  
+建议至少 `k` 个独立来源一致后再信任导入。
+
+---
+
+## 11. 钱包能力闭环（Wallet Capabilities）
+
+## 11.1 `obtc.getexpiry`
+
+输出到期风险关键信息：
+
+- outpoint
+- amount
+- create/expiry height
 - blocks_to_expiry / days_to_expiry
-- status（ok/expiring/expired）
+- status
 - dust_risk
 
-#### `obtc.renew`
+## 11.2 `obtc.renew`
 
-支持显式 outpoint 续期，允许设置：
+支持显式 outpoint 续期，参数包含：
 
 - amount
 - target address（可选）
 - max fee rate（可选）
 - minconf（可选）
 
-返回 tx 摘要信息（txid、输入输出计数、费率等）。
+返回 tx 摘要（txid、输入输出数、费率等）。
 
-#### `renewall`
+## 11.3 `renewall`
 
 支持：
 
-- status 或窗口过滤
+- status 或窗口筛选
 - dry-run
 - interval/runs 调度
 
-### 7.2 Auto-Renew（当前实现）
+## 11.4 Auto-Renew 调度器
 
-调度器具备：
+具备：
 
-- 周期执行（Interval）
-- 窗口筛选（WindowStart / WindowEnd）
-- 每轮候选数上限（MaxUtxosPerRun）
-- 费率上限（MaxFeeRate）
-- 两项关键硬化：
-  1. Failure backoff（失败后延迟下一轮）
-  2. Per-run budget（单轮续期总额上限）
+- 周期执行
+- 窗口筛选
+- 候选数上限
+- 费率上限
+- Failure backoff
+- Per-run budget
 
-与 V0 的 UX 建议保持一致的方向包括：
-
-- 在到期前约 **6–12 个月**窗口内错峰执行，避免集中续期；
-- 在可接受费率阈值下触发续期，降低长期维护成本。
-
-### 7.3 地址与脚本策略
-
-共识层返还到原脚本；钱包可在返还后主动转发到新脚本，降低长期可链接性。
-
-### 7.4 费率策略
-
-续期交易可结合费率阈值与低费窗口执行，以降低长期维护成本。
+目的：在保证安全边界下实现自动化风险缓释。
 
 ---
 
-## 8. DUST 机制（Dust Threshold）
+## 12. 经济与博弈（Economics & Game Theory）
 
-V0 给出的动态阈值定义：
+## 12.1 长期安全预算估算
+
+设 `ρ=0.7, T=7`，则：
 
 \[
-DUST(h)=\alpha\,\tilde f(h)\,v_{in},\quad \alpha\in[1.0,3.0]
+p = -\ln(\rho)/T \approx 5.1\%/年
 \]
 
-其中：
+若沉睡供给占比 `L`：
 
-- `\tilde f(h)`：近 30 天中位费率（sat/vB）
-- `v_in`：代表性输入虚拟大小
-- 建议 `α=2`
+\[
+B \approx L \cdot p
+\]
 
-并建议按 2016 块周期机械更新，抑制波动。
+当 `L ∈ [20%, 30%]` 时，`B` 约为 `~1.0%–1.5%/年`。
 
-当前实现中的 REAP 默认 `dust threshold` 为 `546 sat`。动态化可作为后续演进方向。
+## 12.2 用户合规激励
+
+当续期成本比例 `φ` 远小于 `30%` 税率时，理性用户倾向主动续期。  
+因此大额 UTXO 通常会主动维护；小额 UTXO 则受 dust 约束。
+
+## 12.3 MEV 抑制
+
+确定性顺序 + 资源上限可压缩“择优收割”空间，降低策略噪声。
 
 ---
 
-## 9. 场景矩阵（Behavior Matrix）
+## 13. 安全模型与威胁分析（Security Model）
 
-### 9.1 Normal
-
-- 到期预警 -> 续期执行 -> 风险下降
-- 批量续期在窗口内平滑执行
-
-### 9.2 Boundary
-
-- 激活高度前后切换
-- 输入上限与 weight 上限边界
-- 预算整除/不整除续期金额
-
-### 9.3 Extreme
-
-- 高频 reorg
-- chain client 暂时滞后
-- mempool 逼近 block weight 上限
-- 大量 dust-like UTXO
-
-### 9.4 Adversarial
+## 13.1 典型威胁
 
 - 伪造 marker
-- 重排输入
-- 构造超大输入集
-- 跨链 replay 尝试
+- 重排 REAP 输入
+- 构造超上限输入集
+- 跨链 replay
 - 向 mempool 注入伪系统交易
+- 快照投毒
+- reorg 套利
 
-预期拦截点由 marker 校验、canonical order、输入/权重上限、replay-protected sighash 与 mempool policy 协同覆盖。
+## 13.2 对应防线
 
----
-
-## 10. 经济学与博弈（Economics & Game Theory）
-
-### 10.1 安全预算
-
-长期近似：
-
-`B ≈ L × (-lnρ/T)`
-
-在 `ρ=0.7, T=7, L=25%` 时，`B≈1.27%/年`。
-
-### 10.2 合规激励
-
-当续期成本占比 `φ` 显著低于税率 `τ=30%` 时，理性用户倾向续期。大额 UTXO 通常满足该条件；小额 UTXO 则受 DUST 机制约束。
-
-### 10.3 MEV 抑制
-
-确定性顺序 + 上限约束抑制矿工“择优收割”空间，降低收益方差与策略噪声。
+- marker 一致性校验
+- canonical order
+- input cap + weight budget
+- replay-protected sighash
+- mempool policy
+- 多源快照校验
+- coinbase maturity 约束
 
 ---
 
-## 11. 隐私考量（Privacy）
+## 14. 运维与可观测性（Operations & Observability）
 
-- 返还到同脚本可能形成可链接循环；
-- 钱包应默认在可接受费率下错峰续期并优先新脚本承接；
-- 快照同步应采用多源承诺校验，降低单点信任暴露。
+## 14.1 建议指标
 
----
-
-## 12. 安全考量与攻防（Security）
-
-- 到期集合爆发导致资源挤压：由输入上限与 weight 预算控制；
-- 矿工择优：确定性顺序约束；
-- 时间操纵：高度计时避免 MTP 偏移问题；
-- 跨链重放：namespace + replay-protected sighash 双层防线；
-- 快照投毒：要求多源校验，建议至少 `k` 份独立来源一致后再信任导入；
-- 重组套利：`ReapTax` 服从 coinbase 成熟期约束。
-
----
-
-## 13. 治理与升级（Governance）
-
-V0 设计提出：
-
-- 硬编码核心常量：`T=7, ρ=0.70, Y=52,560, maturity=100` 等；
-- 可调参数（延迟生效）：`N, R, α`；
-- 建议升级流程：
-  - 一个完整窗口内达成约定信号覆盖（例如 2/3）；
-  - 预留宽限期（例如 60 天）；
-  - 固定激活高度。
-
-原则：减少自由裁量面，降低治理不确定性。
-
----
-
-## 14. 实施与运维（Implementation & Operations）
-
-### 14.1 MVP 路线（继承 V0）
-
-1. 共识层：Expiry + REAP + coinbase accounting + replay protection
-2. 节点层：剪枝模式/归档模式 + 快照导入导出
-3. 钱包层：到期显示、手动续期、自动续期、尘埃预警
-4. 挖矿层：模板支持 + REAP 顺序校验 + 税额观测
-5. 工具层：公共看板、统计、回归工具
-6. 测试网络：采用加速到期参数（示例：`T≈7天`）做全链路演练，并补充 REAP 排序/边界/对抗测试
-
-### 14.2 运行期观测指标（实现对齐）
-
-#### Consensus
+### Consensus
 
 - expired spend rejection count
 - REAP non-expired spend rejection count
 - replay-protection violation count
 
-#### Mining
+### Mining
 
 - template build attempts with REAP
 - REAP append success rate
 - reserved weight utilization
 - REAP tax contributed to coinbase
 
-#### Wallet
+### Wallet
 
 - auto-renew candidate count / run
 - auto-renew success/failure ratio
 - backoff activated count
 - per-run budget truncation count
 
-### 14.3 告警建议
+## 14.2 告警建议
 
 - 连续 N 轮 auto-renew failure
 - REAP append success 连续低于阈值
 - expiring backlog 持续上升
 
+## 14.3 实施建议（工程落地）
+
+1. 共识层：Expiry/REAP/Replay Protection 全链路测试  
+2. 节点层：剪枝与归档模式双套回归  
+3. 钱包层：到期提醒、手动续期、自动续期稳定性测试  
+4. 挖矿层：模板组块边界与压力测试  
+5. 测试网络：采用加速到期参数（如约 7 天）演练全流程  
+6. 工具层：公共看板与异常追踪报表
+
 ---
 
-## 15. 关键 KPI（KPI）
+## 15. 治理与升级（Governance）
+
+治理原则：
+
+- 核心常量尽量稳定；
+- 可调参数必须有延迟生效与明确激活高度；
+- 升级流程尽量机械、透明、可复现；
+- 尽量减少自由裁量空间。
+
+---
+
+## 16. 数学附录（Mathematical Appendix）
+
+- 年化衰减：`p = -lnρ / T`
+- 安全流入：`B = L × p`
+- 等预算变换：`ρ' = exp(-pT')`
+- 目标预算反解：`ρ = exp(-(B_target × T)/L)`，`τ = 1 - ρ`
+
+---
+
+## 17. 关键 KPI（KPI）
 
 - `ReapTax / MinerRevenue`（年化）
 - 在险供给（≤90 天到期）
@@ -577,53 +565,117 @@ V0 设计提出：
 
 ---
 
-## 16. 数学附录（Mathematical Appendix）
-
-- 永久不动币年化衰减：
-  `p = -lnρ / T`
-- 安全流入：
-  `B = L × p`
-- 等预算变换：
-  `ρ' = exp(-pT')`
-- 目标预算反解：
-  `ρ = exp(-(B_target × T)/L)`，`τ = 1 - ρ`
-
----
-
-## 17. 术语表（Glossary）
-
-- **Expiry**：UTXO 到期机制。  
-- **Expired UTXO**：达到到期高度的 UTXO。  
-- **EUTXO-REAP**：系统回收交易类型。  
-- **ReapTax**：区块内 REAP 税额总和。  
-- **OutPoint**：`txid:vout`，UTXO 唯一定位符。  
-- **Canonical order**：确定性输入排序规则。  
-- **Replay protection**：签名域隔离防重放机制。  
-- **Domain separation**：用独立 tag/语义隔离签名消息空间。  
-- **Namespace isolation**：链参数与地址/密钥命名空间隔离。  
-- **Auto-Renew**：钱包后台自动续期流程。  
-- **Failure backoff**：失败后延迟重试机制。  
-- **Per-run budget**：单轮续期总额上限机制。  
-- **Mempool**：未确认交易池。  
-- **Template**：矿工组块候选模板。  
-- **Coinbase maturity**：coinbase 可花费成熟期。  
-- **Pruned full node**：可剪枝全节点，保留滚动窗口区块体与完整 UTXO 集。  
-- **Archive node**：归档节点，保留全历史区块与交易体。  
-- **Dust fold**：当返还额低于尘埃阈值时并入 tax，不创建返还输出。  
-- **ListBatchLimit**：到期扫描单页上限，用于控制查询内存与时延。
-
----
-
 ## 18. 法务与合规提示
 
-OBTC 是独立链，不等同于 Bitcoin。到期与回收机制在不同法域可能被解释为协议费、负利率或对沉睡资产的再分配。交易所与托管机构需据此设计内部流程与用户告知文本。
+OBTC 是独立链，不等同于 Bitcoin。到期与回收机制在不同法域可能被解释为协议费、负利率或对沉睡资产再分配。交易所与托管机构需据此设计内部流程与用户告知文本。
 
 ---
 
-## 19. 许可
+## 19. 术语表（Glossary）
+
+> 这一节专门用于降低阅读门槛。遇到陌生词，优先回看这里。
+
+| 术语 | 英文 | 含义（通俗版） | 在 OBTC 里的作用 |
+|---|---|---|---|
+| 未花费输出 | UTXO | 你在链上“还能花”的那一笔钱 | OBTC 的基础记账单元 |
+| 输出定位符 | OutPoint | `txid:vout`，某个输出的唯一坐标 | 精确定位某个 UTXO |
+| 到期 | Expiry | 资产到达规则年龄上限 | 触发续期或系统回收 |
+| 到期高度 | Expiry Height | UTXO 变成 expired 的区块高度 | 共识判断的硬阈值 |
+| 到期索引 | Expiry Index | 专门记“谁何时到期”的索引结构 | 让扫描与删除高效可行 |
+| 系统回收 | REAP | 协议在区块内处理 expired UTXO 的机制 | 把沉睡资产部分回流安全预算 |
+| 回收交易 | REAP Tx | 用于执行 REAP 的系统交易 | 非普通用户交易模板 |
+| 返还 | Refund | REAP 后回到原脚本的部分（70%） | 保留资产连续性 |
+| 税额 | Tax | REAP 后进入矿工收益的部分（30%） | 构成持续安全预算来源 |
+| 标记输出 | Marker | `REAP:height:count:digest` 的 OP_RETURN | 绑定输入集与上下文一致性 |
+| 规范顺序 | Canonical Order | 约定好的唯一输入排序方式 | 防止实现差异导致分歧 |
+| 内存池 | Mempool | 待确认交易暂存区 | REAP 在此被拒收 |
+| 区块模板 | Template | 矿工准备打包的候选区块 | REAP 在此被条件追加 |
+| 出块奖励交易 | Coinbase | 区块里的奖励结算交易 | 通过上限规则纳入 ReapTax |
+| 回放保护 | Replay Protection | 防跨链重放的签名语义约束 | 激活后强制执行 |
+| 签名哈希类型 | SigHash | 决定签名覆盖范围和语义 | 引入 replay bit 后隔离域 |
+| 域隔离 | Domain Separation | 用不同 tag 区分签名消息空间 | 防止跨链复用签名 |
+| 命名空间隔离 | Namespace Isolation | 地址/端口/HD 等命名隔离 | 防止误连与误转 |
+| 动态尘埃阈值 | Dynamic Dust | 基于费率变化调整 dust 阈值 | 避免产生不可经济输出 |
+| 自动续期 | Auto-Renew | 钱包后台自动执行续期 | 降低用户漏操作风险 |
+| 失败退避 | Failure Backoff | 失败后延迟下一轮 | 防止失败风暴 |
+| 单轮预算 | Per-Run Budget | 每轮可续期总额上限 | 防止异常放量 |
+| 可剪枝全节点 | Pruned Full Node | 只保留必要窗口数据的全节点 | 降低存储压力 |
+| 归档节点 | Archive Node | 保留全历史数据的节点 | 提供全历史查询与审计 |
+| 链重组 | Reorg | 主链分支切换 | 需要索引与状态回滚一致性 |
+| 拒绝服务 | DoS | 用资源耗尽方式拖垮系统 | 通过上限和预算约束缓解 |
+| 不变量 | Invariant | 始终必须成立的规则 | 核心正确性校验锚点 |
+
+---
+
+## 20. 常见问题（FAQ）
+
+### Q1：我什么都不做，会发生什么？
+
+如果你的 UTXO 长时间不动并达到到期高度，它会进入 expired 状态。此后它不再按普通交易路径花费，而可能被系统 REAP 处理：70% 返还、30% 计入安全预算。
+
+### Q2：是不是到了到期点就“立刻被拿走”？
+
+不是。到期意味着“进入系统可处理状态”，不是“瞬时扣除”。具体在何时被 REAP，取决于区块内模板是否在该轮选择到该输入。
+
+### Q3：我怎么避免进入 REAP？
+
+最直接方法是到期前主动续期。你可以手动用 `obtc.renew`，也可以使用批量或自动续期策略。
+
+### Q4：为什么要有 30% 税？
+
+这是协议层安全预算设计：把沉睡资产的一部分回流到矿工收益，提升长期安全预算韧性。对活跃用户而言，通常续期成本显著低于 30%。
+
+### Q5：回放保护和地址前缀隔离是不是重复？
+
+不是。两者分别作用在不同层：
+
+- 地址/端口/HD 等命名空间隔离，防误连和误转；
+- 签名域隔离，防跨链复用签名语义。
+
+两者叠加才是完整防线。
+
+### Q6：为什么 REAP 不进 mempool？
+
+因为它是系统交易，不是用户普通交易。放进 mempool 会引入伪系统交易污染与资源滥用风险。当前模型是“模板内构造、区块内执行”。
+
+### Q7：小额 UTXO 会怎样？
+
+如果返还额低于 dust 阈值，会触发 dust fold：不创建返还输出，返还额并入 tax。这样可以避免制造链上垃圾输出。
+
+### Q8：我只关心工程落地，最该看哪些章节？
+
+建议顺序：Section 5（参数）-> Section 8（REAP）-> Section 9（Replay Protection）-> Section 11（Wallet）-> Section 14（运维）。
+
+### Q9：这套规则会不会让系统太复杂？
+
+复杂度主要来自“把长期风险显式化”。OBTC 的做法是：把复杂度前置到规则与工具中，减少后期靠人工补救的不可控风险。
+
+### Q10：如果未来参数要调整，怎么避免随意改？
+
+参数升级应遵循“延迟生效 + 固定激活高度 + 透明信号过程”的原则，核心目的是降低治理不确定性与市场预期扰动。
+
+---
+
+## 21. 结语
+
+OBTC 的核心不在“概念新奇”，而在“规则可执行”。
+
+它把三个问题放在同一套机制里解决：
+
+1. 资产长期沉睡如何处理；
+2. 安全预算如何在长期保持韧性；
+3. 跨层系统如何保持可预测、可运营、可解释。
+
+这份白皮书的价值标准只有一个：
+
+> 规则是否清楚到足以让不同团队独立实现，并在同一链上得到一致结果。
+
+---
+
+## 22. 许可
 
 本文档建议采用 **CC BY 4.0**；参考实现可采用 MIT 等宽松许可。
 
 ---
 
-*白皮书 v1.0（实现对齐融合版）完*  
+*白皮书 v1.0（实现对齐 · 易读扩展版）完*  
