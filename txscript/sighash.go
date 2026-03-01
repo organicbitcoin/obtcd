@@ -22,16 +22,27 @@ type SigHashType uint32
 
 // Hash type bits from the end of a signature.
 const (
-	SigHashDefault      SigHashType = 0x00
-	SigHashOld          SigHashType = 0x0
-	SigHashAll          SigHashType = 0x1
-	SigHashNone         SigHashType = 0x2
-	SigHashSingle       SigHashType = 0x3
+	SigHashDefault SigHashType = 0x00
+	SigHashOld     SigHashType = 0x0
+	SigHashAll     SigHashType = 0x1
+	SigHashNone    SigHashType = 0x2
+	SigHashSingle  SigHashType = 0x3
+
+	// SigHashOBTCReplayProtection marks signatures that commit to the OBTC
+	// replay-protected signature domain.
+	SigHashOBTCReplayProtection SigHashType = 0x40
+
 	SigHashAnyOneCanPay SigHashType = 0x80
 
 	// sigHashMask defines the number of bits of the hash type which is used
 	// to identify which outputs are signed.
 	sigHashMask = 0x1f
+)
+
+var (
+	obtcReplaySighashTagV0  = []byte("OBTC/SigHashV0/v1")
+	obtcReplaySighashTagV1  = []byte("OBTC/SigHashV1/v1")
+	obtcReplayTapSighashTag = []byte("OBTC/TapSighash/v1")
 )
 
 const (
@@ -66,6 +77,29 @@ func shallowCopyTx(tx *wire.MsgTx) wire.MsgTx {
 		txCopy.TxOut[i] = &txOuts[i]
 	}
 	return txCopy
+}
+
+func isOBTCReplayProtectedSigHashType(hashType SigHashType) bool {
+	if hashType&SigHashOBTCReplayProtection != SigHashOBTCReplayProtection {
+		return false
+	}
+
+	normalized := stripOBTCReplayProtection(hashType)
+	if normalized&^(SigHashAnyOneCanPay|sigHashMask) != 0 {
+		return false
+	}
+
+	sigHashType := normalized & sigHashMask
+	switch sigHashType {
+	case SigHashAll, SigHashNone, SigHashSingle:
+		return true
+	default:
+		return false
+	}
+}
+
+func stripOBTCReplayProtection(hashType SigHashType) SigHashType {
+	return hashType &^ SigHashOBTCReplayProtection
 }
 
 // CalcSignatureHash will, given a script and hash type for the current script
@@ -168,8 +202,15 @@ func calcSignatureHash(sigScript []byte, hashType SigHashType, tx *wire.MsgTx, i
 
 	// The final hash is the double sha256 of both the serialized modified
 	// transaction and the hash type (encoded as a 4-byte little-endian
-	// value) appended.
+	// value) appended. For OBTC replay-protected hash types, prepend a fixed
+	// OBTC domain tag so the digest diverges from Bitcoin.
 	sigHashBytes := chainhash.DoubleHashRaw(func(w io.Writer) error {
+		if isOBTCReplayProtectedSigHashType(hashType) {
+			if _, err := w.Write(obtcReplaySighashTagV0); err != nil {
+				return err
+			}
+		}
+
 		if err := txCopy.SerializeNoWitness(w); err != nil {
 			return err
 		}
@@ -207,6 +248,12 @@ func calcWitnessSignatureHashRaw(subScript []byte, sigHashes *TxSigHashes,
 
 	sigHashBytes := chainhash.DoubleHashRaw(func(w io.Writer) error {
 		var scratch [8]byte
+
+		if isOBTCReplayProtectedSigHashType(hashType) {
+			if _, err := w.Write(obtcReplaySighashTagV1); err != nil {
+				return err
+			}
+		}
 
 		// First write out, then encode the transaction's version
 		// number.
@@ -432,10 +479,14 @@ func WithBaseTapscriptVersion(codeSepPos uint32,
 // isValidTaprootSigHash returns true if the passed sighash is a valid taproot
 // sighash.
 func isValidTaprootSigHash(hashType SigHashType) bool {
+	hashType = stripOBTCReplayProtection(hashType)
+
 	switch hashType {
 	case SigHashDefault, SigHashAll, SigHashNone, SigHashSingle:
 		fallthrough
-	case 0x81, 0x82, 0x83:
+	case SigHashAnyOneCanPay | SigHashAll,
+		SigHashAnyOneCanPay | SigHashNone,
+		SigHashAnyOneCanPay | SigHashSingle:
 		return true
 
 	default:
@@ -597,8 +648,13 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 
 	// The final sighash is computed as: hash_TagSigHash(0x00 || sigMsg).
 	// We wrote the 0x00 above so we don't need to append here and incur
-	// extra allocations.
-	sigHash := chainhash.TaggedHash(chainhash.TagTapSighash, sigMsg.Bytes())
+	// extra allocations. OBTC replay-protected hash types use a dedicated
+	// tag so signatures are domain-separated from Bitcoin.
+	tag := chainhash.TagTapSighash
+	if isOBTCReplayProtectedSigHashType(hType) {
+		tag = obtcReplayTapSighashTag
+	}
+	sigHash := chainhash.TaggedHash(tag, sigMsg.Bytes())
 	return sigHash[:], nil
 }
 

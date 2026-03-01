@@ -426,6 +426,12 @@ func newBaseTapscriptSigVerifier(pkBytes, rawSig []byte,
 		if err != nil {
 			return nil, err
 		}
+		if vm.hasFlag(ScriptVerifyOBTCReplayProtection) &&
+			!isOBTCReplayProtectedSigHashType(baseTaprootVerifier.hashType) {
+
+			str := fmt.Sprintf("taproot sighash type missing OBTC replay-protected bit: 0x%x", baseTaprootVerifier.hashType)
+			return nil, scriptError(ErrInvalidSigHashType, str)
+		}
 
 		return &baseTapscriptSigVerifier{
 			taprootSigVerifier: baseTaprootVerifier,

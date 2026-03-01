@@ -393,6 +393,61 @@ func TestOBTCForkHeightValues(t *testing.T) {
 	}
 }
 
+func TestOBTCReplayProtectionActivation(t *testing.T) {
+	tests := []struct {
+		name       string
+		params     *Params
+		before     int32
+		at         int32
+		expectInit bool
+	}{
+		{
+			name:       "obtc mainnet",
+			params:     &ObtcMainNetParams,
+			expectInit: true,
+		},
+		{
+			name:       "obtc testnet",
+			params:     &ObtcTestNetParams,
+			expectInit: true,
+		},
+		{
+			name:       "obtc regtest",
+			params:     &ObtcRegTestParams,
+			expectInit: true,
+		},
+		{
+			name:       "bitcoin mainnet",
+			params:     &MainNetParams,
+			expectInit: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := GetOBTCReplayProtectionHeight(tc.params)
+			if tc.expectInit {
+				if h <= 0 {
+					t.Fatalf("expected positive replay activation height, got %d", h)
+				}
+				if IsOBTCReplayProtectionActive(tc.params, h-1) {
+					t.Fatalf("replay protection should be inactive before activation")
+				}
+				if !IsOBTCReplayProtectionActive(tc.params, h) {
+					t.Fatalf("replay protection should be active at activation height")
+				}
+			} else {
+				if h != -1 {
+					t.Fatalf("expected non-OBTC replay activation height -1, got %d", h)
+				}
+				if IsOBTCReplayProtectionActive(tc.params, 1_000_000) {
+					t.Fatalf("bitcoin network should never activate OBTC replay protection")
+				}
+			}
+		})
+	}
+}
+
 func TestGetExpiryParamsDirect(t *testing.T) {
 	if p := GetExpiryParams(&MainNetParams); p != nil {
 		t.Fatalf("bitcoin mainnet should not have OBTC expiry params")
@@ -416,6 +471,9 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			}
 			if p.ReapConsensusAtHeight < p.EnableAtHeight {
 				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
+			}
+			if p.ReplayProtectionAtHeight < p.ReapConsensusAtHeight {
+				t.Fatalf("expected ReplayProtectionAtHeight >= ReapConsensusAtHeight: %+v", p)
 			}
 			if p.ReapMaxInputs <= 0 {
 				t.Fatalf("expected positive ReapMaxInputs: %+v", p)

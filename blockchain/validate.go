@@ -1332,6 +1332,10 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 		scriptFlags |= txscript.ScriptVerifyTaproot
 	}
 
+	scriptFlags = ApplyOBTCReplayProtectionScriptFlag(
+		scriptFlags, b.chainParams, node.height,
+	)
+
 	// Now that the inexpensive checks are done and have passed, verify the
 	// transactions are actually allowed to spend the coins by running the
 	// expensive ECDSA signature check scripts.  Doing this last helps
