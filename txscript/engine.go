@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -118,6 +119,10 @@ const (
 	// ScriptVerifyConstScriptCode fails non-segwit scripts if a signature
 	// match is found in the script code or if OP_CODESEPARATOR is used.
 	ScriptVerifyConstScriptCode
+
+	// ScriptVerifyOBTCReplayProtection requires signatures to use OBTC
+	// replay-protected sighash domain separation.
+	ScriptVerifyOBTCReplayProtection
 )
 
 const (
@@ -656,9 +661,22 @@ func (vm *Engine) verifyWitnessProgram(witness wire.TxWitness) error {
 			// removing the annex), we'll do normal taproot
 			// keyspend validation.
 			rawSig := witness[0]
-			err := VerifyTaprootKeySpend(
+			if vm.hasFlag(ScriptVerifyOBTCReplayProtection) {
+				if len(rawSig) != schnorr.SignatureSize+1 ||
+					rawSig[schnorr.SignatureSize] == 0 ||
+					!isOBTCReplayProtectedSigHashType(
+						SigHashType(rawSig[schnorr.SignatureSize]),
+					) {
+
+					str := "taproot key spend must use OBTC replay-protected sighash type"
+					return scriptError(ErrInvalidSigHashType, str)
+				}
+			}
+
+			err := verifyTaprootKeySpend(
 				vm.witnessProgram, rawSig, &vm.tx, vm.txIdx,
 				vm.prevOutFetcher, vm.hashCache, vm.sigCache,
+				vm.hasFlag(ScriptVerifyOBTCReplayProtection),
 			)
 			if err != nil {
 				// TODO(roasbeef): proper error
@@ -1156,6 +1174,20 @@ func (vm *Engine) subScript() []byte {
 // checkHashTypeEncoding returns whether or not the passed hashtype adheres to
 // the strict encoding requirements if enabled.
 func (vm *Engine) checkHashTypeEncoding(hashType SigHashType) error {
+	if vm.hasFlag(ScriptVerifyOBTCReplayProtection) {
+		if !isOBTCReplayProtectedSigHashType(hashType) {
+			str := fmt.Sprintf("missing OBTC replay-protected sighash bit: 0x%x", hashType)
+			return scriptError(ErrInvalidSigHashType, str)
+		}
+
+		sigHashType := hashType & ^(SigHashAnyOneCanPay | SigHashOBTCReplayProtection)
+		if sigHashType < SigHashAll || sigHashType > SigHashSingle {
+			str := fmt.Sprintf("invalid OBTC replay-protected hash type 0x%x", hashType)
+			return scriptError(ErrInvalidSigHashType, str)
+		}
+		return nil
+	}
+
 	if !vm.hasFlag(ScriptVerifyStrictEncoding) {
 		return nil
 	}
