@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -59,14 +60,11 @@ func parseReapMarkerPayload(payload string) (height int32, count int, digest str
 
 func reapInputDigest(tx *wire.MsgTx) string {
 	h := sha256.New()
+	var idx [4]byte
 	for _, in := range tx.TxIn {
 		op := in.PreviousOutPoint
 		h.Write(op.Hash[:])
-		var idx [4]byte
-		idx[0] = byte(op.Index)
-		idx[1] = byte(op.Index >> 8)
-		idx[2] = byte(op.Index >> 16)
-		idx[3] = byte(op.Index >> 24)
+		binary.LittleEndian.PutUint32(idx[:], op.Index)
 		h.Write(idx[:])
 	}
 	return hex.EncodeToString(h.Sum(nil))
@@ -76,7 +74,10 @@ func checkReapMarker(tx *wire.MsgTx, txHeight int32) error {
 	if !isLikelyReapTx(tx) {
 		return nil
 	}
-	payload, _ := extractMarkerPayload(tx.TxOut[len(tx.TxOut)-1].PkScript)
+	payload, ok := extractMarkerPayload(tx.TxOut[len(tx.TxOut)-1].PkScript)
+	if !ok {
+		return ruleError(ErrBadTxInput, "reap transaction has unparseable marker output")
+	}
 	h, count, digest, err := parseReapMarkerPayload(payload)
 	if err != nil {
 		return ruleError(ErrBadTxInput, err.Error())
@@ -201,7 +202,9 @@ func checkExpirySpendRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoi
 	for _, txIn := range tx.TxIn {
 		utxo := utxoView.LookupEntry(txIn.PreviousOutPoint)
 		if utxo == nil || utxo.IsSpent() {
-			continue
+			return ruleError(ErrMissingTxOut, fmt.Sprintf(
+				"utxo %v missing from view during expiry check",
+				txIn.PreviousOutPoint))
 		}
 		expiryHeight := int32(expiryParams.CalculateExpiryKey(utxo.BlockHeight()))
 		expired := txHeight >= expiryHeight

@@ -154,13 +154,13 @@ OBTC 实现可以分为三层，每层职责不同。
 
 | 网络 | WindowBlocks | ListBatchLimit | ReapMaxInputs |
 |---|---:|---:|---:|
-| Mainnet | 3,679,200 | 10,000 | 256 |
+| Mainnet | 368,880 | 10,000 | 256 |
 | Testnet | 1,008 | 5,000 | 500 |
 | Regtest | 144 | 1,000 | 200 |
 
 解释：
 
-- Mainnet `3,679,200` 块约等于 7 年；
+- Mainnet `368,880` 块约等于 7 年（144 × 365 × 7）；
 - Testnet/Regtest 窗口更短用于快速验证。
 
 ## 5.3 Namespace Isolation 参数

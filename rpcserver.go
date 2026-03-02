@@ -4086,7 +4086,9 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 		var createHeight uint64
 		if s.cfg.ChainParams != nil {
 			if expiryParams := chaincfg.GetExpiryParams(s.cfg.ChainParams); expiryParams != nil {
-				createHeight = utxo.ExpiryKey - expiryParams.WindowBlocks
+				if utxo.ExpiryKey >= expiryParams.WindowBlocks {
+					createHeight = utxo.ExpiryKey - expiryParams.WindowBlocks
+				}
 			}
 		}
 

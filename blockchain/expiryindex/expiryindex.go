@@ -21,6 +21,29 @@ const (
 	indexName = "expiry index"
 )
 
+// ChainAccessor provides read-only access to blockchain state needed by the
+// expiry index for rebuild and catch-up operations. This interface decouples
+// the index from the concrete blockchain.BlockChain type, allowing the chain
+// instance to be injected after construction (since indexers are created
+// before the blockchain in btcd's initialization sequence).
+type ChainAccessor interface {
+	// BestHeight returns the current best chain tip height.
+	BestHeight() int32
+
+	// BlockByHeight returns the block at the given height on the main chain.
+	BlockByHeight(height int32) (*btcutil.Block, error)
+
+	// FetchSpendJournal returns the spent transaction outputs for the
+	// given block. The returned slice is a flat list ordered by
+	// transaction order (excluding coinbase) then input order.
+	FetchSpendJournal(block *btcutil.Block) ([]blockchain.SpentTxOut, error)
+
+	// ForEachUTXO iterates over all unspent outputs and calls fn for each.
+	// If fn returns a non-nil error, iteration stops and that error is
+	// returned. This is used for fast index rebuild from the UTXO set.
+	ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) error) error
+}
+
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
 
@@ -46,6 +69,17 @@ type ExpiryIndex struct {
 
 	// disabled indicates whether the index is disabled
 	disabled bool
+
+	// chain provides access to blockchain state for rebuild operations.
+	// May be nil until SetChainAccessor is called.
+	chain ChainAccessor
+}
+
+// SetChainAccessor injects the blockchain accessor after both the index and
+// the blockchain have been constructed. Must be called before any rebuild
+// or catch-up operation.
+func (idx *ExpiryIndex) SetChainAccessor(chain ChainAccessor) {
+	idx.chain = chain
 }
 
 // NewExpiryIndex returns a new instance of an expiry index.
@@ -240,8 +274,23 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 		return dbPutTipHeightIndexed(dbTx, blockHeight-1)
 	}
 
-	// Process all transactions in reverse order
+	// Process all transactions in the block.
+	//
+	// The stxos slice is a flat list ordered by transaction order (excluding
+	// the coinbase) then by input order within each transaction. We build a
+	// per-transaction offset map in forward order so we can look up the
+	// correct stxo for each input regardless of processing direction.
 	transactions := block.Transactions()
+
+	// Build stxo offset map: txIdx -> starting offset into stxos.
+	stxoOffsets := make([]int, len(transactions))
+	offset := 0
+	for txIdx, tx := range transactions {
+		stxoOffsets[txIdx] = offset
+		if txIdx != 0 { // skip coinbase
+			offset += len(tx.MsgTx().TxIn)
+		}
+	}
 
 	for txIdx := len(transactions) - 1; txIdx >= 0; txIdx-- {
 		tx := transactions[txIdx]
@@ -259,21 +308,21 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 			}
 		}
 
-		// Restore spent UTXOs (re-add to index)
-		// Skip coinbase transactions as they don't spend existing UTXOs
-		if !blockchain.IsCoinBaseTx(msgTx) {
-			for vinIdx := len(msgTx.TxIn) - 1; vinIdx >= 0; vinIdx-- {
-				txIn := msgTx.TxIn[vinIdx]
-
-				// We need the original UTXO creation height to restore it
-				// This information should be available in stxos
-				if vinIdx < len(stxos) {
-					stxo := stxos[vinIdx]
-					if err := idx.connectTxOut(dbTx, &txIn.PreviousOutPoint,
-						stxo.Height); err != nil {
-						return fmt.Errorf("failed to reconnect txout %v: %v",
-							txIn.PreviousOutPoint, err)
-					}
+		// Restore spent UTXOs (re-add to index).
+		// Skip coinbase (txIdx 0) as it doesn't spend existing UTXOs.
+		if txIdx != 0 {
+			baseOffset := stxoOffsets[txIdx]
+			for vinIdx, txIn := range msgTx.TxIn {
+				stxoIdx := baseOffset + vinIdx
+				if stxoIdx >= len(stxos) {
+					return fmt.Errorf("stxo index %d out of range (len=%d) for tx %d input %d",
+						stxoIdx, len(stxos), txIdx, vinIdx)
+				}
+				stxo := stxos[stxoIdx]
+				if err := idx.connectTxOut(dbTx, &txIn.PreviousOutPoint,
+					stxo.Height); err != nil {
+					return fmt.Errorf("failed to reconnect txout %v: %v",
+						txIn.PreviousOutPoint, err)
 				}
 			}
 		}
@@ -644,69 +693,60 @@ func (idx *ExpiryIndex) tryFastRebuildOrFallback(chainTipHeight int32) error {
 	return idx.incrementalCatchUp(idx.curTipHeight, chainTipHeight)
 }
 
-// fastRebuildFromUTXO rebuilds the index from existing UTXO set
+// fastRebuildFromUTXO rebuilds the index by iterating the current UTXO set
+// via the ChainAccessor.ForEachUTXO callback.
 func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
+	if err := idx.requireChain(); err != nil {
+		return err
+	}
+
 	startTime := time.Now()
 	processed := 0
 
 	log.Infof("ExpiryIndex: Starting fast rebuild from UTXO set")
 
+	// First, clear existing index data.
 	err := idx.db.Update(func(dbTx database.Tx) error {
-		// Clear existing index data
-		if err := idx.clearIndexBuckets(dbTx); err != nil {
-			return fmt.Errorf("failed to clear index buckets: %v", err)
+		return idx.clearIndexBuckets(dbTx)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to clear index buckets: %v", err)
+	}
+
+	// Iterate all UTXOs and add qualifying entries.
+	err = idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
+		// Only index UTXOs created at or after the scan start height.
+		if createHeight < idx.expiryParams.StartScanHeight {
+			return nil
 		}
 
-		// Get the UTXO bucket from chainstate
-		utxoBucket, err := idx.getUTXOBucket(dbTx)
+		err := idx.db.Update(func(dbTx database.Tx) error {
+			return idx.connectTxOut(dbTx, &outpoint, createHeight)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to access UTXO bucket: %v", err)
+			return fmt.Errorf("failed to add UTXO %v: %v", outpoint, err)
 		}
 
-		// Iterate through all UTXOs
-		cursor := utxoBucket.Cursor()
-		found := cursor.First()
-		for found {
-			k := cursor.Key()
-			v := cursor.Value()
-			// Parse UTXO entry
-			outpoint, createHeight, err := idx.parseUTXOEntry(k, v)
-			if err != nil {
-				continue // Skip invalid entries
-			}
-
-			// Check if UTXO is within indexing scope
-			if createHeight < idx.expiryParams.StartScanHeight {
-				continue
-			}
-
-			// Add to ExpiryIndex
-			err = idx.connectTxOut(dbTx, outpoint, createHeight)
-			if err != nil {
-				return fmt.Errorf("failed to add UTXO %v: %v", outpoint, err)
-			}
-
-			processed++
-			if processed%50000 == 0 {
-				elapsed := time.Since(startTime)
-				rate := float64(processed) / elapsed.Seconds()
-				log.Infof("ExpiryIndex: Processed %d UTXOs (%.0f/s)", processed, rate)
-			}
-
-			found = cursor.Next()
+		processed++
+		if processed%50000 == 0 {
+			elapsed := time.Since(startTime)
+			rate := float64(processed) / elapsed.Seconds()
+			log.Infof("ExpiryIndex: Processed %d UTXOs (%.0f/s)", processed, rate)
 		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 
-		// Mark index as complete
+	// Mark index as complete.
+	err = idx.db.Update(func(dbTx database.Tx) error {
 		if err := dbPutTipHeightIndexed(dbTx, chainTipHeight); err != nil {
 			return fmt.Errorf("failed to update tip height: %v", err)
 		}
-
-		// Update internal state
 		idx.curTipHeight = chainTipHeight
-
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -802,39 +842,38 @@ func (idx *ExpiryIndex) clearIndexBuckets(dbTx database.Tx) error {
 	return nil
 }
 
-// getUTXOBucket returns the UTXO bucket from chainstate
-func (idx *ExpiryIndex) getUTXOBucket(dbTx database.Tx) (database.Bucket, error) {
-	// Note: This would need to access btcd's chainstate UTXO bucket
-	// The exact implementation depends on btcd's internal structure
-	// For now, return an error to indicate this needs blockchain instance access
-	return nil, fmt.Errorf("UTXO bucket access not implemented - needs blockchain instance")
+// requireChain returns an error if the chain accessor has not been set.
+func (idx *ExpiryIndex) requireChain() error {
+	if idx.chain == nil {
+		return fmt.Errorf("chain accessor not set - call SetChainAccessor first")
+	}
+	return nil
 }
 
-// parseUTXOEntry parses a UTXO entry from chainstate
-func (idx *ExpiryIndex) parseUTXOEntry(key, value []byte) (*wire.OutPoint, int32, error) {
-	// Note: This would need to parse btcd's UTXO entry format
-	// The exact format depends on btcd's internal serialization
-	// This is a placeholder that needs proper implementation
-	return nil, 0, fmt.Errorf("UTXO entry parsing not implemented")
-}
-
-// getChainTipHeight gets the current blockchain tip height
+// getChainTipHeight gets the current blockchain tip height.
 func (idx *ExpiryIndex) getChainTipHeight() int32 {
-	// Note: This would need access to the blockchain instance
-	// For now, return the current index height as fallback
-	return idx.curTipHeight
+	if idx.chain == nil {
+		return idx.curTipHeight
+	}
+	return idx.chain.BestHeight()
 }
 
-// getBlockByHeight retrieves a block by its height
+// getBlockByHeight retrieves a block by its height.
 func (idx *ExpiryIndex) getBlockByHeight(height int32) (*btcutil.Block, error) {
-	// Note: This would need access to the blockchain instance
-	// This is a placeholder that needs proper implementation
-	return nil, fmt.Errorf("block retrieval not implemented - needs blockchain instance")
+	if err := idx.requireChain(); err != nil {
+		return nil, err
+	}
+	return idx.chain.BlockByHeight(height)
 }
 
-// getSpentTxOuts retrieves spent transaction outputs for a block
+// getSpentTxOuts retrieves spent transaction outputs for a block at the given height.
 func (idx *ExpiryIndex) getSpentTxOuts(height int32) ([]blockchain.SpentTxOut, error) {
-	// Note: This would need access to the spend journal
-	// This is a placeholder that needs proper implementation
-	return nil, fmt.Errorf("spent txouts retrieval not implemented - needs blockchain instance")
+	if err := idx.requireChain(); err != nil {
+		return nil, err
+	}
+	block, err := idx.chain.BlockByHeight(height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block at height %d: %v", height, err)
+	}
+	return idx.chain.FetchSpendJournal(block)
 }

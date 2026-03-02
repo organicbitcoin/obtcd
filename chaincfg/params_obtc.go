@@ -424,7 +424,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 	switch params.Net {
 	case wire.ObtcMainNet:
 		return &ExpiryParams{
-			WindowBlocks:             3679200, // ~7 years at 10min blocks (144 * 365 * 7)
+			WindowBlocks:             368880, // ~7 years at 10min blocks (144 * 365 * 7 = 368,880)
 			ListBatchLimit:           10000,
 			StartScanHeight:          ObtcMainNetForkHeight,
 			EnableAtHeight:           ObtcMainNetForkHeight + 100000, // Week 3+
