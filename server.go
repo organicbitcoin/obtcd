@@ -2950,6 +2950,13 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 		return nil, err
 	}
 
+	// Now that the blockchain is ready, inject it into the expiry index so
+	// that rebuild and catch-up operations can access chain state.
+	if s.expiryIndex != nil {
+		accessor := blockchain.NewExpiryChainAccessor(s.chain)
+		s.expiryIndex.SetChainAccessor(accessor)
+	}
+
 	// Search for a FeeEstimator state in the database. If none can be found
 	// or if it cannot be loaded, create a new one.
 	db.Update(func(tx database.Tx) error {
