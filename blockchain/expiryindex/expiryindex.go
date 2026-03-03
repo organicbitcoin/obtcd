@@ -76,10 +76,20 @@ type ExpiryIndex struct {
 }
 
 // SetChainAccessor injects the blockchain accessor after both the index and
-// the blockchain have been constructed. Must be called before any rebuild
-// or catch-up operation.
+// the blockchain have been constructed. Because indexers are created before
+// the blockchain in btcd's initialization sequence, Init() runs with
+// chain == nil and defers any rebuild/catch-up work. This method picks up
+// that deferred work by running smartRebuild once the chain is available.
 func (idx *ExpiryIndex) SetChainAccessor(chain ChainAccessor) {
 	idx.chain = chain
+
+	// Run deferred rebuild now that chain state is accessible.
+	if idx.disabled {
+		return
+	}
+	if err := idx.smartRebuild(idx.curTipHeight); err != nil {
+		log.Errorf("ExpiryIndex: deferred smartRebuild failed: %v", err)
+	}
 }
 
 // NewExpiryIndex returns a new instance of an expiry index.
@@ -186,8 +196,15 @@ func (idx *ExpiryIndex) Init() error {
 	// Set the current tip height
 	idx.curTipHeight = indexTipHeight
 
-	// Smart rebuild strategy: choose optimal method based on lag
-	return idx.smartRebuild(indexTipHeight)
+	// If the chain accessor is available, run smart rebuild now.
+	// Otherwise defer it to SetChainAccessor (the normal startup path,
+	// since indexers are created before the blockchain instance).
+	if idx.chain != nil {
+		return idx.smartRebuild(indexTipHeight)
+	}
+
+	log.Infof("ExpiryIndex: Init complete (tip=%d), rebuild deferred until chain accessor is set", indexTipHeight)
+	return nil
 }
 
 // ConnectBlock is invoked by the index manager when a new block has been
@@ -705,7 +722,10 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 	log.Infof("ExpiryIndex: Starting fast rebuild from UTXO set")
 
-	// First, clear existing index data.
+	// Clear existing index data then repopulate from the UTXO set.
+	// If repopulation fails partway through, we re-clear the index so that
+	// the next startup triggers a clean full rebuild rather than leaving a
+	// partially-populated index that looks valid.
 	err := idx.db.Update(func(dbTx database.Tx) error {
 		return idx.clearIndexBuckets(dbTx)
 	})
@@ -714,7 +734,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	}
 
 	// Iterate all UTXOs and add qualifying entries.
-	err = idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
+	populateErr := idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
 		// Only index UTXOs created at or after the scan start height.
 		if createHeight < idx.expiryParams.StartScanHeight {
 			return nil
@@ -735,8 +755,15 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
+	if populateErr != nil {
+		// Re-clear so the index is in a clean empty state rather than
+		// partially populated; the next start will retry from scratch.
+		log.Warnf("ExpiryIndex: fast rebuild failed after %d UTXOs, re-clearing index: %v",
+			processed, populateErr)
+		_ = idx.db.Update(func(dbTx database.Tx) error {
+			return idx.clearIndexBuckets(dbTx)
+		})
+		return populateErr
 	}
 
 	// Mark index as complete.
