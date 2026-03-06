@@ -32,7 +32,7 @@ func BuildDryRunSummary(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPPar
 		if refund < 0 {
 			return DryRunSummary{}, fmt.Errorf("negative refund total")
 		}
-		refund, tax = applyDustRule(refund, tax, p.DustThresholdSat)
+		refund, tax = applyDustRule(amt, refund, tax, p.DustThresholdSat)
 		taxTotal += tax
 		refundTotal += refund
 	}

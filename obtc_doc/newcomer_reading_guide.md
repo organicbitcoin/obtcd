@@ -691,7 +691,7 @@ func SelectCandidates(
     如果 EstimateBlueprintWeight(已选数量+1) > WeightBudget → 停止
     计算 tax = taxForValue(amount, p)
     计算 refund = amount - tax
-    应用 dust 规则：(refund, tax) = applyDustRule(refund, tax, DustThresholdSat)
+    应用 dust 规则：(refund, tax) = applyDustRule(amount, refund, tax, DustThresholdSat)
     加入选中列表
     累计 TaxTotal 和 RefundTotal
 
@@ -758,7 +758,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 
      tax = taxForValue(amount, p)
      refund = amount - tax
-     (refund, tax) = applyDustRule(refund, tax, DustThresholdSat)
+     (refund, tax) = applyDustRule(amount, refund, tax, DustThresholdSat)
 
      tx.AddTxIn(TxIn{
          PreviousOutPoint: outpoint,
@@ -795,13 +795,13 @@ func ExtractMarkerPayload(pkScript []byte) (string, bool)
 #### applyDustRule——Dust 折叠规则
 
 ```go
-func applyDustRule(refund, tax, dustThresholdSat int64) (adjRefund, adjTax int64)
+func applyDustRule(value, refund, tax, dustThresholdSat int64) (adjRefund, adjTax int64)
 ```
 
 规则非常简单：
 ```
 如果 dustThresholdSat <= 0（禁用）：返回原值
-如果 0 < refund < dustThresholdSat：refund → 0, tax += refund
+如果 0 < value < dustThresholdSat：refund → 0, tax = value
 否则：返回原值
 ```
 
@@ -810,14 +810,15 @@ func applyDustRule(refund, tax, dustThresholdSat int64) (adjRefund, adjTax int64
 - 这些"灰尘"输出会永久占用 UTXO 集，增加节点负担
 - 把它们合并到税收（矿工奖励），既清理了状态，又避免了浪费
 
-**778/779 突变边界（cliff）**：
+**719/720 突变边界（cliff）**：
 
 ```
-value=1027: tax=308, refund=719 (< 720) → 折叠！refund=0, tax=1027
-value=1028: tax=308, refund=720 (= 720) → 不折叠，refund=720, tax=308
+value=719: tax=215, refund=504 -> 折叠！refund=0, tax=719
+value=720: tax=216, refund=504 -> 不折叠，refund=504, tax=216
+value=1027: tax=308, refund=719 -> 不折叠，refund=719, tax=308
 ```
 
-只差 1 satoshi，结果从"全额充公"变为"返还 720"。这是一个设计上已知的特性（feature），详见 `obtc_doc/reap_dust_behavior.md`。
+只差 1 satoshi，结果从"全额充公"变为"按税率返还"。这是一个设计上已知的特性（feature），详见 `obtc_doc/reap_dust_behavior.md`。
 
 ### 6.7 文件：`marker.go`
 
@@ -1341,7 +1342,7 @@ Git 钩子：
 | `packer_test.go` | Blueprint 构造、refund 聚合 |
 | `reaptx_test.go` | REAP 交易识别、Marker 解析 |
 | `dust_test.go` | Dust 折叠基本规则 |
-| `dust_extreme_test.go` | **778/779 cliff**、零税率+Dust |
+| `dust_extreme_test.go` | **719/720 cliff**、零税率+Dust |
 | `marker_vector_test.go` | Marker 摘要向量测试 |
 | `params_test.go` | 参数验证 |
 | `dryrun_test.go` | DryRun 摘要生成 |

@@ -47,7 +47,7 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 		if refund < 0 {
 			return nil, fmt.Errorf("negative refund amount")
 		}
-		refund, tax = applyDustRule(refund, tax, p.DustThresholdSat)
+		refund, tax = applyDustRule(amt, refund, tax, p.DustThresholdSat)
 		taxTotal += tax
 
 		tx.AddTxIn(&wire.TxIn{PreviousOutPoint: op, Sequence: 0xFFFFFFFE})

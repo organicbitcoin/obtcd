@@ -7,36 +7,44 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-func TestDustExtremeCliff1027Vs1028(t *testing.T) {
+func TestDustExtremeCliff719Vs720(t *testing.T) {
 	p := DefaultREAPParams(SortModeStrict)
 	if p.DustThresholdSat != 720 {
 		t.Fatalf("unexpected default dust threshold: %d", p.DustThresholdSat)
 	}
 
-	// amount=1027 => tax=floor(1027*0.3)=308, refund=719 (<720), so refund is folded.
-	tax1027 := taxForValue(1027, p)
-	refund1027 := int64(1027) - tax1027
-	adjRefund1027, adjTax1027 := applyDustRule(refund1027, tax1027, p.DustThresholdSat)
-	if adjRefund1027 != 0 || adjTax1027 != 1027 {
-		t.Fatalf("1027 cliff mismatch: got refund=%d tax=%d", adjRefund1027, adjTax1027)
+	// amount=719 (<720) => fully folded into tax.
+	tax719 := taxForValue(719, p)
+	refund719 := int64(719) - tax719
+	adjRefund719, adjTax719 := applyDustRule(719, refund719, tax719, p.DustThresholdSat)
+	if adjRefund719 != 0 || adjTax719 != 719 {
+		t.Fatalf("719 cliff mismatch: got refund=%d tax=%d", adjRefund719, adjTax719)
 	}
 
-	// amount=1028 => tax=308, refund=720 (==threshold), so no folding.
-	tax1028 := taxForValue(1028, p)
-	refund1028 := int64(1028) - tax1028
-	adjRefund1028, adjTax1028 := applyDustRule(refund1028, tax1028, p.DustThresholdSat)
-	if adjRefund1028 != 720 || adjTax1028 != 308 {
-		t.Fatalf("1028 cliff mismatch: got refund=%d tax=%d", adjRefund1028, adjTax1028)
+	// amount=720 (==threshold) => keep proportional tax, do not fold.
+	tax720 := taxForValue(720, p)
+	refund720 := int64(720) - tax720
+	adjRefund720, adjTax720 := applyDustRule(720, refund720, tax720, p.DustThresholdSat)
+	if adjRefund720 != 504 || adjTax720 != 216 {
+		t.Fatalf("720 cliff mismatch: got refund=%d tax=%d", adjRefund720, adjTax720)
+	}
+
+	// amount=1027 (>720) also keeps proportional tax even though refund is 719.
+	tax1027 := taxForValue(1027, p)
+	refund1027 := int64(1027) - tax1027
+	adjRefund1027, adjTax1027 := applyDustRule(1027, refund1027, tax1027, p.DustThresholdSat)
+	if adjRefund1027 != 719 || adjTax1027 != 308 {
+		t.Fatalf("1027 threshold mismatch: got refund=%d tax=%d", adjRefund1027, adjTax1027)
 	}
 
 	view := blockchain.NewUtxoViewpoint()
-	opA := addUtxo(t, view, 1027, 71)
-	opB := addUtxo(t, view, 1028, 72)
+	opA := addUtxo(t, view, 719, 71)
+	opB := addUtxo(t, view, 720, 72)
 	s, err := BuildDryRunSummary(REAPPlan{Inputs: []wire.OutPoint{opA, opB}}, view, p)
 	if err != nil {
 		t.Fatalf("dry run failed: %v", err)
 	}
-	if s.TaxTotal != 1335 || s.RefundTotal != 720 {
+	if s.TaxTotal != 935 || s.RefundTotal != 504 {
 		t.Fatalf("unexpected dryrun totals: tax=%d refund=%d", s.TaxTotal, s.RefundTotal)
 	}
 }
@@ -46,7 +54,7 @@ func TestDustExtremePerInputFoldingDiffersFromAggregate(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
 
 	// Two inputs with same script and same value.
-	// Per-input rule: each 700 => tax=210 refund=490 (<720) => fold twice.
+	// Per-input rule: each 700 (<720) => fold twice.
 	op1 := addUtxoWithScript(t, view, 700, 81, []byte{0x51})
 	op2 := addUtxoWithScript(t, view, 700, 82, []byte{0x51})
 
@@ -59,10 +67,10 @@ func TestDustExtremePerInputFoldingDiffersFromAggregate(t *testing.T) {
 	}
 
 	// Hypothetical aggregate-first (NOT implemented):
-	// total=1400 => tax=420 refund=980 (>=720, would not fold).
+	// total=1400 (>=720) => no fold.
 	hypTax := taxForValue(1400, p)
 	hypRefund := int64(1400) - hypTax
-	hypRefund, hypTax = applyDustRule(hypRefund, hypTax, p.DustThresholdSat)
+	hypRefund, hypTax = applyDustRule(1400, hypRefund, hypTax, p.DustThresholdSat)
 	if hypTax != 420 || hypRefund != 980 {
 		t.Fatalf("aggregate baseline changed unexpectedly: tax=%d refund=%d", hypTax, hypRefund)
 	}
@@ -77,7 +85,7 @@ func TestDustExtremePerInputFoldingDiffersFromAggregate(t *testing.T) {
 	}
 }
 
-func TestDustExtremeTaxNumZeroStillFoldsSubDustRefund(t *testing.T) {
+func TestDustExtremeTaxNumZeroStillFoldsSubDustValue(t *testing.T) {
 	p := DefaultREAPParams(SortModeStrict)
 	p.TaxNum = 0
 	view := blockchain.NewUtxoViewpoint()
@@ -89,7 +97,7 @@ func TestDustExtremeTaxNumZeroStillFoldsSubDustRefund(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dry run failed: %v", err)
 	}
-	// TaxNum=0 does not disable dust folding:
+	// TaxNum=0 does not disable value-threshold folding:
 	// 719 => folded to tax, 720 => refunded.
 	if s.TaxTotal != 719 || s.RefundTotal != 720 {
 		t.Fatalf("unexpected zero-taxnum dust behavior: tax=%d refund=%d", s.TaxTotal, s.RefundTotal)

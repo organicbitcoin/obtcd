@@ -155,7 +155,7 @@ func TestBuildBlueprintStaircaseDustAndInvariants(t *testing.T) {
 
 			tax := taxForValue(amount, p)
 			refund := amount - tax
-			refund, tax = applyDustRule(refund, tax, p.DustThresholdSat)
+			refund, tax = applyDustRule(amount, refund, tax, p.DustThresholdSat)
 			expectedTax += tax
 			inTotal += amount
 		}
