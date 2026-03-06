@@ -8,19 +8,24 @@ import (
 )
 
 func TestApplyDustRuleDirect(t *testing.T) {
-	refund, tax := applyDustRule(719, 300, 720)
-	if refund != 0 || tax != 1019 {
+	refund, tax := applyDustRule(719, 503, 216, 720)
+	if refund != 0 || tax != 719 {
 		t.Fatalf("unexpected dust fold result refund=%d tax=%d", refund, tax)
 	}
 
-	refund, tax = applyDustRule(720, 300, 720)
-	if refund != 720 || tax != 300 {
+	refund, tax = applyDustRule(720, 504, 216, 720)
+	if refund != 504 || tax != 216 {
 		t.Fatalf("threshold boundary mismatch refund=%d tax=%d", refund, tax)
 	}
 
-	refund, tax = applyDustRule(100, 300, 0)
-	if refund != 100 || tax != 300 {
+	refund, tax = applyDustRule(100, 70, 30, 0)
+	if refund != 70 || tax != 30 {
 		t.Fatalf("disabled dust rule should be no-op")
+	}
+
+	refund, tax = applyDustRule(1028, 720, 308, 720)
+	if refund != 720 || tax != 308 {
+		t.Fatalf("non-dust input should keep proportional tax")
 	}
 }
 
