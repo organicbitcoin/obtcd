@@ -114,10 +114,10 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 **公式**：`ExpiryKey = CreateHeight + WindowBlocks`
 
 - `CreateHeight`：UTXO 被创建时所在的区块高度（block height）
-- `WindowBlocks`：到期窗口，主网为 368,880 块（约 7 年）
+- `WindowBlocks`：到期窗口，主网为 362,880 块（9! ≈ 6.91 年）
 - `ExpiryKey`：UTXO 到期的区块高度
 
-**举例**：一个在高度 100,000 创建的 UTXO，其 ExpiryKey = 100,000 + 368,880 = 468,880。当链到达高度 468,880 时，这个 UTXO 就"到期"了。
+**举例**：一个在高度 100,000 创建的 UTXO，其 ExpiryKey = 100,000 + 362,880 = 462,880。当链到达高度 462,880 时，这个 UTXO 就"到期"了。
 
 ### 3.3 REAP 交易（系统交易）
 
@@ -132,7 +132,7 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 对每个被 REAP 回收的 UTXO：
 - **Tax（税）**= `floor(value × TaxNum / TaxDen)` = `floor(value × 30 / 100)`
 - **Refund（退款）**= `value - tax`
-- 如果 Refund 低于 Dust 阈值（546 satoshi），则整个金额归为 Tax
+- 如果 Refund 低于 Dust 阈值（720 satoshi，即 6!），则整个金额归为 Tax
 
 税收不会出现在 REAP 交易的输出中——它作为隐含费用（implicit fee）加入 coinbase 奖励。
 
@@ -179,7 +179,7 @@ type ExpiryParams struct {
 
 | 字段 | 含义 | 主网值 | 为什么重要 |
 |------|------|--------|-----------|
-| `WindowBlocks` | UTXO 从创建到到期经过的区块数 | 368,880（≈7年） | 决定"到期"的定义 |
+| `WindowBlocks` | UTXO 从创建到到期经过的区块数 | 362,880（9! ≈ 6.91年） | 决定"到期"的定义 |
 | `ListBatchLimit` | RPC `listexpiring` 命令一次最多返回多少条 | 1000 | 防止 RPC 拒绝服务 |
 | `StartScanHeight` | ExpiryIndex 从哪个高度开始索引 | 分叉高度 | 分叉前的 UTXO 不需要索引 |
 | `EnableAtHeight` | 到期规则从哪个高度生效 | 分叉高度+100,000 | 给用户缓冲期 |
@@ -193,9 +193,9 @@ type ExpiryParams struct {
 ┌──────────┬──────────────┬───────┬──────────┬────────────────┐
 │ 网络      │ Magic Number │ 端口   │ Bech32   │ WindowBlocks   │
 ├──────────┼──────────────┼───────┼──────────┼────────────────┤
-│ MainNet  │ 0x4F425443   │ 8555  │ "obtc"   │ 368,880 (7年)  │
-│ TestNet  │ 0x4F544553   │ 28555 │ "obtct"  │ 1,008 (1周)    │
-│ RegTest  │ 0x4F524547   │ 28666 │ "obtcrt" │ 144 (1天)      │
+│ MainNet  │ 0x4F425443   │ 9527  │ "obtc"   │ 362,880 (9!)   │
+│ TestNet  │ 0x4F544553   │ 19527 │ "obtct"  │ 1,008 (1周)    │
+│ RegTest  │ 0x4F524547   │ 29527 │ "obtcrt" │ 144 (1天)      │
 └──────────┴──────────────┴───────┴──────────┴────────────────┘
 ```
 
@@ -622,7 +622,7 @@ type REAPParams struct {
     ScanBatch        int       // 每批次从索引扫描的数量
     TaxNum           int64     // 税率分子（默认 30）
     TaxDen           int64     // 税率分母（默认 100）
-    DustThresholdSat int64     // Dust 阈值（默认 546 satoshi）
+    DustThresholdSat int64     // Dust 阈值（默认 720 satoshi = 6!）
 }
 ```
 
@@ -634,7 +634,7 @@ type REAPParams struct {
 | WeightBudget | 400,000 | **200,000** | 400,000 | 400,000 |
 | ScanBatch | 10,000 | 10,000 | 5,000 | 2,000 |
 | TaxNum/TaxDen | 30/100 | 30/100 | 30/100 | 30/100 |
-| DustThresholdSat | 546 | 546 | 546 | 546 |
+| DustThresholdSat | 720 | 720 | 720 | 720 |
 
 **主网为什么更保守？**
 - `MaxInputs=256`（全局默认 1000）：限制单个 REAP 交易大小，避免占用过多区块空间
@@ -813,11 +813,11 @@ func applyDustRule(refund, tax, dustThresholdSat int64) (adjRefund, adjTax int64
 **778/779 突变边界（cliff）**：
 
 ```
-value=778: tax=233, refund=545 (< 546) → 折叠！refund=0, tax=778
-value=779: tax=233, refund=546 (= 546) → 不折叠，refund=546, tax=233
+value=1027: tax=308, refund=719 (< 720) → 折叠！refund=0, tax=1027
+value=1028: tax=308, refund=720 (= 720) → 不折叠，refund=720, tax=308
 ```
 
-只差 1 satoshi，结果从"全额充公"变为"返还 546"。这是一个设计上已知的特性（feature），详见 `obtc_doc/reap_dust_behavior.md`。
+只差 1 satoshi，结果从"全额充公"变为"返还 720"。这是一个设计上已知的特性（feature），详见 `obtc_doc/reap_dust_behavior.md`。
 
 ### 6.7 文件：`marker.go`
 
@@ -1524,7 +1524,7 @@ Day 5：重放保护 + 测试验证
 | WindowBlocks | Window Blocks | 到期窗口——从创建到到期的区块数 |
 | Refund | Refund | 退款——REAP 回收中退还原持有者的部分（70%） |
 | Tax | Tax | 税收——REAP 回收中分配给矿工的部分（30%） |
-| Dust | Dust | 灰尘——金额过小的输出（< 546 satoshi） |
+| Dust | Dust | 灰尘——金额过小的输出（< 720 satoshi） |
 | Marker | Marker | 标记输出——REAP 交易中的 OP_RETURN 审计标记 |
 | Blueprint | Blueprint | 蓝图——REAP 交易的完整构造结果 |
 | DryRun | Dry Run | 干运行——不构造交易只计算统计 |

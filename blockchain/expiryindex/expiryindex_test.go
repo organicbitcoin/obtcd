@@ -198,7 +198,7 @@ func TestExpiryCalculation(t *testing.T) {
 			name:         "OBTC mainnet",
 			params:       &chaincfg.ObtcMainNetParams,
 			createHeight: 100000,
-			expectedKey:  468880, // 100000 + 368880 blocks
+			expectedKey:  462880, // 100000 + 362880 blocks
 		},
 	}
 

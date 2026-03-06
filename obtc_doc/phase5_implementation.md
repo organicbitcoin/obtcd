@@ -110,7 +110,7 @@ btcwallet/
 ```json
 {
   "tip_height": 123456,
-  "window_blocks": 368880,
+  "window_blocks": 362880,
   "items": [
     {
       "outpoint": "txid:vout",

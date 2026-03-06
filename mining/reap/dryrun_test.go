@@ -9,7 +9,7 @@ import (
 
 func TestBuildDryRunSummary(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
-	op1 := addUtxo(t, view, 1000, 11)
+	op1 := addUtxo(t, view, 1100, 11)
 	op2 := addUtxo(t, view, 2001, 12)
 
 	p := DefaultREAPParams(SortModeStrict)
@@ -22,11 +22,11 @@ func TestBuildDryRunSummary(t *testing.T) {
 	if s.Picked != 2 {
 		t.Fatalf("picked mismatch: %d", s.Picked)
 	}
-	wantTax := taxForValue(1000, p) + taxForValue(2001, p)
+	wantTax := taxForValue(1100, p) + taxForValue(2001, p)
 	if s.TaxTotal != wantTax {
 		t.Fatalf("tax mismatch got=%d want=%d", s.TaxTotal, wantTax)
 	}
-	if s.RefundTotal != 3001-wantTax {
+	if s.RefundTotal != 3101-wantTax {
 		t.Fatalf("refund mismatch got=%d", s.RefundTotal)
 	}
 	if s.EstWeight != EstimateBlueprintWeight(2) {
@@ -51,7 +51,7 @@ func TestBuildDryRunSummaryDustFoldingTotals(t *testing.T) {
 	op := addUtxo(t, view, 700, 33) // tax=210 refund=490, dust-fold to tax
 
 	p := DefaultREAPParams(SortModeStrict)
-	p.DustThresholdSat = 546
+	p.DustThresholdSat = 720
 
 	s, err := BuildDryRunSummary(REAPPlan{Inputs: []wire.OutPoint{op}}, view, p)
 	if err != nil {

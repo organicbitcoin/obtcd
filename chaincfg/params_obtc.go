@@ -68,7 +68,7 @@ const (
 var ObtcMainNetParams = Params{
 	Name:        "obtcmainnet",
 	Net:         wire.ObtcMainNet,
-	DefaultPort: "8555", // Different from Bitcoin's 8333
+	DefaultPort: "9527", // Stephen Chow's iconic number from "Flirting Scholar"
 
 	// DNS seeds - TODO: Replace with actual OBTC seed nodes in Week 6
 	DNSSeeds: []DNSSeed{
@@ -183,7 +183,7 @@ var ObtcMainNetParams = Params{
 var ObtcTestNetParams = Params{
 	Name:        "obtctestnet",
 	Net:         wire.ObtcTestNet,
-	DefaultPort: "28555", // Different from Bitcoin testnet/simnet defaults
+	DefaultPort: "19527", // TestNet variant of 9527
 
 	// Use Bitcoin testnet's genesis and history up to fork point
 	GenesisBlock: &testNet3GenesisBlock,
@@ -273,7 +273,7 @@ var ObtcTestNetParams = Params{
 var ObtcRegTestParams = Params{
 	Name:        "obtcregtest",
 	Net:         wire.ObtcRegNet, // Use separate magic for regtest isolation
-	DefaultPort: "28666",         // Different from Bitcoin regtest defaults for development isolation
+	DefaultPort: "29527",         // RegTest variant of 9527
 
 	// Use Bitcoin regtest genesis for shared development environment
 	GenesisBlock: &regTestGenesisBlock,
@@ -424,7 +424,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 	switch params.Net {
 	case wire.ObtcMainNet:
 		return &ExpiryParams{
-			WindowBlocks:             368880, // ~7 years at 10min blocks (144 * 365 * 7 = 368,880)
+			WindowBlocks:             362880, // 9! (factorial of 9) ≈ 6.91 years at 10min blocks
 			ListBatchLimit:           10000,
 			StartScanHeight:          ObtcMainNetForkHeight,
 			EnableAtHeight:           ObtcMainNetForkHeight + 100000, // Week 3+

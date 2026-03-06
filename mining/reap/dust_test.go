@@ -8,13 +8,13 @@ import (
 )
 
 func TestApplyDustRuleDirect(t *testing.T) {
-	refund, tax := applyDustRule(545, 300, 546)
-	if refund != 0 || tax != 845 {
+	refund, tax := applyDustRule(719, 300, 720)
+	if refund != 0 || tax != 1019 {
 		t.Fatalf("unexpected dust fold result refund=%d tax=%d", refund, tax)
 	}
 
-	refund, tax = applyDustRule(546, 300, 546)
-	if refund != 546 || tax != 300 {
+	refund, tax = applyDustRule(720, 300, 720)
+	if refund != 720 || tax != 300 {
 		t.Fatalf("threshold boundary mismatch refund=%d tax=%d", refund, tax)
 	}
 
@@ -26,10 +26,10 @@ func TestApplyDustRuleDirect(t *testing.T) {
 
 func TestBuildBlueprintDustRefundFoldedToTax(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
-	op := addUtxo(t, view, 700, 1) // 30% tax=210, refund=490 (<546)
+	op := addUtxo(t, view, 700, 1) // 30% tax=210, refund=490 (<720)
 
 	p := DefaultREAPParams(SortModeStrict)
-	p.DustThresholdSat = 546
+	p.DustThresholdSat = 720
 
 	plan := REAPPlan{Height: 123, Inputs: []wire.OutPoint{op}}
 	plan.TaxTotal = 700
