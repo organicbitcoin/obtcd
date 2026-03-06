@@ -132,7 +132,7 @@ func TestBuildBlueprintStaircaseDustAndInvariants(t *testing.T) {
 			case 0:
 				amount = 700 // refund 490 -> dust fold into tax
 			case 1:
-				amount = 779 // refund 546 -> equals threshold, should remain refund
+				amount = 1028 // refund 720 -> equals threshold, should remain refund
 			case 2:
 				amount = 1200
 			default:

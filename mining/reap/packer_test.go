@@ -12,13 +12,13 @@ import (
 
 func TestBuildBlueprintTotalsAndMarker(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
-	op1 := addUtxo(t, view, 1000, 1)
+	op1 := addUtxo(t, view, 1100, 1)
 	op2 := addUtxo(t, view, 2001, 2)
 
 	p := DefaultREAPParams(SortModeStrict)
 	plan := REAPPlan{Height: 123, Inputs: []wire.OutPoint{op1, op2}}
-	plan.TaxTotal = taxForValue(1000, p) + taxForValue(2001, p)
-	plan.RefundTotal = 3001 - plan.TaxTotal
+	plan.TaxTotal = taxForValue(1100, p) + taxForValue(2001, p)
+	plan.RefundTotal = 3101 - plan.TaxTotal
 
 	tx, err := BuildBlueprint(plan, view, p)
 	if err != nil {
@@ -56,7 +56,7 @@ func TestBuildBlueprintIsFinalizedAtTargetHeight(t *testing.T) {
 
 func TestBuildBlueprintRefundOutputsGroupedByScript(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
-	op1 := addUtxo(t, view, 1000, 1)
+	op1 := addUtxo(t, view, 1100, 1)
 	op2 := addUtxoWithScript(t, view, 2000, 2, []byte{0x52})
 	op3 := addUtxoWithScript(t, view, 3000, 3, []byte{0x52})
 

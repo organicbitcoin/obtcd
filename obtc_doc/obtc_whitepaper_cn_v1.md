@@ -154,13 +154,13 @@ OBTC 实现可以分为三层，每层职责不同。
 
 | 网络 | WindowBlocks | ListBatchLimit | ReapMaxInputs |
 |---|---:|---:|---:|
-| Mainnet | 368,880 | 10,000 | 256 |
+| Mainnet | 362,880 | 10,000 | 256 |
 | Testnet | 1,008 | 5,000 | 500 |
 | Regtest | 144 | 1,000 | 200 |
 
 解释：
 
-- Mainnet `368,880` 块约等于 7 年（144 × 365 × 7）；
+- Mainnet `362,880` 块即 9!（9 的阶乘），约 6.91 年；
 - Testnet/Regtest 窗口更短用于快速验证。
 
 ## 5.3 Namespace Isolation 参数
@@ -169,7 +169,7 @@ OBTC 实现可以分为三层，每层职责不同。
   - Main `0x4F425443`
   - Test `0x4F544553`
   - Reg `0x4F524547`
-- Default port：`8555 / 28555 / 28666`
+- Default port：`9527 / 19527 / 29527`
 - Bech32 HRP：`obtc / obtct / obtcrt`
 - 地址前缀（P2PKH/P2SH/Witness）隔离
 - HD key version 隔离
@@ -183,7 +183,7 @@ OBTC 实现可以分为三层，每层职责不同。
 - Mainnet Max inputs：`256`
 - Mainnet Weight budget：`200,000`
 - Tax ratio：`30%`
-- Dust threshold：`546 sat`
+- Dust threshold：`720 sat`（6! = 720）
 
 ## 5.5 Auto-Renew 默认参数（实现）
 

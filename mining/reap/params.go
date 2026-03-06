@@ -24,7 +24,7 @@ func DefaultREAPParams(mode SortMode) REAPParams {
 		ScanBatch:        10_000,
 		TaxNum:           30,
 		TaxDen:           100,
-		DustThresholdSat: 546,
+		DustThresholdSat: 720, // 6! (factorial of 6)
 	}
 }
 

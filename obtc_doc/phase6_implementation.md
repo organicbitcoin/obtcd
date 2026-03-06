@@ -23,7 +23,7 @@
 
 * **网络名**：`obtc-testnet`
 * **魔数**：`wire.OBTCTestNet`（全新且与 BTC/Testnet/Regtest 不冲突，如 `0xF1C0B7D7`）
-* **默认端口**：P2P `28555`，RPC `28556`
+* **默认端口**：P2P `19527`，RPC `19528`
 * **地址 HRP**：`"tbob"`（示例，避免与 `tb`/`bc` 混淆）
 * **WIF/BIP32**：自定义前缀（**不得**使用 BTC/xpub/xprv 前缀），写入 README 参数表
 * **到期窗口**：`ExpiryParams{Mode:ByHeight, WindowBlocks = 7d * 144 = 1008}`（按 10 分钟块间隔计算）
@@ -74,15 +74,15 @@
   * 建立用户 `obtc`、数据目录 `/var/lib/obtc`
   * 写入 `btcd.conf`（见下）
   * 安装 `systemd` 单元并启动
-  * 开放防火墙：`ufw allow 28555/tcp`；RPC 仅 `localhost`
+  * 开放防火墙：`ufw allow 19527/tcp`；RPC 仅 `localhost`
 * **`/etc/obtc/btcd.conf` 示例**
 
   ```
   ; OBTCTestNet
   addpeer=<EU-IP-OTHER-SEED>
   addpeer=<US-IP-OTHER-SEED>
-  listen=0.0.0.0:28555
-  rpclisten=127.0.0.1:28556
+  listen=0.0.0.0:19527
+  rpclisten=127.0.0.1:19528
   nobanning=1
   noblacklist=1
   txindex=1
@@ -141,7 +141,7 @@
 
   * **下载**（二进制/Docker）、**校验**（sha256/minisign）
   * **运行**：命令行 / Docker Compose
-  * **连种子**：三台 IP + 端口 `28555`（以及 `--network=obtc-testnet`）
+  * **连种子**：三台 IP + 端口 `19527`（以及 `--network=obtc-testnet`）
   * **FAQ**：同步慢、端口被占、时间不同步、无法连接某区域等
 * 截图：`obtc-status` 页、同步中日志
 
@@ -157,15 +157,15 @@ git checkout obtc-main
 go build ./...
 
 # 起两节点（Testnet）
-./btcd --network=obtc-testnet --datadir=.obtc/node1 --listen=127.0.0.1:28555 --rpclisten=127.0.0.1:28556 --txindex --notls --rpcuser=u --rpcpass=p &
-./btcd --network=obtc-testnet --datadir=.obtc/node2 --listen=127.0.0.1:28557 --rpclisten=127.0.0.1:28558 --txindex --notls --rpcuser=u --rpcpass=p --connect=127.0.0.1:28555 &
+./btcd --network=obtc-testnet --datadir=.obtc/node1 --listen=127.0.0.1:19527 --rpclisten=127.0.0.1:19528 --txindex --notls --rpcuser=u --rpcpass=p &
+./btcd --network=obtc-testnet --datadir=.obtc/node2 --listen=127.0.0.1:19529 --rpclisten=127.0.0.1:19530 --txindex --notls --rpcuser=u --rpcpass=p --connect=127.0.0.1:19527 &
 ```
 
 ### B) 容器化（单机）
 
 ```bash
 docker build -t obtc/node:tn .
-docker run -p 28555:28555 -p 28580:28580 obtc/node:tn  # P2P+状态页
+docker run -p 19527:19527 -p 19580:19580 obtc/node:tn  # P2P+状态页
 ```
 
 ### C) 观测脚本（示例）

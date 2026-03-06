@@ -95,7 +95,7 @@ Status: CONFIRMED
 
 **OBTC Network Parameters Verified**:
 - ✅ Magic Numbers: `0x4F425443` (MainNet), `0x4F544553` (TestNet), `0x4F524547` (RegNet)
-- ✅ Unique Ports: 8555 (MainNet), 18555 (TestNet), 18666 (RegTest)
+- ✅ Unique Ports: 9527 (MainNet), 19527 (TestNet), 29527 (RegTest)
 - ✅ Bech32 HRP: `obtc`, `obtct`, `obtcrt`
 - ✅ Network Detection: `IsOBTC()` function working
 - ✅ Fork Height Detection: `IsPostOBTCFork()` function working

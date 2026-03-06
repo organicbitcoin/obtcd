@@ -85,7 +85,7 @@ recommended that `GOPATH` is set to a directory in your home directory such as
 | Parameter | MainNet | TestNet | RegTest |
 |-----------|---------|---------|---------|
 | **Network Magic** | `0x4F425443` | `0x4F544553` | `0x4F524547` |
-| **Default Port** | `8555` | `18555` | `18666` |
+| **Default Port** | `9527` | `19527` | `29527` |
 | **Fork Height** | `950000` (Q2 2026) | `2800000` | `100` |
 | **Bech32 HRP** | `obtc` | `obtct` | `obtcrt` |
 | **Address Prefixes** | *TBD Phase 3* | *TBD Phase 3* | *TBD Phase 3* |
