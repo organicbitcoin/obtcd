@@ -8,7 +8,7 @@
 Phase 6 现在不能再按“新链创世生成”去理解。当前代码明确表明：
 
 - OBTC 是 **Bitcoin 的硬分叉**，不是独立新创世链；
-- `ObtcTestNetParams` 已经存在于 [`chaincfg/params_obtc.go`](/Users/pengyu/src/obtcd/chaincfg/params_obtc.go)；
+- `ObtcTestNetParams` 已经存在于 [`chaincfg/params_obtc.go`](../chaincfg/params_obtc.go)；
 - Testnet 复用 **Bitcoin testnet3 genesis**，在 `ObtcTestNetForkHeight` 之后分叉；
 - 部署时应使用实际网络标志 `--obtctestnet`，不是文档里常见的 `--network=obtc-testnet` 写法。
 
@@ -41,7 +41,7 @@ Phase 6 现在不能再按“新链创世生成”去理解。当前代码明确
 
 - 节点二进制 `btcd`
 - 命令行 `btcctl`
-- 根目录 [`Dockerfile`](/Users/pengyu/src/obtcd/Dockerfile)
+- 根目录 [`Dockerfile`](../Dockerfile)
 - RPC：`getblockchaininfo`、`getpeerinfo`、`getmempoolinfo`、`getchaintips`、`listexpiring`、`getexpiryindexstats`
 
 ## 3. Phase 6 目标

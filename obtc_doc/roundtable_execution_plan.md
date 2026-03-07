@@ -5,7 +5,7 @@
 
 ## Context
 
-圆桌纪要 [`OBTC_圆桌最终共识纪要_2026-03-04.md`](/Users/pengyu/src/obtcd/obtc_doc/OBTC_圆桌最终共识纪要_2026-03-04.md) 定义了 F1-F4 四项交付和 Gate A / Gate B 双闸门。
+圆桌纪要草稿 `obtc_doc/OBTC_圆桌最终共识纪要_2026-03-04.md` 定义了 F1-F4 四项交付和 Gate A / Gate B 双闸门。
 
 这份文档不再复述“理想应然”，而是按 **2026-03-07 当前仓库与工作区状态** 给出执行口径：
 
@@ -70,7 +70,7 @@ expiry index disabled = 共识状态关闭
 
 ### 2.3 Dust cliff 口径必须改成 `719/720`
 
-当前实现与文档基线 [`reap_dust_behavior.md`](/Users/pengyu/src/obtcd/obtc_doc/reap_dust_behavior.md) 已明确：
+当前实现与文档基线 [`reap_dust_behavior.md`](../obtc_doc/reap_dust_behavior.md) 已明确：
 
 - Dust 阈值：`720 sat`
 - cliff：`719/720`
@@ -105,10 +105,10 @@ expiry index disabled = 共识状态关闭
 
 当前工作区已经有：
 
-- [`scripts/gate/metrics.sh`](/Users/pengyu/src/obtcd/scripts/gate/metrics.sh)
-- [`scripts/gate/kill_check.sh`](/Users/pengyu/src/obtcd/scripts/gate/kill_check.sh)
-- [`scripts/gate/gate_a_report.sh`](/Users/pengyu/src/obtcd/scripts/gate/gate_a_report.sh)
-- [`scripts/gate/README.md`](/Users/pengyu/src/obtcd/scripts/gate/README.md)
+- `scripts/gate/metrics.sh`
+- `scripts/gate/kill_check.sh`
+- `scripts/gate/gate_a_report.sh`
+- `scripts/gate/README.md`
 
 它们已经覆盖了 Gate A 的“早期主网/演练期代理指标”。
 
@@ -303,9 +303,9 @@ Gate B 建立在 Gate A 通过基础上。
 1. 三件套文件全部落位
 2. 钱包告知中的 dust cliff 对齐 `719/720`
 3. 技术描述与以下文档一致：
-   - [`reap_dust_behavior.md`](/Users/pengyu/src/obtcd/obtc_doc/reap_dust_behavior.md)
-   - [`newcomer_reading_guide.md`](/Users/pengyu/src/obtcd/obtc_doc/newcomer_reading_guide.md)
-   - [`expiry_commitment_implementation.md`](/Users/pengyu/src/obtcd/obtc_doc/expiry_commitment_implementation.md)
+   - [`reap_dust_behavior.md`](../obtc_doc/reap_dust_behavior.md)
+   - [`newcomer_reading_guide.md`](../obtc_doc/newcomer_reading_guide.md)
+   - [`expiry_commitment_implementation.md`](../obtc_doc/expiry_commitment_implementation.md)
 
 ## 八、结论
 

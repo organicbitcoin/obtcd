@@ -19,10 +19,10 @@
 
 对应代码：
 
-- [`blockchain/validation_reap.go`](/Users/pengyu/src/obtcd/blockchain/validation_reap.go)
-- [`blockchain/validation_obtc_replay.go`](/Users/pengyu/src/obtcd/blockchain/validation_obtc_replay.go)
-- [`blockchain/expiryindex/expiryindex.go`](/Users/pengyu/src/obtcd/blockchain/expiryindex/expiryindex.go)
-- [`mining/mining.go`](/Users/pengyu/src/obtcd/mining/mining.go)
+- [`blockchain/validation_reap.go`](../blockchain/validation_reap.go)
+- [`blockchain/validation_obtc_replay.go`](../blockchain/validation_obtc_replay.go)
+- [`blockchain/expiryindex/expiryindex.go`](../blockchain/expiryindex/expiryindex.go)
+- [`mining/mining.go`](../mining/mining.go)
 
 ### 1.2 ExpiryIndex 恢复基线
 
@@ -44,8 +44,8 @@
 
 仓库当前已有：
 
-- [`release/release.sh`](/Users/pengyu/src/obtcd/release/release.sh)
-- [`release/README.md`](/Users/pengyu/src/obtcd/release/README.md)
+- [`release/release.sh`](../release/release.sh)
+- [`release/README.md`](../release/README.md)
 
 它们当前的语义是：
 

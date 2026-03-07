@@ -5,7 +5,7 @@
 
 ## 1. 当前主网基线
 
-当前代码已经定义了 [`ObtcMainNetParams`](/Users/pengyu/src/obtcd/chaincfg/params_obtc.go)。
+当前代码已经定义了 [`ObtcMainNetParams`](../chaincfg/params_obtc.go)。
 
 最重要的事实：
 
@@ -56,9 +56,9 @@
 
 当前可直接复用的是：
 
-- [`release/release.sh`](/Users/pengyu/src/obtcd/release/release.sh)
-- [`release/README.md`](/Users/pengyu/src/obtcd/release/README.md)
-- 根目录 [`Dockerfile`](/Users/pengyu/src/obtcd/Dockerfile)
+- [`release/release.sh`](../release/release.sh)
+- [`release/README.md`](../release/README.md)
+- 根目录 [`Dockerfile`](../Dockerfile)
 
 ## 3. Phase 8 目标
 

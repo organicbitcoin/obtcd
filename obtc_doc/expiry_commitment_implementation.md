@@ -70,7 +70,7 @@ State_h = { (outpoint, expiry_height) }
 
 ## 4. Coinbase 脚本格式
 
-当前代码在 [`blockchain/expiryindex/commitment.go`](/Users/pengyu/src/obtcd/blockchain/expiryindex/commitment.go) 中定义了固定格式：
+当前代码在 [`blockchain/expiryindex/commitment.go`](../blockchain/expiryindex/commitment.go) 中定义了固定格式：
 
 ```text
 OP_RETURN OP_DATA_37 <TAG(4B)> <VERSION(1B)> <ROOT(32B)>
@@ -96,7 +96,7 @@ OP_RETURN OP_DATA_37 <TAG(4B)> <VERSION(1B)> <ROOT(32B)>
 
 ### 5.1 Canonical 元素编码
 
-当前实现的单元素编码在 [`blockchain/expiryindex/accumulator.go`](/Users/pengyu/src/obtcd/blockchain/expiryindex/accumulator.go)：
+当前实现的单元素编码在 [`blockchain/expiryindex/accumulator.go`](../blockchain/expiryindex/accumulator.go)：
 
 ```text
 elem = outpoint(36B) || expiry_height_u64_be(8B)
@@ -106,7 +106,7 @@ elem = outpoint(36B) || expiry_height_u64_be(8B)
 
 ### 5.2 累加器
 
-当前使用的是 `MuHash3072`，实现位于 [`blockchain/expiryindex/muhash.go`](/Users/pengyu/src/obtcd/blockchain/expiryindex/muhash.go)。
+当前使用的是 `MuHash3072`，实现位于 [`blockchain/expiryindex/muhash.go`](../blockchain/expiryindex/muhash.go)。
 
 需要关心的接口只有四个：
 
@@ -158,7 +158,7 @@ type AccumulatorSnapshot struct {
 
 ### 7.1 ConnectBlock
 
-当前 `ConnectBlock` 逻辑在 [`blockchain/expiryindex/expiryindex.go`](/Users/pengyu/src/obtcd/blockchain/expiryindex/expiryindex.go)。
+当前 `ConnectBlock` 逻辑在 [`blockchain/expiryindex/expiryindex.go`](../blockchain/expiryindex/expiryindex.go)。
 
 执行顺序是：
 
@@ -232,7 +232,7 @@ type AccumulatorSnapshot struct {
 
 ## 9. 挖矿侧实现
 
-挖矿路径位于 [`mining/mining.go`](/Users/pengyu/src/obtcd/mining/mining.go)。
+挖矿路径位于 [`mining/mining.go`](../mining/mining.go)。
 
 ### 9.1 状态注入
 
@@ -267,7 +267,7 @@ type AccumulatorSnapshot struct {
 
 ## 10. 启动接线与开关语义
 
-当前接线在 [`server.go`](/Users/pengyu/src/obtcd/server.go)。
+当前接线在 [`server.go`](../server.go)。
 
 ### 10.1 OBTC 网络上的默认行为
 
@@ -300,7 +300,7 @@ Expiry commitment consensus state is maintained regardless.
 
 ## 11. 存储与恢复
 
-当前实现没有新建独立的 `expirycommit` bucket，而是复用 [`blockchain/expiryindex/buckets.go`](/Users/pengyu/src/obtcd/blockchain/expiryindex/buckets.go) 里的 `expiry-meta`。
+当前实现没有新建独立的 `expirycommit` bucket，而是复用 [`blockchain/expiryindex/buckets.go`](../blockchain/expiryindex/buckets.go) 里的 `expiry-meta`。
 
 当前元数据键是：
 
