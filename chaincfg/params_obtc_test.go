@@ -472,6 +472,19 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			if p.StartScanHeight != 0 {
 				t.Fatalf("expected StartScanHeight to begin at genesis, got %d", p.StartScanHeight)
 			}
+			if tc.params.Net == ObtcMainNetParams.Net {
+				want := ObtcMainNetForkHeight + 2016
+				if p.EnableAtHeight != want {
+					t.Fatalf("expected mainnet EnableAtHeight %d, got %d", want, p.EnableAtHeight)
+				}
+				if p.ReapConsensusAtHeight != want || p.ReplayProtectionAtHeight != want {
+					t.Fatalf("expected mainnet staged heights to collapse to %d: %+v", want, p)
+				}
+				if p.ExpiryCommitmentEnableAtHeight != want {
+					t.Fatalf("expected mainnet commitment activation %d, got %d",
+						want, p.ExpiryCommitmentEnableAtHeight)
+				}
+			}
 			if p.ReapConsensusAtHeight < p.EnableAtHeight {
 				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
 			}

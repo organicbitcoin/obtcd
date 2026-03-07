@@ -29,11 +29,11 @@
 | Bech32 HRP | `obtc` |
 | Fork Height | `950000` |
 | `WindowBlocks` | `362880` |
-| `EnableAtHeight` | `ObtcMainNetForkHeight + 100000` |
-| `ReapConsensusAtHeight` | `ObtcMainNetForkHeight + 110000` |
-| `ReplayProtectionAtHeight` | `ObtcMainNetForkHeight + 115000` |
+| `EnableAtHeight` | `ObtcMainNetForkHeight + 2016` |
+| `ReapConsensusAtHeight` | `ObtcMainNetForkHeight + 2016` |
+| `ReplayProtectionAtHeight` | `ObtcMainNetForkHeight + 2016` |
 | `ReapMaxInputs` | `256` |
-| `ExpiryCommitmentEnableAtHeight` | `ObtcMainNetForkHeight + 100000` |
+| `ExpiryCommitmentEnableAtHeight` | `ObtcMainNetForkHeight + 2016` |
 
 当前还有一个现实问题：
 

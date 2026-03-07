@@ -210,9 +210,9 @@ type ExpiryParams struct {
 | `WindowBlocks` | UTXO 从创建到到期经过的区块数 | 362,880（9! ≈ 6.91年） | 决定"到期"的定义 |
 | `ListBatchLimit` | RPC `listexpiring` 命令一次最多返回多少条 | 1000 | 防止 RPC 拒绝服务 |
 | `StartScanHeight` | ExpiryIndex 从哪个高度开始索引 | genesis（0） | 共享历史上的老 UTXO 也会进入 expiry/REAP 扫描 |
-| `EnableAtHeight` | 到期规则从哪个高度生效 | 分叉高度+100,000 | 给用户缓冲期 |
-| `ReapConsensusAtHeight` | 强制 REAP 输入排序规范的高度 | 分叉高度+110,000 | 渐进激活共识规则 |
-| `ReplayProtectionAtHeight` | 重放保护激活高度 | 分叉高度+115,000 | 签名域分离 |
+| `EnableAtHeight` | 到期规则从哪个高度生效 | 分叉高度+2016 | 主网保留 1 个难度调整周期缓冲 |
+| `ReapConsensusAtHeight` | 强制 REAP 输入排序规范的高度 | 分叉高度+2016 | 与 expiry spend 规则同高激活 |
+| `ReplayProtectionAtHeight` | 重放保护激活高度 | 分叉高度+2016 | 与 expiry/REAP 同高激活，避免再分阶段错位 |
 | `ReapMaxInputs` | 单个 REAP 交易最多包含的输入数 | 256 | 防止交易过大 |
 | `ExpiryCommitmentEnableAtHeight` | 强制 coinbase 必须带 expiry commitment 的高度 | 网络参数定义值 | 让状态根进入共识承诺 |
 
