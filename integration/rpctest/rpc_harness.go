@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -636,9 +637,9 @@ func readLastAllocatedPort(portFile string) int {
 		panic(fmt.Errorf("error reading port file: %w", err))
 	}
 
-	lastAllocatedPort, err := strconv.Atoi(string(port))
+	lastAllocatedPort, err := strconv.Atoi(strings.TrimSpace(string(port)))
 	if err != nil {
-		panic(fmt.Errorf("error parsing port: %w", err))
+		return int(defaultNodePort)
 	}
 
 	return lastAllocatedPort

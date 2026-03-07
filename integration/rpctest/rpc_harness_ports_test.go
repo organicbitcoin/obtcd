@@ -1,7 +1,9 @@
 package rpctest
 
 import (
+	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 )
@@ -76,5 +78,35 @@ func TestNextAvailablePortFromFileWrapsCursor(t *testing.T) {
 	port := nextAvailablePortFromFile(lockFile, portFile)
 	if port <= int(defaultNodePort) || port >= 65535 {
 		t.Fatalf("expected wrapped port within valid range, got %d", port)
+	}
+}
+
+func TestNextAvailablePortFromFileRepairsMalformedCursor(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	lockFile := filepath.Join(tempDir, "ports.lock")
+	portFile := filepath.Join(tempDir, "ports.state")
+
+	if err := os.WriteFile(portFile, []byte("corrupt-cursor"), 0600); err != nil {
+		t.Fatalf("unable to seed malformed cursor file: %v", err)
+	}
+
+	port := nextAvailablePortFromFile(lockFile, portFile)
+	if port <= int(defaultNodePort) || port >= 65535 {
+		t.Fatalf("expected repaired port within valid range, got %d", port)
+	}
+
+	savedPortBytes, err := os.ReadFile(portFile)
+	if err != nil {
+		t.Fatalf("unable to read repaired cursor file: %v", err)
+	}
+
+	savedPort, err := strconv.Atoi(string(savedPortBytes))
+	if err != nil {
+		t.Fatalf("expected repaired cursor file to contain a valid port, got %q: %v", string(savedPortBytes), err)
+	}
+	if savedPort != port {
+		t.Fatalf("expected repaired cursor file to store %d, got %d", port, savedPort)
 	}
 }
