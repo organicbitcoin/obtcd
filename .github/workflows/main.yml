@@ -151,15 +151,29 @@ jobs:
           EOF
           go run validate_obtc.go
 
-      - name: Check DevNet Scripts
+      - name: Check DevNet and Phase6 scripts
         run: |
-          echo "Validating DevNet scripts..."
+          echo "Validating script entrypoints..."
           ls -la scripts/
-          chmod +x scripts/devnet-up.sh
-          
-          echo "Testing devnet-up.sh help..."
+
+          chmod +x \
+            scripts/devnet-up.sh \
+            scripts/phase6/run_testnet_node.sh \
+            scripts/phase6/collect_validation_snapshot.sh \
+            scripts/validation/testnet_smoke.sh
+
+          echo "Checking shell syntax..."
+          bash -n scripts/devnet-up.sh
+          bash -n scripts/phase6/run_testnet_node.sh
+          bash -n scripts/phase6/collect_validation_snapshot.sh
+          bash -n scripts/validation/testnet_smoke.sh
+
+          echo "Testing help outputs..."
           ./scripts/devnet-up.sh help
-          
+          ./scripts/phase6/run_testnet_node.sh --help
+          ./scripts/phase6/collect_validation_snapshot.sh --help
+          ./scripts/validation/testnet_smoke.sh --help
+
           echo "✅ All scripts validated successfully"
 
   test-rpctest:

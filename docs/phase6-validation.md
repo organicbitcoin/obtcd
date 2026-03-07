@@ -64,3 +64,15 @@
 ```bash
 # paste exact commands and key outputs here
 ```
+
+## 9. Optional automation
+
+You can append a structured snapshot directly into this file:
+
+```bash
+scripts/phase6/collect_validation_snapshot.sh \
+  --rpcuser=<u> \
+  --rpcpass=<p> \
+  --rpcserver=127.0.0.1:19528 \
+  --append docs/phase6-validation.md
+```

@@ -8,6 +8,8 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
   - Start/stop/restart/status/tail for a local or remote OBTC testnet node.
 - `systemd/obtcd-testnet.service`
   - Example `systemd` unit for long-running seed/observer nodes.
+- `collect_validation_snapshot.sh`
+  - Capture a markdown snapshot of key RPC evidence for `docs/phase6-validation.md`.
 
 ## Quick start
 
@@ -25,6 +27,15 @@ RPC_USER=u RPC_PASS=p scripts/phase6/run_testnet_node.sh status
 
 # Stop node
 scripts/phase6/run_testnet_node.sh stop
+```
+
+Collect a validation snapshot:
+
+```bash
+scripts/phase6/collect_validation_snapshot.sh \
+  --rpcuser=u \
+  --rpcpass=p \
+  --append docs/phase6-validation.md
 ```
 
 ## Common environment overrides

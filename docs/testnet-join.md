@@ -86,13 +86,34 @@ If `--expiryindex` is enabled:
 ./cmd/btcctl/btcctl --obtctestnet --rpcuser=<u> --rpcpass=<p> --rpcserver=127.0.0.1:19528 listexpiring 0 99999999 100
 ```
 
-## 5. Seed/peering notes (Phase 6)
+## 5. Collect validation evidence (recommended)
+
+Append a markdown snapshot into your Phase 6 validation record:
+
+```bash
+scripts/phase6/collect_validation_snapshot.sh \
+  --rpcuser=<u> \
+  --rpcpass=<p> \
+  --rpcserver=127.0.0.1:19528 \
+  --append docs/phase6-validation.md
+```
+
+Or write to a standalone file:
+
+```bash
+scripts/phase6/collect_validation_snapshot.sh \
+  --rpcuser=<u> \
+  --rpcpass=<p> \
+  --out docs/phase6-validation-snapshot.md
+```
+
+## 6. Seed/peering notes (Phase 6)
 
 - Seed readiness requires **2-3 long-lived nodes** (preferably multi-region).
 - At this stage, bootstrap should rely on explicit `--addpeer` entries until seed rollout is finalized.
 - Keep at least one observability node with `--expiryindex` enabled.
 
-## 6. Common issues
+## 7. Common issues
 
 ### No peers
 
@@ -108,7 +129,7 @@ If `--expiryindex` is enabled:
 
 If height/peers look wrong, verify you actually started with `--obtctestnet`.
 
-## 7. Minimal operator security baseline
+## 8. Minimal operator security baseline
 
 - Keep RPC bound to localhost (`127.0.0.1`).
 - Use strong, unique `rpcuser`/`rpcpass`.
