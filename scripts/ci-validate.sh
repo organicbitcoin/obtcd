@@ -118,7 +118,7 @@ require_command bash
 
 tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/obtc-ci.XXXXXX")"
 go_cache_root="${OBTC_GO_CACHE_ROOT:-${TMPDIR:-/tmp}/obtc-go-cache}"
-validate_file="${repo_root}/.validate_obtc_local.go"
+validate_file="${repo_root}/validate_obtc_local.go"
 btcec_coverage_backup_existed=0
 
 export GOCACHE="${GOCACHE:-${go_cache_root}/build}"
