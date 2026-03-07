@@ -1,0 +1,38 @@
+[Unit]
+Description=OBTC Testnet Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=obtc
+Group=obtc
+WorkingDirectory=/opt/obtcd
+
+# Adjust rpc credentials and peers before use.
+ExecStart=/opt/obtcd/btcd \
+  --obtctestnet \
+  --datadir=/var/lib/obtcd-testnet \
+  --listen=0.0.0.0:19527 \
+  --rpclisten=127.0.0.1:19528 \
+  --txindex \
+  --expiryindex \
+  --notls \
+  --rpcuser=replace_me \
+  --rpcpass=replace_me \
+  --addpeer=replace_seed_1:19527 \
+  --addpeer=replace_seed_2:19527
+
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Keep node data writable while protecting the rest of the system.
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/obtcd-testnet
+
+[Install]
+WantedBy=multi-user.target

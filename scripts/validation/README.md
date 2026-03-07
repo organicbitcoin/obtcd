@@ -70,6 +70,19 @@ Use the quick validation script for easy testing:
 ./scripts/validation/quick_validate.sh obtcmainnet --rpcuser=user --rpcpass=pass --bench -o mainnet_results.json
 ```
 
+## ⚡ Testnet smoke check (Phase 6)
+
+For operator-focused Phase 6 checks (node health + optional expiry index availability), run:
+
+```bash
+scripts/validation/testnet_smoke.sh \
+  --rpcuser=<user> \
+  --rpcpass=<pass> \
+  --rpcserver=127.0.0.1:19528
+```
+
+Use `--strict-expiryindex` if your role requires `getexpiryindexstats` to be available.
+
 ## 🔧 Advanced Usage
 
 ### Direct Tool Usage

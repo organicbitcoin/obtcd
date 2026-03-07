@@ -1,0 +1,47 @@
+# Phase 6 Testnet Operations Helpers
+
+This directory contains minimal scripts/templates for Phase 6 testnet deployment and validation.
+
+## Files
+
+- `run_testnet_node.sh`
+  - Start/stop/restart/status/tail for a local or remote OBTC testnet node.
+- `systemd/obtcd-testnet.service`
+  - Example `systemd` unit for long-running seed/observer nodes.
+
+## Quick start
+
+From repository root:
+
+```bash
+# Build first
+go build ./...
+
+# Start node
+RPC_USER=u RPC_PASS=p scripts/phase6/run_testnet_node.sh start
+
+# Check status
+RPC_USER=u RPC_PASS=p scripts/phase6/run_testnet_node.sh status
+
+# Stop node
+scripts/phase6/run_testnet_node.sh stop
+```
+
+## Common environment overrides
+
+```bash
+BTCD_BIN=/opt/obtcd/btcd
+BTCCTL_BIN=/opt/obtcd/cmd/btcctl/btcctl
+DATA_DIR=/var/lib/obtcd-testnet
+P2P_LISTEN=0.0.0.0:19527
+RPC_LISTEN=127.0.0.1:19528
+RPC_SERVER=127.0.0.1:19528
+ADDPEERS=seed1.example.com:19527,seed2.example.com:19527
+ENABLE_EXPIRYINDEX=1
+```
+
+## Notes
+
+- Keep RPC on localhost unless you have strict access controls.
+- Use at least one observer node with `--expiryindex` enabled.
+- For seed-candidate nodes, ensure inbound TCP `19527` is reachable.
