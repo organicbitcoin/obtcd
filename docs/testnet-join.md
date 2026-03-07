@@ -59,6 +59,18 @@ scripts/phase6/run_testnet_node.sh start
   --addpeer=<peer2:19527>
 ```
 
+### Option C: generate a config file first
+
+```bash
+scripts/phase6/gen_testnet_conf.sh \
+  --rpcuser=<rpc_user> \
+  --rpcpass=<rpc_pass> \
+  --addpeers=<peer1:19527>,<peer2:19527>
+
+# then start node with generated config
+./btcd --configfile=./phase6-obtctestnet.conf
+```
+
 ## 4. Validate node health
 
 Run smoke checks:

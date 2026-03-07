@@ -12,6 +12,8 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
   - Capture a markdown snapshot of key RPC evidence for `docs/phase6-validation.md`.
 - `seed_preflight.sh`
   - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener).
+- `gen_testnet_conf.sh`
+  - Generate a minimal `btcd` testnet config template for seed/observer nodes.
 
 ## Quick start
 
@@ -51,6 +53,15 @@ scripts/phase6/seed_preflight.sh \
 ```
 
 Use `--strict-expiryindex` for observer/validator roles that must expose expiry RPC.
+
+Generate a baseline config file:
+
+```bash
+scripts/phase6/gen_testnet_conf.sh \
+  --rpcuser=u \
+  --rpcpass=p \
+  --addpeers=seed1.example.com:19527,seed2.example.com:19527
+```
 
 ## Common environment overrides
 
