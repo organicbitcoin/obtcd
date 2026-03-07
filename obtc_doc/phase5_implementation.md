@@ -19,12 +19,12 @@
 
 ## 🧭 白皮书要点（本周落地）
 
-来自《obtc_whitepaper_cn_v0》第 6 章（钱包 UX）：
+来自《obtc_whitepaper_cn_v1》第 6 章（钱包 UX）：
 
 1. **到期感知**：展示倒计时；距到期 < 180 天提示加重。
 2. **一键续期**：把将到期 UTXO 发送到**新脚本**，重置 7 年计时。
 3. **自动续期**：在**到期前 6–12 个月**随机窗口执行，避免同步行为暴露。
-4. **尘埃预警**：若预测 70% 返还 < DUST，强提示用户续期或合并。
+4. **尘埃预警**：若按当前实现会触发 dust 折叠，强提示用户续期或合并。
 5. **返还脚本**：共识层返还到原脚本；钱包应自动“转发到新脚本”。
 
 ---
@@ -66,12 +66,14 @@ btcwallet/
 - `blocks_to_expiry`
 - `days_to_expiry ≈ blocks_to_expiry / 144`
 - `status`: `ok | expiring | expired`
-- `dust_risk`: `true/false`（若 `floor(value * 0.7) < DUST`）
+- `dust_risk`: `true/false`（若 `value > 0 && value < DustThresholdSat`）
 
 **DUST 预警**：
-- 若未续期，未来 REAP 返还可能不足 DUST → `dust_risk=true`。
+- 若未续期，且输入金额满足 `0 < value < DustThresholdSat`，则会被 dust 折叠 → `dust_risk=true`。
 - 提示建议“合并/续期”。
-- 注意当前 REAP dust 逻辑按**单输入**执行，存在阈值 cliff（如 778/779）与“TaxNum=0 仍可能因 dust 折叠产生有效损失”的语义；钱包侧展示请按实现口径解释。
+- 注意当前 REAP dust 逻辑按**单输入**执行，并且看的是**输入金额本身是否低于阈值**，不是按返还额做判断。
+- 当前实现的 cliff 是 **719/720**。
+- `TaxNum=0` 也**不会**自动关闭 dust 折叠；钱包侧展示请按实现口径解释。
 - 详见：`obtc_doc/reap_dust_behavior.md`。
 
 ### 2) 一键续期（renew）
@@ -109,14 +111,14 @@ btcwallet/
 **响应示例**：
 ```json
 {
-  "tip_height": 123456,
+  "tip_height": 461680,
   "window_blocks": 362880,
   "items": [
     {
       "outpoint": "txid:vout",
       "amount": 100000,
       "create_height": 100000,
-      "expiry_height": 3779200,
+      "expiry_height": 462880,
       "blocks_to_expiry": 1200,
       "days_to_expiry": 8,
       "status": "expiring",
@@ -164,7 +166,7 @@ btcctl renew-all --before 180d --maxfeerate 5
 
 ### 单元测试
 - 到期计算（高度/剩余区块/天数）；
-- DUST 预警边界；
+- DUST 预警边界（重点覆盖 `719/720` cliff）；
 - 续期选择逻辑（过滤已过期/锁定/太小输出）。
 
 ### 集成测试（regtest/simnet）
@@ -199,9 +201,9 @@ btcctl renew-all --before 180d --maxfeerate 5
 
 ## 🧱 常见坑 & 规避
 
+* **沿用旧的 dust 口径** ⇒ 当前实现应统一按 `value < 720` 的输入级折叠规则解释，不要再用基于 refund 的旧判断方式。
 * **不记录 create_height** ⇒ 无法可靠计算到期高度；必须在钱包 DB 保存。
 * **续期已过期 UTXO** ⇒ 交易无效；应强制拒绝。
 * **批量续期费率过高** ⇒ 增加 `max_feerate` 限制。
 * **输出仍回到原脚本** ⇒ 隐私退化；默认转发到新地址。
 * **自动续期过于集中** ⇒ 随机窗口 + 每日上限。
-

@@ -51,7 +51,8 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 ├─────────────────────────────────────────────────┤
 │  C. REAP 选择与交易构造 (mining/reap/*.go)       │
 ├─────────────────────────────────────────────────┤
-│  B. 到期索引 (blockchain/expiryindex/*.go)       │
+│  B. 到期索引 + Expiry Commitment                │
+│     状态 (blockchain/expiryindex/*.go)          │
 ├─────────────────────────────────────────────────┤
 │  A. 网络参数与基础设施 (chaincfg/params_obtc.go, │
 │     wire/protocol.go, scripts/)                  │
@@ -66,16 +67,19 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 
 ```
 1. 新区块连接 ──→ ExpiryIndex.ConnectBlock()
-                    记录 "哪些 UTXO 在哪个高度到期"
+                    ├─ 校验 coinbase 中的 expiry commitment（前状态 Root_{n-1}）
+                    ├─ 记录 "哪些 UTXO 在哪个高度到期"
+                    └─ 增量更新 expiry MuHash accumulator
 
-2. 矿工构建模板 ──→ maybeBuildREAPTx()
+2. 矿工构建模板 ──→ maybeBuildREAPTx() + NewBlockTemplate()
                     ├─ collectExpiredOutpoints(): 从索引扫描到期候选
                     ├─ reap.SelectCandidates():   确定性选择+排序+截断
-                    └─ reap.BuildBlueprint():     构造 REAP 系统交易
+                    ├─ reap.BuildBlueprint():     构造 REAP 系统交易
+                    └─ AddExpiryCommitment():     在 coinbase 写入 Root_{n-1}
 
 3. 区块验证 ──→ CheckTransactionInputs()
-                ├─ checkReapMarker():            验证 Marker 完整性
-                ├─ checkExpirySpendRules():      验证到期花费规则
+                ├─ checkReapMarker():             验证 Marker 完整性
+                ├─ checkExpirySpendRules():       验证到期花费规则
                 └─ checkReapConsensusHardening(): 验证输入排序和数量限制
 ```
 
@@ -83,7 +87,7 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 
 ## 第二章：开发时间线与里程碑
 
-项目从 2025 年 10 月开始，至今共 **136 次提交**，分 8 个阶段推进：
+项目从 2025 年 10 月开始，至今按 `git log --since="2025-10-01"` 统计共 **123 次提交**，分阶段推进：
 
 | 时间 | 阶段 | 关键交付 | 对应 PR |
 |------|------|---------|---------|
@@ -98,6 +102,7 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 | 2026-02-15 | Phase 4 | 共识验证 + 模板接线（31 次提交） | #19~#27 |
 | 2026-02-27~28 | Phase 4+ | 测试加固、Staircase 压力、并发回归 | #28~#38 |
 | 2026-03-01~03 | Phase 5 | 重放保护、命名空间隔离、ExpiryIndex 修复 | #39~#44 |
+| 2026-03-07 | Phase 5+ | Expiry commitment（MuHash3072、coinbase OP_RETURN、共识接线加固） | #51 |
 
 ---
 
@@ -153,6 +158,25 @@ Marker 的作用是让任何节点都可以独立验证："这笔 REAP 交易是
 - SegWit v0：`"OBTC/SigHashV1/v1"`
 - Taproot：`"OBTC/TapSighash/v1"`
 
+### 3.7 Expiry Commitment（到期状态承诺）
+
+这是 2026-03 最新加入的机制，用来回答另一个问题：**"所有节点如何确认自己维护的是同一个 Expiry 状态？"**
+
+- 承诺位置：coinbase 交易的一个专用 `OP_RETURN`
+- 承诺内容：`ExpiryIndex` 当前维护的 MuHash 状态根
+- 承诺时机：区块 `n` 的 coinbase 承诺的是**前状态** `Root_{n-1}`
+- 设计目的：不改区块头结构，但让区块对 expiry state 有共识级承诺
+
+脚本格式是：
+
+```text
+OP_RETURN OP_DATA_37 <TAG(4B)="OEXP"> <VERSION(1B)=0x01> <ROOT(32B)>
+```
+
+注意它和 REAP 交易末尾的 `Marker` 不是一回事：
+- `Marker` 属于 REAP 系统交易，审计 REAP 输入集合
+- `Expiry Commitment` 属于 coinbase，承诺整个 expiry state
+
 ---
 
 ## 第四章：网络参数层 chaincfg
@@ -165,13 +189,14 @@ Marker 的作用是让任何节点都可以独立验证："这笔 REAP 交易是
 
 ```go
 type ExpiryParams struct {
-    WindowBlocks             uint64  // UTXO 到期窗口（块数）
-    ListBatchLimit           int     // RPC 单次返回上限
-    StartScanHeight          int32   // 开始构建索引的块高
-    EnableAtHeight           int32   // 开始强制到期规则的块高
-    ReapConsensusAtHeight    int32   // 启用规范 REAP 排序/限制的块高
-    ReplayProtectionAtHeight int32   // 启用重放保护的块高
-    ReapMaxInputs            int     // 共识级别的 REAP 最大输入数
+    WindowBlocks                    uint64  // UTXO 到期窗口（块数）
+    ListBatchLimit                  int     // RPC 单次返回上限
+    StartScanHeight                 int32   // 开始构建索引的块高
+    EnableAtHeight                  int32   // 开始强制到期规则的块高
+    ReapConsensusAtHeight           int32   // 启用规范 REAP 排序/限制的块高
+    ReplayProtectionAtHeight        int32   // 启用重放保护的块高
+    ReapMaxInputs                   int     // 共识级别的 REAP 最大输入数
+    ExpiryCommitmentEnableAtHeight  int32   // 开始强制 coinbase expiry commitment 的块高
 }
 ```
 
@@ -186,6 +211,12 @@ type ExpiryParams struct {
 | `ReapConsensusAtHeight` | 强制 REAP 输入排序规范的高度 | 分叉高度+110,000 | 渐进激活共识规则 |
 | `ReplayProtectionAtHeight` | 重放保护激活高度 | 分叉高度+115,000 | 签名域分离 |
 | `ReapMaxInputs` | 单个 REAP 交易最多包含的输入数 | 256 | 防止交易过大 |
+| `ExpiryCommitmentEnableAtHeight` | 强制 coinbase 必须带 expiry commitment 的高度 | 网络参数定义值 | 让状态根进入共识承诺 |
+
+这三个高度现在要分开理解：
+- `StartScanHeight`：从这里开始维护索引和 accumulator
+- `EnableAtHeight`：从这里开始执行“普通交易不能花费已到期 UTXO、REAP 只能花费已到期 UTXO”
+- `ExpiryCommitmentEnableAtHeight`：从这里开始，区块必须在 coinbase 写入与本地前状态一致的 commitment
 
 #### 4.1.2 三个 OBTC 网络
 
@@ -254,25 +285,36 @@ ObtcRegNet  BitcoinNet = 0x4F524547  // "OREG"
 
 ## 第五章：到期索引层 ExpiryIndex
 
-ExpiryIndex 是 OBTC 最核心的基础设施之一，它回答一个核心问题：**"当前有哪些 UTXO 已经到期？"**
+ExpiryIndex 是 OBTC 最核心的基础设施之一。到 2026-03 的最新实现里，它已经同时承担两件事：
+
+1. 回答查询问题：**"当前有哪些 UTXO 会在什么高度到期？"**
+2. 维护共识状态：**"当前链尖对应的 expiry state root 是什么？"**
+
+所以它不再只是一个“辅助扫描索引”，而是 OBTC 上**始终维护的 expiry commitment 状态源**。`--expiryindex` 这个开关现在只影响扫描/RPC/REAP 选择功能，不影响 commitment 共识状态的维护。
 
 ### 5.1 包结构概览
 
 ```
 blockchain/expiryindex/
+├── accumulator.go         # MuHash 状态持久化与快照
+├── commitment.go          # coinbase expiry commitment 脚本
 ├── doc.go                  # 包文档（设计原则说明）
 ├── expiryindex.go          # 核心索引实现 ★★★ 最重要
 ├── buckets.go              # 数据库桶管理
 ├── encode.go               # 编码/解码（确定性序列化）
+├── muhash.go               # MuHash3072 accumulator 实现
 ├── params.go               # 过期参数适配
 ├── log.go                  # 日志配置
+├── accumulator_test.go     # accumulator 元数据测试
 ├── benchmark_test.go       # 性能基准测试
 ├── buckets_test.go         # 桶操作测试
+├── commitment_test.go      # commitment 脚本测试
 ├── database_test.go        # 数据库集成测试
 ├── encode_test.go          # 编码单元测试
 ├── encode_extra_test.go    # 编码边界测试
 ├── expiryindex_test.go     # 核心索引测试
 ├── helpers_extra_test.go   # 辅助函数测试
+├── muhash_test.go          # MuHash 向量/性质测试
 ├── params_extra_test.go    # 参数测试
 ├── rebuild_test.go         # 重建策略测试
 ├── scan_extra_test.go      # 扫描边界测试
@@ -311,9 +353,16 @@ type ExpiryIndex struct {
 }
 ```
 
-#### 5.2.3 双向映射——核心数据结构
+注意：**MuHash accumulator 并不挂在结构体字段里**。当前实现把 accumulator state、对应的 tip hash、tip height 都持久化在 `expiry-meta` 桶中，通过数据库事务和索引更新一起提交，避免“索引更新了但 commitment root 还是旧值”的中间态。
 
-ExpiryIndex 在数据库中维护**两个桶（bucket）**，构成双向映射：
+#### 5.2.3 双向映射 + MuHash accumulator
+
+ExpiryIndex 在数据库中维护两层状态：
+
+1. **双向映射**：给扫描/RPC/REAP 选择器使用
+2. **MuHash accumulator**：给 coinbase expiry commitment 使用
+
+双向映射部分仍然是两个桶（bucket）：
 
 ```
 正向映射（用于花费时快速删除）：
@@ -331,6 +380,20 @@ ExpiryIndex 在数据库中维护**两个桶（bucket）**，构成双向映射�
 - 当一个 UTXO 被花费时，需要从索引中删除它。此时只知道 OutPoint，需要正向映射找到它的 ExpiryKey，然后从反向映射中移除。
 - 当矿工构建 REAP 交易时，需要找到所有"在某个高度范围内到期"的 UTXO。此时用反向映射按 ExpiryKey 范围扫描。
 
+MuHash accumulator 承诺的是语义集合：
+
+```text
+{ (outpoint, expiryHeight) }
+```
+
+每个条目的 canonical 编码是：
+
+```text
+encodeOutPoint(outpoint, 36B) || encodeExpiryKey(expiryHeight, 8B)
+```
+
+也就是固定 44 字节。区块连接时对新增条目做 `Add`，对被花费条目做 `Remove`，最后得到 32 字节的 root digest。
+
 #### 5.2.4 ConnectBlock——区块连接
 
 ```go
@@ -338,16 +401,36 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx,
     block *btcutil.Block, stxos []blockchain.SpentTxOut) error
 ```
 
-当一个新区块被添加到主链时调用。核心流程：
+当一个新区块被添加到主链时调用。最新版核心流程是：
 
 ```
-1. 如果当前高度 < StartScanHeight，仅更新 tipHeight，返回
-2. 遍历区块中的所有交易：
+1. 如果当前高度 < StartScanHeight：
+   ├─ 不处理索引内容
+   ├─ 只更新 tipHeight
+   └─ 只更新 accumulator 对应的 tip hash
+
+2. 读取当前 accumulator state（这代表 Root_{n-1}）
+
+3. 如果当前高度 >= ExpiryCommitmentEnableAtHeight：
+   └─ 校验 coinbase 里必须且只能有一个 expiry commitment，
+      且它承诺的 root 必须等于本地 Root_{n-1}
+
+4. 遍历区块中的所有交易：
    a. 对于每个输入（除 coinbase 外）：
-      调用 disconnectTxOut(outpoint)  // 被花费的 UTXO 从索引中移除
+      ├─ 从 outpoint->expiry 映射中取出 expiryKey
+      ├─ 对 MuHash 做 Remove(outpoint, expiryKey)
+      └─ 调用 disconnectTxOut(outpoint)
    b. 对于每个输出：
-      调用 connectTxOut(outpoint, blockHeight)  // 新 UTXO 加入索引
-3. 更新 tipHeight
+      ├─ 跳过 `txscript.IsUnspendable(pkScript)` 的输出
+      ├─ 计算 expiryKey = blockHeight + WindowBlocks
+      ├─ 对 MuHash 做 Add(outpoint, expiryKey)
+      └─ 调用 connectTxOut(outpoint, blockHeight)
+
+5. 持久化新的 accumulator state（现在代表 Root_n）
+
+6. 原子更新：
+   ├─ tipHeight
+   └─ accumulatorTipHash
 ```
 
 **关键函数 connectTxOut**：
@@ -368,11 +451,14 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx,
     block *btcutil.Block, stxos []blockchain.SpentTxOut) error
 ```
 
-当发生链重组（reorg）时调用，执行 ConnectBlock 的**反向操作**：
+当发生链重组（reorg）时调用，执行 ConnectBlock 的**严格反向操作**：
 - 移除该区块创建的 UTXO
+- 从 MuHash 中移除这些新增条目
 - 恢复该区块花费的 UTXO
+- 将它们重新加入 MuHash
+- 回滚 `tipHeight` 和 `accumulatorTipHash`
 
-**重要**：ConnectBlock 和 DisconnectBlock 的对称性是**数据一致性的关键**。如果这两个函数不完全对称，链重组后索引数据会不一致。
+**重要**：ConnectBlock 和 DisconnectBlock 的对称性现在不只是“扫描索引一致性”的问题，也直接关系到 commitment root 是否会在重组后漂移。
 
 #### 5.2.6 ScanExpiringUTXOs——Staircase 分页扫描
 
@@ -418,9 +504,45 @@ smartRebuild(indexTipHeight):
 └── lag == 0 → 已最新，无操作
 ```
 
-**fastRebuildFromUTXO**：直接遍历数据库中的全部 UTXO 集，重新计算每个 UTXO 的 ExpiryKey 并填充索引。适用于首次启动或大幅落后。
+**fastRebuildFromUTXO**：直接遍历数据库中的全部 UTXO 集，重新计算每个 UTXO 的 ExpiryKey，同时重建：
+- 双向映射
+- MuHash accumulator
+- accumulator 对应的 tip hash / tip height
+
+适用于首次启动或大幅落后。
 
 **incrementalCatchUp**：逐块处理从 fromHeight+1 到 toHeight 的每个区块，模拟 ConnectBlock 操作。适用于轻微落后。
+
+最新版还专门补了一个回归测试：当 `StartScanHeight < EnableAtHeight` 时，live `ConnectBlock()` 路径算出的 accumulator root，必须和 `fastRebuildFromUTXO()` 完全一致，防止“扫描开始高度”和“规则生效高度”错位造成状态根分叉。
+
+#### 5.2.8 `accumulator.go`、`commitment.go`、`muhash.go`
+
+这三个文件是这次最新版最值得补读的新内容。
+
+`accumulator.go` 负责：
+- 条目的 canonical 44 字节编码
+- `AccumulatorSnapshot { Root, TipHash, TipHeight }`
+- accumulator state / tip hash 的数据库持久化
+
+`commitment.go` 负责 coinbase commitment 脚本的构造和严格解析：
+
+```text
+OP_RETURN OP_DATA_37 <TAG(4B)="OEXP"> <VERSION(1B)> <ROOT(32B)>
+```
+
+这里的解析是**严格 canonical** 的：
+- 脚本长度必须正好是 39 字节
+- push opcode 必须是 `OP_DATA_37`
+- tag 必须匹配 `"OEXP"`
+- coinbase 中只允许一个 expiry commitment
+
+`muhash.go` 负责 MuHash3072 accumulator 本身。你不需要一开始就看完所有数学细节，但至少要知道它支持：
+- `Add(entry)`
+- `Remove(entry)`
+- `Digest()`
+- `Serialize()/Deserialize()`
+
+这让 ExpiryIndex 能在区块连接/断开时做**增量更新**，而不是每个块都全量重哈希整个状态。
 
 ### 5.3 文件：`encode.go`
 
@@ -465,14 +587,29 @@ bktExpiry2Outpoints  = "expiry-to-outpoints"  // 反向映射
 元数据键：
 ```go
 keyTipHeightIndexed = "tip-height"  // 已索引到的最高块高度
-keyIndexVersion     = "version"     // 索引版本号（当前为 1）
+keyIndexVersion     = "version"     // 索引版本号（当前为 2）
+keyAccumulatorState = "accumulator-state"
+keyAccumulatorTipHash = "accumulator-tip-hash"
 ```
 
 重要常量：
 ```go
+CurrentIndexVersion = 2
 MaxOutpointsPerKey = 10000   // 单个 ExpiryKey 下最多存多少个 OutPoint
 DefaultBatchSize   = 1000    // 默认事务批处理大小
 ```
+
+`keyAccumulatorTipHash` 的意义很实际：矿工生成模板时不能只拿一个 root，还必须知道这个 root 对应的是**哪一个 tip**。所以现在导出的快照是：
+
+```go
+type AccumulatorSnapshot struct {
+    Root      [32]byte
+    TipHash   chainhash.Hash
+    TipHeight int32
+}
+```
+
+挖矿模板只有在 `(TipHash, TipHeight)` 和当前最佳链一致时，才允许把这个 root 写进 coinbase。
 
 ### 5.5 文件：`params.go`
 
@@ -488,12 +625,17 @@ IsExpiryEnabled(height int32) bool
 IsIndexingEnabled(height int32) bool
   // height >= StartScanHeight
 
+isCommitmentActive(height int32) bool
+  // height >= ExpiryCommitmentEnableAtHeight
+
 CalculateExpiryRange(fromHeight int32, horizonBlocks uint64) (fromKey, toKey uint64)
   // 计算 RPC 扫描范围
 
 GetDefaultHorizon() uint64
   // 默认扫描视域：144 块（约 1 天）
 ```
+
+这里要注意一个容易混淆的点：`IsIndexingEnabled()` 看的是 `StartScanHeight`，不是 `EnableAtHeight`。这也是为什么系统可以先积累一段时间的 expiry state，再在更晚的高度开始强制执行 REAP/expiry 共识规则。
 
 ### 5.6 文件：`blockchain/expiry_chain_accessor.go`
 
@@ -513,7 +655,7 @@ type ExpiryChainAccessor struct {
 
 ### 5.7 文件：`blockchain/utxo_iter.go`
 
-提供底层 UTXO 遍历方法，供 ExpiryIndex 快速重建使用：
+提供底层 UTXO 遍历方法，供 ExpiryIndex 快速重建双向映射和 accumulator 使用：
 
 ```go
 func (b *BlockChain) ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) error) error
@@ -1094,6 +1236,8 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 2. 不是 OBTC 网络
 3. 高度 < EnableAtHeight
 
+这里的 `reapIndex == nil` 在最新版里有了新语义：它只表示**没有启用扫描/REAP 选择功能**，不表示没有 expiry commitment 状态。因为 commitment 状态现在由 `expiryState` 单独接线，并且在 OBTC 网络上 always-on。
+
 **正常流程**：
 1. 获取网络特定的 REAP 参数（SortModeStrict）
 2. 验证参数
@@ -1143,7 +1287,8 @@ func (g *BlkTmplGenerator) normalTxWeightLimit(nextBlockHeight int32, reserveFor
 ```go
 type BlkTmplGenerator struct {
     // ...原有字段...
-    reapIndex   *expiryindex.ExpiryIndex  // REAP 到期索引
+    reapIndex   *expiryindex.ExpiryIndex  // REAP 到期索引（可选）
+    expiryState expiryCommitmentSource    // expiry commitment 状态源（always-on）
 
     // 可选测试钩子
     reapSigOpCostFn      func(tx, view, segwit) (int, error)
@@ -1151,15 +1296,17 @@ type BlkTmplGenerator struct {
 }
 ```
 
-#### SetREAPIndex 方法
+#### SetREAPIndex / SetExpiryCommitmentSource 方法
 
 ```go
 func (g *BlkTmplGenerator) SetREAPIndex(idx *expiryindex.ExpiryIndex)
+func (g *BlkTmplGenerator) SetExpiryCommitmentSource(src expiryCommitmentSource)
 ```
 
-在 `server.go` 的节点启动阶段调用，将 ExpiryIndex 注入模板生成器。
+`SetREAPIndex()` 只给 REAP 交易构造路径用。
+`SetExpiryCommitmentSource()` 给 coinbase expiry commitment 路径用，并且在 OBTC 网络上始终会接上。
 
-#### NewBlockTemplate 中的 REAP 集成
+#### NewBlockTemplate 中的 REAP + Expiry Commitment 集成
 
 ```
 1. 规划 REAP 交易：
@@ -1177,21 +1324,33 @@ func (g *BlkTmplGenerator) SetREAPIndex(idx *expiryindex.ExpiryIndex)
    ├─ 更新 blockUtxos 反映花费
    ├─ 添加到区块交易列表
    └─ 税收加入 totalFees → 影响 coinbase 奖励
+
+5. 如果 segwit 生效且区块里有 witness：
+   └─ 写入 witness commitment
+
+6. 如果 nextBlockHeight >= ExpiryCommitmentEnableAtHeight：
+   ├─ 调用 expiryState.GetAccumulatorSnapshot()
+   ├─ 检查 snapshot.(TipHash, TipHeight) 与当前 best tip 完全一致
+   └─ 将 snapshot.Root 以专用 OP_RETURN 写入 coinbase
 ```
+
+这个 tip 对齐检查非常重要。它解决的是一个很具体的问题：**不能在父块是 A 的模板里，误写一个属于父块 B 的 expiry root**。最新版通过导出原子快照 `AccumulatorSnapshot { Root, TipHash, TipHeight }` 来避免这个竞态。
 
 ### 9.3 文件：`server.go`（修改部分）
 
-负责启动初始化顺序：
+负责启动初始化顺序。最新版的关键变化是：**在 OBTC 网络上，ExpiryIndex 一定会创建并加入 IndexManager**，因为它现在承载 expiry commitment 共识状态。
 
 ```
 节点启动
+  → 在 OBTC 网络上创建 ExpiryIndex（通过 IndexManager）
   → 创建 BlockChain
-  → 创建 ExpiryIndex（通过 IndexManager）
   → ExpiryIndex.SetChainAccessor(chain)  // 注入链访问器
-  → BlkTmplGenerator.SetREAPIndex(idx)   // 注入到模板生成器
+  → BlkTmplGenerator.SetExpiryCommitmentSource(idx)  // 总是注入
+  → 如果开启 --expiryindex：
+       BlkTmplGenerator.SetREAPIndex(idx)            // 仅 REAP 扫描/选择功能
 ```
 
-**初始化顺序至关重要**：如果顺序错误，模板生成器可能拿到 nil 的索引，导致 REAP 功能静默失效。
+同时，`config.go` 里的 `--expiryindex` 说明也改了：它只控制 scan/RPC features，**expiry commitment consensus state is maintained regardless**。
 
 ---
 
@@ -1219,6 +1378,8 @@ type GetExpiryIndexStatsCmd struct{}  // 无参数
 ```
 
 **用途**：获取到期索引的统计信息（总 UTXO 数、总 ExpiryKey 数等）。
+
+这两个 RPC 现在都属于**可选的 scan/RPC 能力**。如果节点没有启用 `--expiryindex`，这些接口不可用；但底层的 expiry commitment 状态仍然会继续维护。
 
 ### 10.2 文件：`btcjson/obtcextresults.go`
 
@@ -1252,6 +1413,8 @@ type ExpiryIndexStatsResult struct {
 ### 10.3 文件：`rpcserver.go`（修改部分）
 
 注册了 `listexpiring` 和 `getexpiryindexstats` 的处理函数，将 RPC 请求映射到 ExpiryIndex 的扫描操作。
+
+最新版这里的文案也更新了：当你没开 `--expiryindex` 时，报错强调的是 **"ExpiryIndex scan/RPC is disabled"**，而不是说整个 ExpiryIndex 都不存在。这个措辞变化反映的正是新架构语义。
 
 ### 10.4 文件：`mempool/mempool.go`（修改部分）
 
@@ -1320,12 +1483,15 @@ Git 钩子：
 
 | 测试文件 | 覆盖内容 |
 |---------|---------|
+| `accumulator_test.go` | accumulator 元数据、快照一致性 |
+| `commitment_test.go` | coinbase commitment 构造/解析、重复检测 |
 | `expiryindex_test.go` | ConnectBlock/DisconnectBlock、基本 CRUD |
 | `buckets_test.go` | 桶操作、元数据读写 |
 | `encode_test.go` | 编码/解码正确性 |
 | `encode_extra_test.go` | 编码边界条件 |
 | `database_test.go` | 数据库集成 |
-| `rebuild_test.go` | 重建策略（smart/fast/incremental） |
+| `muhash_test.go` | MuHash3072 基本性质 |
+| `rebuild_test.go` | 重建策略（smart/fast/incremental）+ live/rebuild accumulator 一致性 |
 | `scan_staircase_test.go` | **Staircase 分页**——多 ExpiryKey 跨越 |
 | `scan_extra_test.go` | 扫描边界条件 |
 | `sequence_fuzz_test.go` | 随机操作序列的一致性 |
@@ -1396,10 +1562,13 @@ Day 1：全局概念
 
 Day 2：到期索引
 ├── 阅读 blockchain/expiryindex/doc.go（设计原则）
-├── 阅读 blockchain/expiryindex/expiryindex.go（核心 500 行）
+├── 阅读 blockchain/expiryindex/expiryindex.go（核心主流程）
 │   ├── 重点：ConnectBlock / DisconnectBlock 的对称性
 │   ├── 重点：ScanExpiringUTXOs 的分页逻辑
 │   └── 重点：smartRebuild 的策略选择
+├── 阅读 blockchain/expiryindex/commitment.go（coinbase OP_RETURN 格式）
+├── 阅读 blockchain/expiryindex/accumulator.go + muhash.go
+│   └── 重点：GetAccumulatorSnapshot / Add / Remove / Digest
 ├── 阅读 blockchain/expiryindex/encode.go（大端序设计）
 └── 运行 go test ./blockchain/expiryindex/... -v -run TestScanExpiringUTXOsStaircasePressure
 
@@ -1422,7 +1591,9 @@ Day 4：共识验证 + 模板集成
 ├── 阅读 mining/template_reap.go
 │   ├── 重点：maybeBuildREAPTx 的早退条件
 │   └── 重点：权重预留策略
-└── 快速浏览 mining/mining.go 中 REAP 相关部分
+└── 快速浏览 mining/mining.go 中 REAP + expiry commitment 相关部分
+    ├── 重点：SetExpiryCommitmentSource()
+    └── 重点：coinbase 写入 Root_{n-1} 前的 tip 对齐检查
 
 Day 5：重放保护 + 测试验证
 ├── 阅读 txscript/sighash.go 中的 OBTC 修改
@@ -1438,6 +1609,8 @@ Day 5：重放保护 + 测试验证
 | OBTC 和 BTC 的区别 | `chaincfg/params_obtc.go` | `ObtcMainNetParams` |
 | UTXO 什么时候到期 | `blockchain/expiryindex/params.go` | `CalculateExpiryKey()` |
 | 到期索引怎么工作 | `blockchain/expiryindex/expiryindex.go` | `ConnectBlock()`, `ScanExpiringUTXOs()` |
+| expiry commitment 怎么编码 | `blockchain/expiryindex/commitment.go` | `BuildExpiryCommitmentScript()` |
+| expiry root 怎么读取快照 | `blockchain/expiryindex/accumulator.go` | `AccumulatorSnapshot` |
 | 矿工怎么选择 REAP 输入 | `mining/reap/selector.go` | `SelectCandidates()` |
 | REAP 交易长什么样 | `mining/reap/reaptx.go` | `BuildBlueprint()` |
 | 税率怎么算 | `mining/reap/selector.go` | `taxForValue()` |
@@ -1446,6 +1619,7 @@ Day 5：重放保护 + 测试验证
 | 到期 UTXO 能被谁花 | `blockchain/validation_reap.go` | `checkExpirySpendRules()` |
 | 重放保护怎么实现 | `txscript/sighash.go` | `obtcReplaySighashTagV0` 等 |
 | REAP 交易怎么进区块 | `mining/template_reap.go` | `maybeBuildREAPTx()` |
+| coinbase 里的 expiry commitment 怎么进区块 | `mining/mining.go` | `SetExpiryCommitmentSource()`, `NewBlockTemplate()` |
 | RPC 怎么查到期信息 | `btcjson/obtcextcmds.go` | `ListExpiringCmd` |
 | 内存池为什么拒绝 REAP | `mempool/mempool.go` | `IsLikelyREAPTx()` 检查 |
 
@@ -1459,9 +1633,12 @@ Day 5：重放保护 + 测试验证
 
 ```
 ★★★ chaincfg/params_obtc.go               # OBTC 网络参数定义
+★★  blockchain/expiryindex/accumulator.go # accumulator 状态持久化与快照
+★★  blockchain/expiryindex/commitment.go  # coinbase expiry commitment 脚本
 ★★★ blockchain/expiryindex/expiryindex.go  # 到期索引核心
 ★★  blockchain/expiryindex/encode.go       # 确定性编码
 ★★  blockchain/expiryindex/buckets.go      # 数据库桶管理
+★★  blockchain/expiryindex/muhash.go       # MuHash3072 accumulator
 ★   blockchain/expiryindex/params.go       # 过期参数适配
 ★   blockchain/expiryindex/doc.go          # 包文档
 ☆   blockchain/expiryindex/log.go          # 日志配置
@@ -1487,17 +1664,17 @@ Day 5：重放保护 + 测试验证
 ### 修改的上游文件
 
 ```
-★   mining/mining.go          # NewBlockTemplate REAP 注入
+★   mining/mining.go          # NewBlockTemplate 注入 REAP + expiry commitment
 ★   blockchain/validate.go    # REAP 验证挂接点
 ★   blockchain/scriptval.go   # REAP 脚本验证分流
 ★   mempool/mempool.go        # REAP 交易拒绝策略
 ★   txscript/sighash.go       # 重放保护域分离
 ★   txscript/engine.go        # 重放保护标志
 ☆   wire/protocol.go          # OBTC 网络常量
-☆   config.go                 # OBTC 网络命令行参数
+☆   config.go                 # `--expiryindex` 只控制 scan/RPC features
 ☆   params.go                 # 参数注入映射
-☆   server.go                 # SetREAPIndex 初始化
-☆   rpcserver.go              # RPC handler
+☆   server.go                 # always-on expiry state 初始化 + 可选 REAP 接线
+☆   rpcserver.go              # scan/RPC handler 与禁用提示
 ☆   rpcserverhelp.go          # RPC 帮助文本
 ```
 
@@ -1522,6 +1699,9 @@ Day 5：重放保护 + 测试验证
 | UTXO | Unspent Transaction Output | 未花费交易输出——比特币的"余额"单元 |
 | ExpiryKey | Expiry Key | 到期键——UTXO 到期的区块高度 |
 | ExpiryIndex | Expiry Index | 到期索引——跟踪哪些 UTXO 何时到期 |
+| Expiry Commitment | Expiry Commitment | 写在 coinbase 里的 expiry state root 承诺 |
+| Accumulator | Accumulator | 累加器——这里指增量维护的 MuHash 状态 |
+| MuHash | MuHash3072 | 可增量 Add/Remove 的集合承诺结构 |
 | WindowBlocks | Window Blocks | 到期窗口——从创建到到期的区块数 |
 | Refund | Refund | 退款——REAP 回收中退还原持有者的部分（70%） |
 | Tax | Tax | 税收——REAP 回收中分配给矿工的部分（30%） |
@@ -1552,6 +1732,7 @@ Day 5：重放保护 + 测试验证
 看文件名：
 - `*_obtc_*` 或 `*_reap*` 后缀的文件是 OBTC 新增的
 - `chaincfg/params_obtc.go`、`blockchain/expiryindex/`、`mining/reap/` 整个目录都是新的
+- 最新增量里重点看 `blockchain/expiryindex/{accumulator,commitment,muhash}.go`
 - 修改的上游文件可以通过 `git log --since="2025-10-01" -- <file>` 查看变更历史
 
 ### Q2：为什么 REAP 交易的版本是 3？
@@ -1573,9 +1754,19 @@ Day 5：重放保护 + 测试验证
 和普通交易一样：
 - `DisconnectBlock` 会恢复被 REAP 花费的 UTXO 到索引中
 - 新的最长链可能包含不同的 REAP 交易（因为候选集可能不同）
-- ExpiryIndex 的双向映射保证了重组后的一致性
+- ExpiryIndex 的双向映射和 MuHash accumulator 会一起回滚，保证重组后索引和 commitment root 一致
 
-### Q6：怎么在本地测试 REAP 功能？
+### Q6：如果我没开 `--expiryindex`，节点还会验证 expiry commitment 吗？
+
+会。最新版里 `--expiryindex` 只控制：
+- `listexpiring` / `getexpiryindexstats` 这类 scan/RPC 能力
+- 挖矿时是否使用扫描索引去构造 REAP 交易
+
+但在 **OBTC 网络** 上，`ExpiryIndex` 作为 expiry commitment 状态源会始终创建并维护。也就是说：
+- 不开 `--expiryindex` 不会关闭 expiry commitment 共识状态
+- 开不开这个开关，不应该影响区块有效性判断
+
+### Q7：怎么在本地测试 REAP 功能？
 
 ```bash
 # 1. 构建
@@ -1590,7 +1781,7 @@ go test ./blockchain/expiryindex/... -v -count=1
 go test ./blockchain/ -v -run TestReap -count=1
 ```
 
-### Q7：我想修改税率或到期窗口怎么办？
+### Q8：我想修改税率、到期窗口或 commitment 激活高度怎么办？
 
 修改 `chaincfg/params_obtc.go` 中对应网络的 `ExpiryParams`。注意：
 - 这些是**共识参数**，修改后需要所有节点同步更新
@@ -1599,6 +1790,6 @@ go test ./blockchain/ -v -run TestReap -count=1
 
 ---
 
-> 文档版本：v1.0
-> 生成日期：2026-03-06
-> 覆盖代码范围：2025-10-07 ~ 2026-03-03（136 次提交）
+> 文档版本：v1.1
+> 生成日期：2026-03-07
+> 覆盖代码范围：2025-10-07 ~ 2026-03-07（按 `git log --since="2025-10-01"` 统计 123 次提交）

@@ -1,217 +1,191 @@
-# Phase 6 计划（加速 Testnet 部署与观测）— 网络上线、三地域种子、最小观测面
+# Phase 6 计划（OBTC Testnet 部署与观测）— 按当前代码基线对齐
 
-> 修订（2026-02-11）：若 Week4/5 仍在稳定期，Week6 先做“私有 testnet + 单地域双节点 + 可复现部署”，三地域公网种子可顺延到 Week6.5，优先保证协议稳定性。
+> 对齐日期：2026-03-07
+> 目标：把 OBTC Testnet 以**当前 `master` 已有实现**为基线部署起来，并补足最小观测与接入文档。
 
-**时间预算：18–20 小时**｜**目标**：把 **OBTC-Testnet** 跑起来并稳定运行 7–10 天；提供最小观测（区块/节点/REAP 指标）；验证“到期→REAP→矿工收税”的**端到端**在公网可复现。
+## 1. 当前基线
 
----
+Phase 6 现在不能再按“新链创世生成”去理解。当前代码明确表明：
 
-## 🎯 本周目标（Definition of Done）
+- OBTC 是 **Bitcoin 的硬分叉**，不是独立新创世链；
+- `ObtcTestNetParams` 已经存在于 [`chaincfg/params_obtc.go`](/Users/pengyu/src/obtcd/chaincfg/params_obtc.go)；
+- Testnet 复用 **Bitcoin testnet3 genesis**，在 `ObtcTestNetForkHeight` 之后分叉；
+- 部署时应使用实际网络标志 `--obtctestnet`，不是文档里常见的 `--network=obtc-testnet` 写法。
 
-* 启用 **OBTC-Testnet**（独立网络参数、独立创世、独立端口/HRP/WIF/BIP32），**到期窗口=7 天**（仅 Testnet 加速）。
-* 3 台\*\*种子节点（不同地域）\*\*上线可联通：至少 **EU / US / AS**。
-* 发布 **Testnet 二进制 & Docker 镜像** + 一键接入文档。
-* 部署最小只读状态页（`obtc-status`），公开：高度、出块间隔、节点数、mempool、近 288 块 REAP 税额汇总。
-* 从外部新节点\*\*<2 小时内\*\*可同步到头。
-* 连续稳定出块 ≥ 72 小时（本周内先跑满 72h；7–10 天的长观测继续运行）。
+当前代码里的 Testnet 关键参数：
 
----
+| 项目 | 当前值 |
+|------|--------|
+| 网络名 | `obtctestnet` |
+| P2P 默认端口 | `19527` |
+| Bech32 HRP | `obtct` |
+| Fork Height | `2800000` |
+| `WindowBlocks` | `1008` |
+| `EnableAtHeight` | `ObtcTestNetForkHeight + 100` |
+| `ReapConsensusAtHeight` | `ObtcTestNetForkHeight + 120` |
+| `ReplayProtectionAtHeight` | `ObtcTestNetForkHeight + 130` |
+| `ReapMaxInputs` | `500` |
+| `ExpiryCommitmentEnableAtHeight` | `ObtcTestNetForkHeight + 100` |
 
-## 🗺️ 网络与参数（本周冻结）
+## 2. 当前缺口
 
-> Week1 已有 `params_obtc.go` 骨架；本周**填实并启用** Testnet 参数。
+这几个能力在仓库里**还没有现成实现**，文档不能再写成既成事实：
 
-* **网络名**：`obtc-testnet`
-* **魔数**：`wire.OBTCTestNet`（全新且与 BTC/Testnet/Regtest 不冲突，如 `0xF1C0B7D7`）
-* **默认端口**：P2P `19527`，RPC `19528`
-* **地址 HRP**：`"tbob"`（示例，避免与 `tb`/`bc` 混淆）
-* **WIF/BIP32**：自定义前缀（**不得**使用 BTC/xpub/xprv 前缀），写入 README 参数表
-* **到期窗口**：`ExpiryParams{Mode:ByHeight, WindowBlocks = 7d * 144 = 1008}`（按 10 分钟块间隔计算）
-* **PoW/难度**：开启 **AllowMinDifficultyBlocks=true**（类似 BTC Testnet 规则），便于低算力维持活性
-* **REAP 上限**：`MaxREAPInputsPerBlock`（例如 200） 与 `MaxReapTaxPerBlock`（例如 0.2 \* BlockSubsidy）
-* **DNSSeeds**：本周先用**静态 IP 种子**，`DNSSeeds` 留占位；若你有域名，可同时配置 `seed-eu.test.obtc.org` 等
+- 没有 `cmd/gengenesis/`
+- 没有 `cmd/checkgenesis/`
+- 没有 `cmd/obtc-status/`
+- 没有 `docs/testnet-join.md`
+- 没有专用 `tools/reap-audit.go`
 
----
+当前可直接复用的只有：
 
-## 🗂️ 本周交付物（Deliverables）
+- 节点二进制 `btcd`
+- 命令行 `btcctl`
+- 根目录 [`Dockerfile`](/Users/pengyu/src/obtcd/Dockerfile)
+- RPC：`getblockchaininfo`、`getpeerinfo`、`getmempoolinfo`、`getchaintips`、`listexpiring`、`getexpiryindexstats`
 
-* `chaincfg/params_obtc.go`：`OBTCTestNetParams` 填实并 `Register()` 生效
-* `cmd/gengenesis/`：创世生成器（输出创世哈希/merkle/nonce/时间戳；附校验器）
-* `build/`：Dockerfile、Compose、打包脚本（linux/amd64, darwin/arm64, windows/amd64）
-* `cmd/obtc-status/`：最小只读状态页（JSON/HTML）部署在每台种子上
-* `infra/`：`systemd` 单元与防火墙脚本；`seed-userdata.sh` 云主机一键初始化
-* `docs/testnet-join.md`：对外接入指南（端口/参数/校验/常见故障）
-* `docs/phase6-validation.md`：观测记录、同步用时、REAP 指标快照
+## 3. Phase 6 目标
 
----
+本阶段的目标应收敛为：
 
-## 🧩 任务拆解与时间分配（≤ 20h）
+1. 用现有 `ObtcTestNetParams` 跑起可连通的 Testnet 节点
+2. 把 placeholder DNS seeds 替换成真实种子
+3. 用现有 RPC 和日志提供最小观测
+4. 补齐接入文档和部署脚本
 
-### 1) 参数启用与创世冻结（4h）
+不应再把“新创世生成器”作为 Phase 6 前提。
 
-* **填实与启用** `OBTCTestNetParams`（见“网络与参数”）；`init() { Register(&OBTCTestNetParams) }`
-* **创世生成**：
+## 4. 交付物
 
-  * 写 `cmd/gengenesis/`：输入创世时间/消息，搜索 nonce（允许最小难度）
-  * 输出：`genesisHash`, `merkleRoot`, `time`, `bits`, `nonce`
-  * 同时生成 `genesis.json` + `genesis.h`（Go 常量）
-* **校验器**：`cmd/checkgenesis` 读取常量再算一遍，保证可复现
-* **DoD**：切到 `--net=obtc-testnet` 本地两节点能起链出块
+建议交付物改为：
 
-### 2) 构建产物与发布（3h）
+- `chaincfg/params_obtc.go`
+  - 核对并冻结 Testnet 参数
+  - 替换 placeholder DNS seeds
+- `docs/testnet-join.md`
+  - 节点接入、端口、校验、排错
+- `docs/phase6-validation.md`
+  - 同步耗时、互联情况、观测截图或日志摘要
+- `infra/` 或 `scripts/`
+  - 最小部署脚本
+  - `systemd` 示例
+  - 防火墙/端口说明
 
-* **CI**：在现有 Linux 任务上新增 **Testnet 构建步骤**；产出三平台二进制 + sha256 校验
-* **Dockerfile**：静态构建 `btcd` + `obtc-status`（scratch 或 distroless）
-* **Compose**：`docker compose up obtc-fullnode` 一键拉起（映射 P2P/RPC/STATUS 端口）
-* **DoD**：本地可 `docker run` 起完整节点并接入种子
+如果后续要做状态页，再单独作为新增项，不在本阶段默认前提里写死 `obtc-status`。
 
-### 3) 三地域种子节点部署（6h）
+## 5. 任务拆解
 
-* **云主机**：3 台（EU/US/AS），Ubuntu LTS，固定公网 IP
-* **初始化脚本** `infra/seed-userdata.sh`：
+### 5.1 Testnet 参数冻结
 
-  * 安装二进制到 `/opt/obtc/`
-  * 建立用户 `obtc`、数据目录 `/var/lib/obtc`
-  * 写入 `btcd.conf`（见下）
-  * 安装 `systemd` 单元并启动
-  * 开放防火墙：`ufw allow 19527/tcp`；RPC 仅 `localhost`
-* **`/etc/obtc/btcd.conf` 示例**
+重点核对：
 
-  ```
-  ; OBTCTestNet
-  addpeer=<EU-IP-OTHER-SEED>
-  addpeer=<US-IP-OTHER-SEED>
-  listen=0.0.0.0:19527
-  rpclisten=127.0.0.1:19528
-  nobanning=1
-  noblacklist=1
-  txindex=1
-  notls=1
-  network=obtc-testnet
-  ; P2P v1 only（如默认有 v2）
-  nov2=1
-  ```
-* **`systemd` 单元 `btcd.service`**
+- `DefaultPort = 19527`
+- `Bech32HRPSegwit = "obtct"`
+- `GenesisBlock = testNet3GenesisBlock`
+- `GenesisHash = testNet3GenesisHash`
+- `WindowBlocks = 1008`
+- `ReapMaxInputs = 500`
 
-  ```
-  [Unit]
-  Description=OBTC Testnet Node
-  After=network-online.target
+这里要特别注意：
 
-  [Service]
-  User=obtc
-  ExecStart=/opt/obtc/btcd --config=/etc/obtc/btcd.conf
-  Restart=on-failure
-  LimitNOFILE=1048576
+- 当前文档不能再写“生成新的 Testnet 创世”
+- 真正需要冻结的是 **fork height 之后的 OBTC 参数**，不是 genesis 本身
 
-  [Install]
-  WantedBy=multi-user.target
-  ```
-* **状态页服务** `obtc-status.service`（监听 `:28580` 只读）
+### 5.2 种子节点部署
 
-  * 展示：`height`, `hash`, `peerCount`, `mempoolSize`, `last10BlockIntervals`, `reapTax24h`, `reapInputs24h`
-* **DoD**：三台均为 **`addnode`/`connect` 目标**；互连可见，状态页可访问
+建议目标：
 
-### 4) 最小观测面与指标计算（3h）
+- 至少 2~3 台长期在线节点
+- 可先单地域双节点，再扩到 EU / US / AS
 
-* **节点端**：在出块时记录 REAP 蓝图/交易统计到日志（或导出内部 `/status` JSON）
-* **状态页聚合**：
+建议最小配置项：
 
-  * `GET /status.json`：
+```ini
+obtctestnet=1
+listen=0.0.0.0:19527
+rpclisten=127.0.0.1:19528
+txindex=1
+notls=1
+rpcuser=<user>
+rpcpass=<pass>
+addpeer=<seed1>
+addpeer=<seed2>
+```
 
-    ```json
-    {
-      "height":12345,
-      "median_block_interval_sec":612,
-      "peers":23,
-      "mempool":42,
-      "reap_last_288_blocks":{"count":198,"tax_sum": "12.34 OBTC","inputs": 3521}
-    }
-    ```
-* **离线脚本** `tools/reap-audit.go`：从 RPC 扫近 288 块，统计：
+### 5.3 最小观测
 
-  * **REAP 覆盖率** = 被 REAP 的到期 UTXO / 到期总数
-  * **REAP 积压** = 当前已过期但未被 REAP 的 UTXO 数
-  * **孤块率** = orphan / (main+orphan)
-* **DoD**：跑一次审计脚本输出 CSV/Markdown 表格，纳入 `docs/phase6-validation.md`
+当前最现实的做法是基于现有 RPC 拼出最小观测面：
 
-### 5) 外部接入指南与故障排查（2h）
+- `getblockchaininfo`：块高、best hash、difficulty
+- `getpeerinfo`：连接数
+- `getmempoolinfo`：mempool 规模
+- `getchaintips`：分叉/非 active tip
+- `listexpiring`：即将到期 UTXO 扫描
+- `getexpiryindexstats`：索引 tip 与规模
 
-* `docs/testnet-join.md`：
+注意：
 
-  * **下载**（二进制/Docker）、**校验**（sha256/minisign）
-  * **运行**：命令行 / Docker Compose
-  * **连种子**：三台 IP + 端口 `19527`（以及 `--network=obtc-testnet`）
-  * **FAQ**：同步慢、端口被占、时间不同步、无法连接某区域等
-* 截图：`obtc-status` 页、同步中日志
+- `listexpiring` / `getexpiryindexstats` 属于 **scan/RPC 能力**
+- 节点如果没开 `--expiryindex`，这些 RPC 不可用
+- 但 expiry commitment 共识状态仍然会维护，这两件事不能混为一谈
 
----
+因此：
 
-## 🚀 执行步骤速览（可直接用）
+- 至少要有一个“观测节点”显式开启 `--expiryindex`
+- 不是所有节点都必须开
 
-### A) 本地切换到 Testnet 验证
+### 5.4 接入文档
+
+`docs/testnet-join.md` 至少应包含：
+
+- `--obtctestnet` 启动方式
+- 默认 P2P 端口 `19527`
+- 地址前缀 `obtct`
+- RPC 示例
+- 常见错误
+  - 没连上 peers
+  - 忘了加 `--obtctestnet`
+  - 没开 `--expiryindex` 导致观测 RPC 不可用
+
+## 6. 验证命令
+
+### 本地双节点
 
 ```bash
-# 切换分支并构建
-git checkout obtc-main
 go build ./...
 
-# 起两节点（Testnet）
-./btcd --network=obtc-testnet --datadir=.obtc/node1 --listen=127.0.0.1:19527 --rpclisten=127.0.0.1:19528 --txindex --notls --rpcuser=u --rpcpass=p &
-./btcd --network=obtc-testnet --datadir=.obtc/node2 --listen=127.0.0.1:19529 --rpclisten=127.0.0.1:19530 --txindex --notls --rpcuser=u --rpcpass=p --connect=127.0.0.1:19527 &
+./btcd --obtctestnet --datadir=.obtc/node1 \
+  --listen=127.0.0.1:19527 \
+  --rpclisten=127.0.0.1:19528 \
+  --txindex --notls --rpcuser=u --rpcpass=p &
+
+./btcd --obtctestnet --datadir=.obtc/node2 \
+  --listen=127.0.0.1:19529 \
+  --rpclisten=127.0.0.1:19530 \
+  --txindex --notls --rpcuser=u --rpcpass=p \
+  --connect=127.0.0.1:19527 &
 ```
 
-### B) 容器化（单机）
+### 观测节点 RPC
 
 ```bash
-docker build -t obtc/node:tn .
-docker run -p 19527:19527 -p 19580:19580 obtc/node:tn  # P2P+状态页
+./cmd/btcctl/btcctl --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:19528 getblockchaininfo
+./cmd/btcctl/btcctl --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:19528 getpeerinfo
+./cmd/btcctl/btcctl --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:19528 getchaintips
+./cmd/btcctl/btcctl --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:19528 getexpiryindexstats
 ```
 
-### C) 观测脚本（示例）
+## 7. 完成标准（DoD）
 
-```bash
-go run tools/reap-audit.go --rpc=http://u:p@127.0.0.1:28556 --window=288 --out=docs/reap-288.csv
-```
+- [ ] Testnet 节点可使用 `--obtctestnet` 正常启动并互连
+- [ ] 文档不再要求“新创世生成器”作为前提
+- [ ] 至少 1 个观测节点开启 `--expiryindex` 并能提供 `getexpiryindexstats`
+- [ ] `docs/testnet-join.md` 落位
+- [ ] `docs/phase6-validation.md` 记录同步与互联结果
 
----
+## 8. 风险与约束
 
-## ✅ 本周验收清单（可勾选）
-
-* [ ] `OBTCTestNetParams` 启用且与主/回归网络**完全隔离**（魔数/端口/HRP/WIF/BIP32）
-* [ ] 生成并**冻结** Testnet 创世（哈希/时间/nonce/merkle）并写入校验器
-* [ ] 三地域种子节点在线，**互连可见**，`obtc-status` 可访问
-* [ ] 外部新节点 **< 2 小时** 同步到头
-* [ ] 公开**接入指南**（二进制+Docker+校验）
-* [ ] 72 小时内：**连续出块**、REAP 正常、审计脚本生成统计报告
-* [ ] `docs/phase6-validation.md` 附：高度曲线、出块间隔箱线图、REAP 24h 汇总、孤块率、积压曲线
-
----
-
-## 📊 运行期关键指标（7–10 天观测窗口）
-
-* **出块间隔**：中位数接近 600s（±20% 可接受）
-* **孤块率**：≤ 3%（短期波动允许 5% 峰值）
-* **REAP 覆盖率**：≥ 95%（到期后 N 块内被处理）
-* **REAP 积压**：稳定在**小于 MaxInputsPerBlock × 3**
-* **同步时间**：新节点 < 2h（带宽正常情况下）
-
----
-
-## 🧱 风险 & 预案
-
-* **算力不足/出块停滞**：启用 `AllowMinDifficultyBlocks`；必要时临时开启**自挖**辅助。
-* **链上参数错配**（地址/WIF/BIP32/魔数冲突）：**立即下线发布页**，回滚到上一个 tag，重新生成创世（Testnet 允许重启）。
-* **种子单点**：三地域**互为对等**，并在代码中写入多个 `addnode`；若一台故障，更新 README 去掉该 IP。
-* **观测缺失**：状态页挂了不影响出块；用审计脚本直连任一 RPC 节点补数。
-
----
-
-## 🧰 Cursor 助攻清单
-
-* 批量改写 `params_obtc.go` 与相关引用（HRP/WIF/BIP32/端口），自动生成常量表与 README 参数片段
-* 生成 `systemd` 单元、Dockerfile/Compose、`seed-userdata.sh`
-* 状态页与审计脚本的样板代码、JSON 结构与测试桩
-* 生成 `docs/testnet-join.md` 的模板（带命令区块与截图占位）
-
----
+- **placeholder seed 仍未替换**：外部接入会失败或不稳定
+- **把 scan/RPC 和 commitment 状态混淆**：会误判节点健康
+- **继续按新创世链理解 Testnet**：后续部署脚本和文档都会跑偏
+- **没有专用状态页**：本阶段先接受“RPC + 日志”的最小观测方案
