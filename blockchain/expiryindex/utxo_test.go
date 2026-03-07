@@ -42,55 +42,46 @@ func TestConnectTxOut(t *testing.T) {
 		t.Fatalf("Failed to initialize index: %v", err)
 	}
 
-	// Create test outpoint
-	hash, _ := chainhash.NewHashFromStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	outpoint := &wire.OutPoint{
-		Hash:  *hash,
-		Index: 0,
-	}
-
 	tests := []struct {
 		name         string
 		createHeight int32
-		expectError  bool
+		shouldIndex  bool
 	}{
 		{
 			name:         "valid height after fork",
-			createHeight: 150, // After ObtcRegTestForkHeight (100)
-			expectError:  false,
+			createHeight: 150,
+			shouldIndex:  true,
 		},
 		{
-			name:         "valid height at fork",
-			createHeight: 100, // At ObtcRegTestForkHeight
-			expectError:  false,
+			name:         "valid height near genesis",
+			createHeight: 1,
+			shouldIndex:  true,
 		},
 		{
-			name:         "height before fork (should skip)",
-			createHeight: 50,    // Before ObtcRegTestForkHeight
-			expectError:  false, // No error, but should be skipped
+			name:         "negative height should skip",
+			createHeight: -1,
+			shouldIndex:  false,
 		},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			hash, _ := chainhash.NewHashFromStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+			outpoint := &wire.OutPoint{
+				Hash:  *hash,
+				Index: uint32(i),
+			}
+
 			err = db.Update(func(dbTx database.Tx) error {
 				return idx.connectTxOut(dbTx, outpoint, test.createHeight)
 			})
-
-			if test.expectError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				}
-				return
-			}
 
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
 
-			// Verify the UTXO was added to the index (only if after fork)
-			if test.createHeight >= idx.expiryParams.StartScanHeight {
+			if test.shouldIndex {
 				err = db.View(func(dbTx database.Tx) error {
 					// Check outpoint-to-expiry mapping
 					outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
@@ -157,6 +148,22 @@ func TestConnectTxOut(t *testing.T) {
 				if err != nil {
 					t.Errorf("Verification failed: %v", err)
 				}
+				return
+			}
+
+			err = db.View(func(dbTx database.Tx) error {
+				outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
+				if outpointBucket == nil {
+					t.Error("Outpoint bucket not found")
+					return nil
+				}
+				if got := outpointBucket.Get(encodeOutPoint(outpoint)); got != nil {
+					t.Error("Outpoint should not have been indexed")
+				}
+				return nil
+			})
+			if err != nil {
+				t.Errorf("Skip verification failed: %v", err)
 			}
 		})
 	}

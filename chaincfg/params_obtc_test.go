@@ -469,6 +469,9 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			if p.WindowBlocks == 0 {
 				t.Fatalf("expected positive WindowBlocks")
 			}
+			if p.StartScanHeight != 0 {
+				t.Fatalf("expected StartScanHeight to begin at genesis, got %d", p.StartScanHeight)
+			}
 			if p.ReapConsensusAtHeight < p.EnableAtHeight {
 				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
 			}
@@ -477,6 +480,12 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			}
 			if p.ReapMaxInputs <= 0 {
 				t.Fatalf("expected positive ReapMaxInputs: %+v", p)
+			}
+			if p.ReapTaxNumerator <= 0 || p.ReapTaxDenominator <= 0 {
+				t.Fatalf("expected positive REAP tax parameters: %+v", p)
+			}
+			if p.ReapDustThresholdSat < 0 {
+				t.Fatalf("expected non-negative REAP dust threshold: %+v", p)
 			}
 		})
 	}

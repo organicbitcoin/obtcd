@@ -23,11 +23,14 @@ var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 type ExpiryParams struct {
 	WindowBlocks             uint64 // Expiry window in blocks
 	ListBatchLimit           int    // Max items returned in one RPC scan
-	StartScanHeight          int32  // Height to start building index
+	StartScanHeight          int32  // Height to start building index (genesis for OBTC)
 	EnableAtHeight           int32  // Height to enable expiry enforcement (Week 3+)
 	ReapConsensusAtHeight    int32  // Height to enforce canonical REAP ordering / limits
 	ReplayProtectionAtHeight int32  // Height to enforce OBTC replay-protected sighash domain
 	ReapMaxInputs            int    // Consensus max REAP inputs per transaction (0 = disabled)
+	ReapTaxNumerator         int64  // Consensus REAP tax numerator
+	ReapTaxDenominator       int64  // Consensus REAP tax denominator
+	ReapDustThresholdSat     int64  // Refunds for inputs below this value fold fully into tax
 
 	// ExpiryCommitmentEnableAtHeight is the height at which the expiry
 	// commitment in coinbase becomes mandatory. Before this height the
@@ -432,11 +435,14 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 		return &ExpiryParams{
 			WindowBlocks:                   362880, // 9! (factorial of 9) ≈ 6.91 years at 10min blocks
 			ListBatchLimit:                 10000,
-			StartScanHeight:                ObtcMainNetForkHeight,
+			StartScanHeight:                0,
 			EnableAtHeight:                 ObtcMainNetForkHeight + 100000, // Week 3+
 			ReapConsensusAtHeight:          ObtcMainNetForkHeight + 110000, // staged consensus hardening
 			ReplayProtectionAtHeight:       ObtcMainNetForkHeight + 115000, // staged replay-domain activation
 			ReapMaxInputs:                  256,
+			ReapTaxNumerator:               30,
+			ReapTaxDenominator:             100,
+			ReapDustThresholdSat:           720,
 			ExpiryCommitmentEnableAtHeight: ObtcMainNetForkHeight + 100000,
 		}
 
@@ -444,11 +450,14 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 		return &ExpiryParams{
 			WindowBlocks:                   1008, // ~1 week for testing (144 * 7)
 			ListBatchLimit:                 5000,
-			StartScanHeight:                ObtcTestNetForkHeight,
+			StartScanHeight:                0,
 			EnableAtHeight:                 ObtcTestNetForkHeight + 100,
 			ReapConsensusAtHeight:          ObtcTestNetForkHeight + 120,
 			ReplayProtectionAtHeight:       ObtcTestNetForkHeight + 130,
 			ReapMaxInputs:                  500,
+			ReapTaxNumerator:               30,
+			ReapTaxDenominator:             100,
+			ReapDustThresholdSat:           720,
 			ExpiryCommitmentEnableAtHeight: ObtcTestNetForkHeight + 100,
 		}
 
@@ -456,11 +465,14 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 		return &ExpiryParams{
 			WindowBlocks:                   144, // ~1 day for development
 			ListBatchLimit:                 1000,
-			StartScanHeight:                ObtcRegTestForkHeight,
+			StartScanHeight:                0,
 			EnableAtHeight:                 ObtcRegTestForkHeight + 10,
 			ReapConsensusAtHeight:          ObtcRegTestForkHeight + 12,
 			ReplayProtectionAtHeight:       ObtcRegTestForkHeight + 14,
 			ReapMaxInputs:                  200,
+			ReapTaxNumerator:               30,
+			ReapTaxDenominator:             100,
+			ReapDustThresholdSat:           720,
 			ExpiryCommitmentEnableAtHeight: ObtcRegTestForkHeight + 10,
 		}
 

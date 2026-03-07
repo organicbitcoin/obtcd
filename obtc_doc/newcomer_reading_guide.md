@@ -196,6 +196,9 @@ type ExpiryParams struct {
     ReapConsensusAtHeight           int32   // 启用规范 REAP 排序/限制的块高
     ReplayProtectionAtHeight        int32   // 启用重放保护的块高
     ReapMaxInputs                   int     // 共识级别的 REAP 最大输入数
+    ReapTaxNumerator                int64   // 共识级别的 REAP 税率分子
+    ReapTaxDenominator              int64   // 共识级别的 REAP 税率分母
+    ReapDustThresholdSat            int64   // 小额退款折叠为税的阈值
     ExpiryCommitmentEnableAtHeight  int32   // 开始强制 coinbase expiry commitment 的块高
 }
 ```
@@ -206,7 +209,7 @@ type ExpiryParams struct {
 |------|------|--------|-----------|
 | `WindowBlocks` | UTXO 从创建到到期经过的区块数 | 362,880（9! ≈ 6.91年） | 决定"到期"的定义 |
 | `ListBatchLimit` | RPC `listexpiring` 命令一次最多返回多少条 | 1000 | 防止 RPC 拒绝服务 |
-| `StartScanHeight` | ExpiryIndex 从哪个高度开始索引 | 分叉高度 | 分叉前的 UTXO 不需要索引 |
+| `StartScanHeight` | ExpiryIndex 从哪个高度开始索引 | genesis（0） | 共享历史上的老 UTXO 也会进入 expiry/REAP 扫描 |
 | `EnableAtHeight` | 到期规则从哪个高度生效 | 分叉高度+100,000 | 给用户缓冲期 |
 | `ReapConsensusAtHeight` | 强制 REAP 输入排序规范的高度 | 分叉高度+110,000 | 渐进激活共识规则 |
 | `ReplayProtectionAtHeight` | 重放保护激活高度 | 分叉高度+115,000 | 签名域分离 |
@@ -214,7 +217,7 @@ type ExpiryParams struct {
 | `ExpiryCommitmentEnableAtHeight` | 强制 coinbase 必须带 expiry commitment 的高度 | 网络参数定义值 | 让状态根进入共识承诺 |
 
 这三个高度现在要分开理解：
-- `StartScanHeight`：从这里开始维护索引和 accumulator
+- `StartScanHeight`：从这里开始维护索引和 accumulator；当前实现从 genesis 起生效
 - `EnableAtHeight`：从这里开始执行“普通交易不能花费已到期 UTXO、REAP 只能花费已到期 UTXO”
 - `ExpiryCommitmentEnableAtHeight`：从这里开始，区块必须在 coinbase 写入与本地前状态一致的 commitment
 

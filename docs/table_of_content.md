@@ -8,6 +8,8 @@
 * [Mining](mining.md)
 * [Wallet](wallet.md)
 * [Developer resources](developer_resources.md)
+* [OBTC Testnet Join Guide](testnet-join.md)
+* [Phase 6 Validation Report](phase6-validation.md)
 * [JSON RPC API](json_rpc_api.md)
 * [Code contribution guidelines](code_contribution_guidelines.md)
 * [Contact](contact.md)

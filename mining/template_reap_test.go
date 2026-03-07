@@ -19,7 +19,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-func createMiningTestExpiryIndexWithOutputs(t *testing.T, createBuckets bool, outputs int) (*expiryindex.ExpiryIndex, func()) {
+func createMiningTestExpiryIndexWithOutputsAtHeight(t *testing.T, createBuckets bool,
+	outputs int, blockHeight int32) (*expiryindex.ExpiryIndex, func()) {
 	t.Helper()
 	tmpDir, err := os.MkdirTemp("", "mining_reap_test_")
 	if err != nil {
@@ -63,7 +64,7 @@ func createMiningTestExpiryIndexWithOutputs(t *testing.T, createBuckets bool, ou
 			t.Fatalf("add tx: %v", err)
 		}
 		blk := btcutil.NewBlock(msgBlock)
-		blk.SetHeight(120)
+		blk.SetHeight(blockHeight)
 		if err := db.Update(func(dbTx database.Tx) error { return idx.ConnectBlock(dbTx, blk, nil) }); err != nil {
 			db.Close()
 			os.RemoveAll(tmpDir)
@@ -76,6 +77,10 @@ func createMiningTestExpiryIndexWithOutputs(t *testing.T, createBuckets bool, ou
 		os.RemoveAll(tmpDir)
 	}
 	return idx, teardown
+}
+
+func createMiningTestExpiryIndexWithOutputs(t *testing.T, createBuckets bool, outputs int) (*expiryindex.ExpiryIndex, func()) {
+	return createMiningTestExpiryIndexWithOutputsAtHeight(t, createBuckets, outputs, 120)
 }
 
 func createMiningTestExpiryIndex(t *testing.T) (*expiryindex.ExpiryIndex, func()) {
@@ -149,6 +154,23 @@ func TestCollectExpiredOutpointsDirect(t *testing.T) {
 	}
 	if len(ops) == 0 {
 		t.Fatalf("expected at least one expired outpoint")
+	}
+}
+
+func TestCollectExpiredOutpointsIncludesGenesisEraUTXO(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndexWithOutputsAtHeight(t, true, 1, 1)
+	defer teardown()
+
+	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
+	p := reap.DefaultREAPParams(reap.SortModeStrict)
+	p.ScanBatch = 10
+
+	ops, err := g.collectExpiredOutpoints(500, p)
+	if err != nil {
+		t.Fatalf("collectExpiredOutpoints failed: %v", err)
+	}
+	if len(ops) != 1 {
+		t.Fatalf("expected genesis-era utxo to be indexed and expirable, got %d candidates", len(ops))
 	}
 }
 

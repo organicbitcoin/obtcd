@@ -60,7 +60,7 @@ State_h = { (outpoint, expiry_height) }
 
 当前实现的作用域规则：
 
-- 创建高度必须满足 `create_height >= StartScanHeight`
+- `StartScanHeight` 目前是 genesis，因此历史共享链上的 UTXO 也会进入作用域
 - 区块连接时跳过 `txscript.IsUnspendable(pkScript)` 输出
 
 说明：

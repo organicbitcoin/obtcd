@@ -38,17 +38,29 @@ func DefaultREAPParamsForNet(net *chaincfg.Params, mode SortMode) REAPParams {
 		return p
 	}
 
+	if expiryParams := chaincfg.GetExpiryParams(net); expiryParams != nil {
+		if expiryParams.ReapMaxInputs > 0 {
+			p.MaxInputs = expiryParams.ReapMaxInputs
+		}
+		if expiryParams.ReapTaxNumerator > 0 {
+			p.TaxNum = expiryParams.ReapTaxNumerator
+		}
+		if expiryParams.ReapTaxDenominator > 0 {
+			p.TaxDen = expiryParams.ReapTaxDenominator
+		}
+		if expiryParams.ReapDustThresholdSat >= 0 {
+			p.DustThresholdSat = expiryParams.ReapDustThresholdSat
+		}
+	}
+
 	switch net.Net {
 	case chaincfg.ObtcMainNetParams.Net:
 		// Mainnet starts conservative to avoid starving normal transactions.
 		p.WeightBudget = 200_000
-		p.MaxInputs = 256
 	case chaincfg.ObtcRegTestParams.Net:
 		p.ScanBatch = 2_000
-		p.MaxInputs = 200
 	case chaincfg.ObtcTestNetParams.Net:
 		p.ScanBatch = 5_000
-		p.MaxInputs = 500
 	}
 
 	return p
