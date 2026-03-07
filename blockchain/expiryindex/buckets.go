@@ -54,7 +54,7 @@ var (
 const (
 	// CurrentIndexVersion tracks the current index format version
 	// Increment this when making breaking changes to the index format
-	CurrentIndexVersion = 2
+	CurrentIndexVersion = 3
 
 	// MaxOutpointsPerKey limits the size of outpoint lists to prevent
 	// unbounded memory usage for keys with many UTXOs

@@ -187,6 +187,93 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 	return nil
 }
 
+func reapTaxForValue(v int64, expiryParams *chaincfg.ExpiryParams) int64 {
+	if expiryParams == nil || v <= 0 || expiryParams.ReapTaxDenominator <= 0 ||
+		expiryParams.ReapTaxNumerator <= 0 {
+		return 0
+	}
+	return (v * expiryParams.ReapTaxNumerator) / expiryParams.ReapTaxDenominator
+}
+
+func applyReapDustRule(value, refund, tax int64,
+	expiryParams *chaincfg.ExpiryParams) (int64, int64) {
+
+	if expiryParams == nil || expiryParams.ReapDustThresholdSat <= 0 {
+		return refund, tax
+	}
+	if value > 0 && value < expiryParams.ReapDustThresholdSat {
+		return 0, value
+	}
+	return refund, tax
+}
+
+func checkReapTaxRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoint,
+	chainParams *chaincfg.Params) error {
+
+	if chainParams == nil || utxoView == nil || !isLikelyReapTx(tx) {
+		return nil
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(chainParams)
+	if expiryParams == nil || txHeight < expiryParams.EnableAtHeight {
+		return nil
+	}
+
+	expectedRefundByScript := make(map[string]int64)
+	var expectedRefundTotal int64
+
+	for _, txIn := range tx.TxIn {
+		utxo := utxoView.LookupEntry(txIn.PreviousOutPoint)
+		if utxo == nil || utxo.IsSpent() {
+			return ruleError(ErrMissingTxOut, fmt.Sprintf(
+				"utxo %v missing from view during reap tax check",
+				txIn.PreviousOutPoint))
+		}
+
+		value := utxo.Amount()
+		tax := reapTaxForValue(value, expiryParams)
+		refund := value - tax
+		if refund < 0 {
+			return ruleError(ErrBadTxOutValue, "reap refund amount is negative")
+		}
+		refund, _ = applyReapDustRule(value, refund, tax, expiryParams)
+		if refund > 0 {
+			expectedRefundByScript[string(utxo.PkScript())] += refund
+		}
+		expectedRefundTotal += refund
+	}
+
+	actualRefundByScript := make(map[string]int64)
+	var actualRefundTotal int64
+	for _, txOut := range tx.TxOut[:len(tx.TxOut)-1] {
+		if txOut.Value <= 0 {
+			return ruleError(ErrBadTxOutValue,
+				"reap refund outputs must be positive")
+		}
+		actualRefundByScript[string(txOut.PkScript)] += txOut.Value
+		actualRefundTotal += txOut.Value
+	}
+
+	if actualRefundTotal != expectedRefundTotal {
+		return ruleError(ErrBadTxOutValue, fmt.Sprintf(
+			"reap refund total mismatch: got %d want %d",
+			actualRefundTotal, expectedRefundTotal))
+	}
+	if len(actualRefundByScript) != len(expectedRefundByScript) {
+		return ruleError(ErrBadTxOutValue,
+			"reap refund output set does not match expected distribution")
+	}
+
+	for script, expected := range expectedRefundByScript {
+		if got, ok := actualRefundByScript[script]; !ok || got != expected {
+			return ruleError(ErrBadTxOutValue,
+				"reap refund output set does not match expected distribution")
+		}
+	}
+
+	return nil
+}
+
 func checkExpirySpendRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoint,
 	chainParams *chaincfg.Params) error {
 

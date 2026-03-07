@@ -170,17 +170,14 @@ func (idx *ExpiryIndex) Init() error {
 
 	// Open a read transaction to get the current tip height
 	var indexTipHeight int32 = -1
+	var storedVersion uint16
 	err := idx.db.View(func(dbTx database.Tx) error {
 		// Check index version compatibility
 		version, err := dbGetIndexVersion(dbTx)
 		if err != nil {
 			return fmt.Errorf("failed to get index version: %v", err)
 		}
-
-		if version != 0 && version != CurrentIndexVersion {
-			return fmt.Errorf("index version mismatch: got %d, expected %d",
-				version, CurrentIndexVersion)
-		}
+		storedVersion = version
 
 		// Get the current tip height
 		indexTipHeight, err = dbGetTipHeightIndexed(dbTx)
@@ -193,6 +190,24 @@ func (idx *ExpiryIndex) Init() error {
 
 	if err != nil {
 		return err
+	}
+
+	if storedVersion != 0 && storedVersion != CurrentIndexVersion {
+		log.Infof("ExpiryIndex: resetting index for version upgrade %d -> %d",
+			storedVersion, CurrentIndexVersion)
+		err = idx.db.Update(func(dbTx database.Tx) error {
+			if err := idx.clearIndexBuckets(dbTx); err != nil {
+				return err
+			}
+			if err := dbPutTipHeightIndexed(dbTx, -1); err != nil {
+				return err
+			}
+			return dbPutIndexVersion(dbTx, CurrentIndexVersion)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to reset index for version upgrade: %v", err)
+		}
+		indexTipHeight = -1
 	}
 
 	// Set the current tip height
@@ -397,6 +412,9 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 						stxoIdx, len(stxos), txIdx, vinIdx)
 				}
 				stxo := stxos[stxoIdx]
+				if stxo.Height < idx.expiryParams.StartScanHeight {
+					continue
+				}
 
 				// Re-add to accumulator (reverse of the Remove done in ConnectBlock).
 				op := &txIn.PreviousOutPoint
@@ -434,6 +452,9 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 // connectTxOut adds a new UTXO to the expiry index
 func (idx *ExpiryIndex) connectTxOut(dbTx database.Tx, outpoint *wire.OutPoint,
 	createHeight int32) error {
+	if createHeight < idx.expiryParams.StartScanHeight {
+		return nil
+	}
 
 	// Calculate the expiry key for this UTXO
 	expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)

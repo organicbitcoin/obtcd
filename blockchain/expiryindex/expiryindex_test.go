@@ -174,6 +174,68 @@ func TestExpiryIndexInit(t *testing.T) {
 	}
 }
 
+func TestExpiryIndexInitResetsOnVersionMismatch(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+
+	if err := db.Update(func(dbTx database.Tx) error {
+		if err := idx.Create(dbTx); err != nil {
+			return err
+		}
+		if err := dbPutIndexVersion(dbTx, CurrentIndexVersion-1); err != nil {
+			return err
+		}
+		if err := dbPutTipHeightIndexed(dbTx, 42); err != nil {
+			return err
+		}
+		return dbTx.Metadata().Bucket(bktOutpoint2Expiry).Put([]byte("stale"), []byte("value"))
+	}); err != nil {
+		t.Fatalf("Failed to seed stale index data: %v", err)
+	}
+
+	if err := idx.Init(); err != nil {
+		t.Fatalf("Init should reset stale index instead of failing: %v", err)
+	}
+
+	if idx.curTipHeight != -1 {
+		t.Fatalf("expected reset tip height -1, got %d", idx.curTipHeight)
+	}
+
+	if err := db.View(func(dbTx database.Tx) error {
+		version, err := dbGetIndexVersion(dbTx)
+		if err != nil {
+			return err
+		}
+		if version != CurrentIndexVersion {
+			t.Fatalf("version mismatch after reset: got %d want %d", version, CurrentIndexVersion)
+		}
+
+		tip, err := dbGetTipHeightIndexed(dbTx)
+		if err != nil {
+			return err
+		}
+		if tip != -1 {
+			t.Fatalf("expected cleared tip height -1, got %d", tip)
+		}
+
+		if got := dbTx.Metadata().Bucket(bktOutpoint2Expiry).Get([]byte("stale")); got != nil {
+			t.Fatalf("stale index entry should have been cleared")
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatalf("Failed to verify reset state: %v", err)
+	}
+}
+
 // TestExpiryCalculation tests UTXO expiry calculations
 func TestExpiryCalculation(t *testing.T) {
 	tests := []struct {

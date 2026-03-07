@@ -24,8 +24,8 @@ type ExpiryParams struct {
 	// This prevents excessive memory usage and long-running queries
 	ListBatchLimit int
 
-	// StartScanHeight is the block height at which to start building the index
-	// This should typically be set to the OBTC fork height
+	// StartScanHeight is the block height at which to start building the index.
+	// OBTC now indexes from genesis so pre-fork UTXOs also participate in expiry.
 	StartScanHeight int32
 
 	// EnableAtHeight is the block height at which expiry enforcement begins

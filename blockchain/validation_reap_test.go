@@ -14,6 +14,57 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
+func makeValidReapTx(t *testing.T, view *UtxoViewpoint, height int32,
+	inputs ...wire.OutPoint) *wire.MsgTx {
+
+	t.Helper()
+
+	tx := wire.NewMsgTx(reapTxVersion)
+	for _, op := range inputs {
+		tx.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if expiryParams == nil {
+		t.Fatalf("expected expiry params")
+	}
+
+	refundByScript := make(map[string]int64)
+	for _, op := range inputs {
+		entry := view.LookupEntry(op)
+		if entry == nil || entry.IsSpent() {
+			t.Fatalf("missing utxo for reap test input %v", op)
+		}
+		amount := entry.Amount()
+		tax := reapTaxForValue(amount, expiryParams)
+		refund := amount - tax
+		if refund < 0 {
+			t.Fatalf("negative refund for input %v", op)
+		}
+		refund, _ = applyReapDustRule(amount, refund, tax, expiryParams)
+		if refund > 0 {
+			refundByScript[string(entry.PkScript())] += refund
+		}
+	}
+
+	scripts := make([]string, 0, len(refundByScript))
+	for script := range refundByScript {
+		scripts = append(scripts, script)
+	}
+	sort.Slice(scripts, func(i, j int) bool {
+		return bytes.Compare([]byte(scripts[i]), []byte(scripts[j])) < 0
+	})
+	for _, script := range scripts {
+		tx.AddTxOut(&wire.TxOut{
+			Value:    refundByScript[script],
+			PkScript: []byte(script),
+		})
+	}
+
+	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, height)})
+	return tx
+}
+
 func addUtxoToView(t *testing.T, view *UtxoViewpoint, value int64, height int32) wire.OutPoint {
 	t.Helper()
 	tx := wire.NewMsgTx(1)
@@ -153,11 +204,8 @@ func TestREAPCanonicalInputOrderEnforced(t *testing.T) {
 	highAmount := addUtxoToView(t, view, 2000, 1)
 	lowAmount := addUtxoToView(t, view, 1000, 1)
 
-	tx := wire.NewMsgTx(reapTxVersion)
 	// Wrong strict order: same expiry but larger amount comes first.
-	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: highAmount})
-	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: lowAmount})
-	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+	tx := makeValidReapTx(t, view, 500, highAmount, lowAmount)
 
 	_, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams)
 	if err == nil || !strings.Contains(err.Error(), "canonical order") {
@@ -170,10 +218,7 @@ func TestREAPCanonicalInputOrderAcceptedWhenSorted(t *testing.T) {
 	highAmount := addUtxoToView(t, view, 2000, 1)
 	lowAmount := addUtxoToView(t, view, 1000, 1)
 
-	tx := wire.NewMsgTx(reapTxVersion)
-	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: lowAmount})
-	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: highAmount})
-	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+	tx := makeValidReapTx(t, view, 500, lowAmount, highAmount)
 
 	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams); err != nil {
 		t.Fatalf("expected sorted reap tx to pass, got: %v", err)
@@ -200,15 +245,49 @@ func TestREAPInputCountConsensusLimit(t *testing.T) {
 		return inputs[i].Index < inputs[j].Index
 	})
 
-	tx := wire.NewMsgTx(reapTxVersion)
-	for _, op := range inputs {
-		tx.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
-	}
-	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+	tx := makeValidReapTx(t, view, 500, inputs...)
 
 	_, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams)
 	if err == nil || !strings.Contains(err.Error(), "exceeds consensus limit") {
 		t.Fatalf("expected reap input count limit rejection, got: %v", err)
+	}
+}
+
+func TestREAPExpiredSpendRequiresExpectedRefundDistribution(t *testing.T) {
+	view := NewUtxoViewpoint()
+	op := addUtxoToView(t, view, 1000, 1)
+
+	tx := wire.NewMsgTx(reapTxVersion)
+	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
+	tx.AddTxOut(&wire.TxOut{Value: 1000, PkScript: []byte{txscript.OP_TRUE}})
+	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 500)})
+
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams)
+	if err == nil || !strings.Contains(err.Error(), "refund total mismatch") {
+		t.Fatalf("expected reap refund mismatch rejection, got: %v", err)
+	}
+}
+
+func TestREAPExpiredSpendWithExpectedRefundAccepted(t *testing.T) {
+	view := NewUtxoViewpoint()
+	op := addUtxoToView(t, view, 1000, 1)
+
+	tx := makeValidReapTx(t, view, 500, op)
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("expected valid reap tax distribution, got: %v", err)
+	}
+}
+
+func TestREAPExpiredDustOnlyInputAcceptedWithoutRefundOutput(t *testing.T) {
+	view := NewUtxoViewpoint()
+	op := addUtxoToView(t, view, 700, 1) // below 720 dust threshold -> full tax
+
+	tx := makeValidReapTx(t, view, 500, op)
+	if len(tx.TxOut) != 1 {
+		t.Fatalf("expected dust-only reap tx to contain only marker output, got %d outputs", len(tx.TxOut))
+	}
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("expected dust-only reap tx to pass, got: %v", err)
 	}
 }
 
