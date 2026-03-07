@@ -432,18 +432,19 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 
 	switch params.Net {
 	case wire.ObtcMainNet:
+		mainnetActivationHeight := ObtcMainNetForkHeight + 2016 // one retarget window after fork
 		return &ExpiryParams{
 			WindowBlocks:                   362880, // 9! (factorial of 9) ≈ 6.91 years at 10min blocks
 			ListBatchLimit:                 10000,
 			StartScanHeight:                0,
-			EnableAtHeight:                 ObtcMainNetForkHeight + 100000, // Week 3+
-			ReapConsensusAtHeight:          ObtcMainNetForkHeight + 110000, // staged consensus hardening
-			ReplayProtectionAtHeight:       ObtcMainNetForkHeight + 115000, // staged replay-domain activation
+			EnableAtHeight:                 mainnetActivationHeight,
+			ReapConsensusAtHeight:          mainnetActivationHeight,
+			ReplayProtectionAtHeight:       mainnetActivationHeight,
 			ReapMaxInputs:                  256,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
-			ExpiryCommitmentEnableAtHeight: ObtcMainNetForkHeight + 100000,
+			ExpiryCommitmentEnableAtHeight: mainnetActivationHeight,
 		}
 
 	case wire.ObtcTestNet:
