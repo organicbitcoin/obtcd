@@ -243,8 +243,9 @@ func TestConnectBlockBasic(t *testing.T) {
 		t.Fatalf("Failed to initialize index: %v", err)
 	}
 
-	// Create a test block
-	block := createTestBlock(t, 150) // Height after fork point
+	// Create a test block with identity commitment (accumulator starts empty).
+	identityRoot := NewMuHash().Digest()
+	block := createTestBlockWithCommitment(t, 150, &identityRoot) // Height after fork point
 
 	// Connect the block
 	err = db.Update(func(dbTx database.Tx) error {
@@ -298,8 +299,9 @@ func TestConnectDisconnectBlock(t *testing.T) {
 		t.Fatalf("Failed to initialize index: %v", err)
 	}
 
-	// Create a test block
-	block := createTestBlock(t, 150)
+	// Create a test block with identity commitment (accumulator starts empty).
+	identityRoot := NewMuHash().Digest()
+	block := createTestBlockWithCommitment(t, 150, &identityRoot)
 
 	var originalStats *ExpiryIndexStats
 
@@ -348,6 +350,14 @@ func TestConnectDisconnectBlock(t *testing.T) {
 
 // createTestBlock creates a test block with the given height
 func createTestBlock(t *testing.T, height int32) *btcutil.Block {
+	return createTestBlockWithCommitment(t, height, nil)
+}
+
+// createTestBlockWithCommitment creates a test block, optionally embedding
+// an expiry commitment. If root is non-nil, a commitment output is added.
+func createTestBlockWithCommitment(t *testing.T, height int32, root *[AccumulatorDigestSize]byte) *btcutil.Block {
+	t.Helper()
+
 	// Create a block header
 	prevHash, _ := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
 	merkleRoot, _ := chainhash.NewHashFromStr("1111111111111111111111111111111111111111111111111111111111111111")
@@ -378,6 +388,14 @@ func createTestBlock(t *testing.T, height int32) *btcutil.Block {
 			},
 		},
 		LockTime: 0,
+	}
+
+	// Add expiry commitment output if root is provided.
+	if root != nil {
+		coinbaseTx.TxOut = append(coinbaseTx.TxOut, &wire.TxOut{
+			Value:    0,
+			PkScript: BuildExpiryCommitmentScript(*root),
+		})
 	}
 
 	// Create a block

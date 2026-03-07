@@ -876,6 +876,19 @@ mempoolLoop:
 		witnessCommitment = AddWitnessCommitment(coinbaseTx, blockTxns)
 	}
 
+	// If the expiry commitment is active, embed Root_{n-1} in the coinbase.
+	if g.reapIndex != nil {
+		ep := chaincfg.GetExpiryParams(g.chainParams)
+		if ep != nil && nextBlockHeight >= ep.ExpiryCommitmentEnableAtHeight {
+			root, err := g.reapIndex.GetAccumulatorDigest()
+			if err != nil {
+				log.Warnf("Failed to get expiry accumulator digest: %v", err)
+			} else {
+				AddExpiryCommitment(coinbaseTx, root)
+			}
+		}
+	}
+
 	// Calculate the required difficulty for the block.  The timestamp
 	// is potentially adjusted to ensure it comes after the median time of
 	// the last several blocks per the chain consensus rules.
@@ -970,6 +983,16 @@ func AddWitnessCommitment(coinbaseTx *btcutil.Tx,
 		commitmentOutput)
 
 	return witnessCommitment
+}
+
+// AddExpiryCommitment adds the expiry state root commitment as an OP_RETURN
+// output within the coinbase tx. The root is the pre-state Root_{n-1}.
+func AddExpiryCommitment(coinbaseTx *btcutil.Tx, root [expiryindex.AccumulatorDigestSize]byte) {
+	commitmentOutput := &wire.TxOut{
+		Value:    0,
+		PkScript: expiryindex.BuildExpiryCommitmentScript(root),
+	}
+	coinbaseTx.MsgTx().TxOut = append(coinbaseTx.MsgTx().TxOut, commitmentOutput)
 }
 
 // UpdateBlockTime updates the timestamp in the header of the passed block to

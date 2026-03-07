@@ -31,6 +31,10 @@ type ExpiryParams struct {
 	// EnableAtHeight is the block height at which expiry enforcement begins
 	// This allows the index to be built before enforcement starts (Week 3+)
 	EnableAtHeight int32
+
+	// ExpiryCommitmentEnableAtHeight is the height at which the expiry
+	// commitment in coinbase becomes mandatory.
+	ExpiryCommitmentEnableAtHeight int32
 }
 
 // GetExpiryParams returns expiry parameters for the given network.
@@ -44,10 +48,11 @@ func GetExpiryParams(params *chaincfg.Params) *ExpiryParams {
 
 	// Convert chaincfg.ExpiryParams to expiryindex.ExpiryParams
 	return &ExpiryParams{
-		WindowBlocks:    cfg.WindowBlocks,
-		ListBatchLimit:  cfg.ListBatchLimit,
-		StartScanHeight: cfg.StartScanHeight,
-		EnableAtHeight:  cfg.EnableAtHeight,
+		WindowBlocks:                   cfg.WindowBlocks,
+		ListBatchLimit:                 cfg.ListBatchLimit,
+		StartScanHeight:                cfg.StartScanHeight,
+		EnableAtHeight:                 cfg.EnableAtHeight,
+		ExpiryCommitmentEnableAtHeight: cfg.ExpiryCommitmentEnableAtHeight,
 	}
 }
 

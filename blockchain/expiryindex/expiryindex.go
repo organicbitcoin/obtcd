@@ -209,7 +209,11 @@ func (idx *ExpiryIndex) Init() error {
 
 // ConnectBlock is invoked by the index manager when a new block has been
 // connected to the main chain. This indexer adds entries for all the new
-// UTXOs created by the block.
+// UTXOs created by the block and maintains the MuHash accumulator.
+//
+// If the expiry commitment is active at this height, the pre-state root
+// (i.e. Root_{n-1}) is validated against the coinbase commitment before
+// processing any transactions.
 func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 	stxos []blockchain.SpentTxOut) error {
 
@@ -225,8 +229,20 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 		return dbPutTipHeightIndexed(dbTx, blockHeight)
 	}
 
-	// Process all transactions in the block
+	// Load current accumulator state (represents Root_{n-1}).
+	mh, err := dbGetAccumulatorState(dbTx)
+	if err != nil {
+		return fmt.Errorf("failed to load accumulator: %v", err)
+	}
+
+	// Validate the expiry commitment before processing (pre-state commitment).
+	if err := idx.validateExpiryCommitment(block, mh.Digest()); err != nil {
+		return err
+	}
+
+	// Process all transactions in the block.
 	blockHash := block.Hash()
+	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
 	for txIdx, tx := range block.Transactions() {
 		msgTx := tx.MsgTx()
 
@@ -234,20 +250,35 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 		if !blockchain.IsCoinBaseTx(msgTx) {
 			// Process spent UTXOs (remove from index)
 			for _, txIn := range msgTx.TxIn {
-				if err := idx.disconnectTxOut(dbTx, &txIn.PreviousOutPoint); err != nil {
+				op := &txIn.PreviousOutPoint
+
+				// Update accumulator before removing from index.
+				encodedEK := outpointBucket.Get(encodeOutPoint(op))
+				if encodedEK != nil {
+					ek, _ := decodeExpiryKey(encodedEK)
+					mh.Remove(computeEntryData(op, ek))
+				}
+
+				if err := idx.disconnectTxOut(dbTx, op); err != nil {
 					return fmt.Errorf("failed to disconnect txout %v: %v",
 						txIn.PreviousOutPoint, err)
 				}
 			}
 		}
 
-		// Process new UTXOs (add to index)
-		for voutIdx := range msgTx.TxOut {
-			// Create outpoint for this output
+		// Process new UTXOs (add to index), skip provably unspendable outputs.
+		for voutIdx, txOut := range msgTx.TxOut {
+			if isUnspendable(txOut.PkScript) {
+				continue
+			}
+
 			outpoint := &wire.OutPoint{
 				Hash:  *tx.Hash(),
 				Index: uint32(voutIdx),
 			}
+
+			expiryKey := idx.expiryParams.CalculateExpiryKey(blockHeight)
+			mh.Add(computeEntryData(outpoint, expiryKey))
 
 			if err := idx.connectTxOut(dbTx, outpoint, blockHeight); err != nil {
 				return fmt.Errorf("failed to connect txout %v: %v", outpoint, err)
@@ -259,6 +290,11 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 			log.Debugf("Processed %d/%d transactions in block %v",
 				txIdx, len(block.Transactions()), blockHash)
 		}
+	}
+
+	// Store updated accumulator (now represents Root_n).
+	if err := dbPutAccumulatorState(dbTx, mh); err != nil {
+		return fmt.Errorf("failed to store accumulator: %v", err)
 	}
 
 	// Update the tip height
@@ -274,7 +310,7 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 // DisconnectBlock is invoked by the index manager when a block has been
 // disconnected from the main chain. This indexer removes entries for all
-// the UTXOs created by the block.
+// the UTXOs created by the block and rolls back the MuHash accumulator.
 func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	stxos []blockchain.SpentTxOut) error {
 
@@ -289,6 +325,12 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	if !idx.expiryParams.IsIndexingEnabled(blockHeight) {
 		// Update tip height but don't process the block
 		return dbPutTipHeightIndexed(dbTx, blockHeight-1)
+	}
+
+	// Load current accumulator state.
+	mh, err := dbGetAccumulatorState(dbTx)
+	if err != nil {
+		return fmt.Errorf("failed to load accumulator: %v", err)
 	}
 
 	// Process all transactions in the block.
@@ -313,19 +355,26 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 		tx := transactions[txIdx]
 		msgTx := tx.MsgTx()
 
-		// Remove new UTXOs that were created by this block
+		// Remove new UTXOs that were created by this block (reverse of Add).
 		for voutIdx := len(msgTx.TxOut) - 1; voutIdx >= 0; voutIdx-- {
+			if isUnspendable(msgTx.TxOut[voutIdx].PkScript) {
+				continue
+			}
+
 			outpoint := &wire.OutPoint{
 				Hash:  *tx.Hash(),
 				Index: uint32(voutIdx),
 			}
+
+			expiryKey := idx.expiryParams.CalculateExpiryKey(blockHeight)
+			mh.Remove(computeEntryData(outpoint, expiryKey))
 
 			if err := idx.disconnectTxOut(dbTx, outpoint); err != nil {
 				return fmt.Errorf("failed to disconnect txout %v: %v", outpoint, err)
 			}
 		}
 
-		// Restore spent UTXOs (re-add to index).
+		// Restore spent UTXOs (re-add to index, reverse of Remove).
 		// Skip coinbase (txIdx 0) as it doesn't spend existing UTXOs.
 		if txIdx != 0 {
 			baseOffset := stxoOffsets[txIdx]
@@ -336,13 +385,23 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 						stxoIdx, len(stxos), txIdx, vinIdx)
 				}
 				stxo := stxos[stxoIdx]
-				if err := idx.connectTxOut(dbTx, &txIn.PreviousOutPoint,
-					stxo.Height); err != nil {
+
+				// Re-add to accumulator (reverse of the Remove done in ConnectBlock).
+				op := &txIn.PreviousOutPoint
+				expiryKey := idx.expiryParams.CalculateExpiryKey(stxo.Height)
+				mh.Add(computeEntryData(op, expiryKey))
+
+				if err := idx.connectTxOut(dbTx, op, stxo.Height); err != nil {
 					return fmt.Errorf("failed to reconnect txout %v: %v",
 						txIn.PreviousOutPoint, err)
 				}
 			}
 		}
+	}
+
+	// Store rolled-back accumulator (now represents Root_{n-1}).
+	if err := dbPutAccumulatorState(dbTx, mh); err != nil {
+		return fmt.Errorf("failed to store accumulator: %v", err)
 	}
 
 	// Update the tip height
@@ -461,6 +520,95 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 	}
 
 	return nil
+}
+
+// isUnspendable returns true if the given pkScript is provably unspendable.
+// These outputs (e.g. OP_RETURN) are not added to the UTXO set and should
+// not be tracked by the expiry index.
+func isUnspendable(pkScript []byte) bool {
+	// OP_RETURN scripts and empty scripts are unspendable.
+	if len(pkScript) == 0 {
+		return true
+	}
+	return pkScript[0] == 0x6a // txscript.OP_RETURN
+}
+
+// isCommitmentActive returns true if the expiry commitment is mandatory
+// at the given block height.
+func (idx *ExpiryIndex) isCommitmentActive(height int32) bool {
+	h := idx.expiryParams.ExpiryCommitmentEnableAtHeight
+	return h > 0 && height >= h
+}
+
+// validateExpiryCommitment checks the expiry commitment in the coinbase
+// transaction against the expected pre-state root.
+//
+// Before the activation height, this is a no-op. After activation, blocks
+// must contain exactly one valid expiry commitment matching the expected root.
+func (idx *ExpiryIndex) validateExpiryCommitment(
+	block *btcutil.Block, expectedRoot [AccumulatorDigestSize]byte) error {
+
+	blockHeight := block.Height()
+	if !idx.isCommitmentActive(blockHeight) {
+		return nil
+	}
+
+	coinbaseTx := block.Transactions()[0]
+
+	// Check for duplicate commitments.
+	if CountExpiryCommitments(coinbaseTx) > 1 {
+		return blockchain.RuleError{
+			ErrorCode:   blockchain.ErrBadExpiryCommitmentDuplicate,
+			Description: fmt.Sprintf("block %d has multiple expiry commitments", blockHeight),
+		}
+	}
+
+	// Extract the commitment.
+	version, root, found := ExtractExpiryCommitment(coinbaseTx)
+	if !found {
+		return blockchain.RuleError{
+			ErrorCode:   blockchain.ErrBadExpiryCommitmentMissing,
+			Description: fmt.Sprintf("block %d missing required expiry commitment", blockHeight),
+		}
+	}
+
+	// Check version.
+	if version != ExpiryCommitmentVersion {
+		return blockchain.RuleError{
+			ErrorCode: blockchain.ErrBadExpiryCommitmentFormat,
+			Description: fmt.Sprintf("block %d has unsupported expiry commitment version %d",
+				blockHeight, version),
+		}
+	}
+
+	// Compare root.
+	if root != expectedRoot {
+		return blockchain.RuleError{
+			ErrorCode: blockchain.ErrBadExpiryCommitmentMismatch,
+			Description: fmt.Sprintf("block %d expiry commitment mismatch: "+
+				"coinbase=%x, expected=%x", blockHeight, root, expectedRoot),
+		}
+	}
+
+	return nil
+}
+
+// GetAccumulatorDigest returns the current MuHash digest (Root at current tip).
+// Used by mining code to read Root_{n-1} for embedding in block n's coinbase.
+func (idx *ExpiryIndex) GetAccumulatorDigest() ([AccumulatorDigestSize]byte, error) {
+	var digest [AccumulatorDigestSize]byte
+	if idx.disabled {
+		return digest, fmt.Errorf("expiry index is disabled")
+	}
+	err := idx.db.View(func(dbTx database.Tx) error {
+		mh, err := dbGetAccumulatorState(dbTx)
+		if err != nil {
+			return err
+		}
+		digest = mh.Digest()
+		return nil
+	})
+	return digest, err
 }
 
 // ScanExpiringUTXOs scans for UTXOs expiring within the specified range.
@@ -733,12 +881,17 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		return fmt.Errorf("failed to clear index buckets: %v", err)
 	}
 
-	// Iterate all UTXOs and add qualifying entries.
+	// Iterate all UTXOs and add qualifying entries, building the
+	// MuHash accumulator in memory alongside the index.
+	mh := NewMuHash()
 	populateErr := idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
 		// Only index UTXOs created at or after the scan start height.
 		if createHeight < idx.expiryParams.StartScanHeight {
 			return nil
 		}
+
+		expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)
+		mh.Add(computeEntryData(&outpoint, expiryKey))
 
 		err := idx.db.Update(func(dbTx database.Tx) error {
 			return idx.connectTxOut(dbTx, &outpoint, createHeight)
@@ -766,8 +919,11 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		return populateErr
 	}
 
-	// Mark index as complete.
+	// Mark index as complete and store the accumulator.
 	err = idx.db.Update(func(dbTx database.Tx) error {
+		if err := dbPutAccumulatorState(dbTx, mh); err != nil {
+			return fmt.Errorf("failed to store accumulator: %v", err)
+		}
 		if err := dbPutTipHeightIndexed(dbTx, chainTipHeight); err != nil {
 			return fmt.Errorf("failed to update tip height: %v", err)
 		}
@@ -864,6 +1020,11 @@ func (idx *ExpiryIndex) clearIndexBuckets(dbTx database.Tx) error {
 			}
 			found = cursor.Next()
 		}
+	}
+
+	// Reset accumulator to identity state.
+	if err := dbPutAccumulatorState(dbTx, NewMuHash()); err != nil {
+		return fmt.Errorf("failed to reset accumulator: %v", err)
 	}
 
 	return nil

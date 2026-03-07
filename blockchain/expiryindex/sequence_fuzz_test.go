@@ -32,11 +32,21 @@ func TestConnectDisconnectLongSequenceRollback(t *testing.T) {
 		t.Fatalf("init index: %v", err)
 	}
 
-	// Seed one spendable outpoint in the index.
+	// Seed one spendable outpoint in the index and accumulator.
 	seedOut := makeOutPoint(200, 0)
 	seedHeight := int32(110)
 	if err := db.Update(func(dbTx database.Tx) error {
 		if err := idx.connectTxOut(dbTx, &seedOut, seedHeight); err != nil {
+			return err
+		}
+		// Update accumulator to include the seeded UTXO.
+		mh, err := dbGetAccumulatorState(dbTx)
+		if err != nil {
+			return err
+		}
+		expiryKey := idx.expiryParams.CalculateExpiryKey(seedHeight)
+		mh.Add(computeEntryData(&seedOut, expiryKey))
+		if err := dbPutAccumulatorState(dbTx, mh); err != nil {
 			return err
 		}
 		if err := dbPutTipHeightIndexed(dbTx, seedHeight); err != nil {
@@ -61,7 +71,20 @@ func TestConnectDisconnectLongSequenceRollback(t *testing.T) {
 	expectedUTXOs := 1
 
 	for h := int32(120); h < 145; h++ {
-		b, newOut := buildSpendBlock(h, prevOut)
+		// Read current accumulator digest for the commitment.
+		var commitRoot *[AccumulatorDigestSize]byte
+		if idx.isCommitmentActive(h) {
+			r := [AccumulatorDigestSize]byte{}
+			db.View(func(dbTx database.Tx) error {
+				mh, err := dbGetAccumulatorState(dbTx)
+				if err == nil {
+					r = mh.Digest()
+				}
+				return nil
+			})
+			commitRoot = &r
+		}
+		b, newOut := buildSpendBlock(h, prevOut, commitRoot)
 		stxos := []blockchain.SpentTxOut{{Height: prevCreateHeight}}
 
 		err := db.Update(func(dbTx database.Tx) error {
@@ -212,7 +235,7 @@ func FuzzScanExpiringUTXOsProperties(f *testing.F) {
 	})
 }
 
-func buildSpendBlock(height int32, prevOut wire.OutPoint) (*btcutil.Block, wire.OutPoint) {
+func buildSpendBlock(height int32, prevOut wire.OutPoint, commitRoot *[AccumulatorDigestSize]byte) (*btcutil.Block, wire.OutPoint) {
 	prevHash := chainhash.Hash{}
 	root := chainhash.Hash{1}
 	header := wire.BlockHeader{
@@ -226,6 +249,14 @@ func buildSpendBlock(height int32, prevOut wire.OutPoint) (*btcutil.Block, wire.
 	coinbase := &wire.MsgTx{Version: 1}
 	coinbase.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Index: 0xffffffff}, SignatureScript: []byte{byte(height & 0xff), byte((height >> 8) & 0xff)}, Sequence: 0xffffffff})
 	coinbase.AddTxOut(&wire.TxOut{Value: 50_0000_0000, PkScript: []byte{0x51}})
+
+	// Add expiry commitment if provided.
+	if commitRoot != nil {
+		coinbase.AddTxOut(&wire.TxOut{
+			Value:    0,
+			PkScript: BuildExpiryCommitmentScript(*commitRoot),
+		})
+	}
 
 	spend := &wire.MsgTx{Version: 1}
 	spend.AddTxIn(&wire.TxIn{PreviousOutPoint: prevOut, SignatureScript: []byte{0x51}, Sequence: 0xffffffff})

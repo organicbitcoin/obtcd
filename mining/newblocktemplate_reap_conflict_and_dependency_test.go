@@ -73,7 +73,7 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 	values := make(map[int32]int64)
 	var prev *btcutil.Block
 	for h := int32(1); h <= tipHeight; h++ {
-		blk := mineCoinbaseBlockNoPoW(t, chain, &params, prev)
+		blk := mineCoinbaseBlockNoPoWWithIdx(t, chain, &params, prev, idx)
 		if err := db.Update(func(dbTx database.Tx) error {
 			return idx.ConnectBlock(dbTx, blk, nil)
 		}); err != nil {
