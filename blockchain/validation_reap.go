@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -91,6 +92,36 @@ func checkReapMarker(tx *wire.MsgTx, txHeight int32) error {
 	if digest != reapInputDigest(tx) {
 		return ruleError(ErrBadTxInput, "reap marker digest mismatch")
 	}
+	return nil
+}
+
+func checkReapBlockHardening(block *btcutil.Block, blockHeight int32,
+	chainParams *chaincfg.Params) error {
+
+	if block == nil || chainParams == nil {
+		return nil
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(chainParams)
+	if expiryParams == nil || blockHeight < expiryParams.ReapConsensusAtHeight {
+		return nil
+	}
+
+	reapCount := 0
+	for i, tx := range block.Transactions()[1:] {
+		if !isLikelyReapTx(tx.MsgTx()) {
+			continue
+		}
+
+		reapCount++
+		if reapCount > 1 {
+			return ruleError(ErrMultipleReapTx, fmt.Sprintf(
+				"block contains multiple REAP transactions (second at index %d)",
+				i+1,
+			))
+		}
+	}
+
 	return nil
 }
 

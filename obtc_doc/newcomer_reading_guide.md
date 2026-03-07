@@ -131,6 +131,7 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 - **输入**：若干到期 UTXO
 - **输出**：退款输出（refund output）+ 一个 Marker 输出
 - **Marker**：OP_RETURN 输出，值为 0，payload 格式 `REAP:<height>:<count>:<digest>`
+- **区块约束**：从 `ReapConsensusAtHeight` 开始，每个区块最多只能包含 1 笔 REAP 交易
 
 ### 3.4 税收和退款
 
@@ -139,7 +140,7 @@ OBTC 保留了 btcd 的模块路径（`github.com/btcsuite/btcd`），这意味�
 - **Refund（退款）**= `value - tax`
 - 如果 Refund 低于 Dust 阈值（720 satoshi，即 6!），则整个金额归为 Tax
 
-税收不会出现在 REAP 交易的输出中——它作为隐含费用（implicit fee）加入 coinbase 奖励。
+协议不定义独立的 burn 输出或基金分流地址。所有未返还部分都不会出现在 REAP 交易输出里，而是作为隐含费用（implicit fee）加入 coinbase 奖励，归矿工收入。
 
 ### 3.5 Marker（标记输出）
 
@@ -1024,7 +1025,7 @@ type DryRunSummary struct {
 
 ### 7.1 文件：`validation_reap.go` ★★★
 
-这是 REAP 的**共识安全守门员**，确保链上的每一笔 REAP 交易都是合法的。
+这是 REAP 的**共识安全守门员**，确保链上的每一笔 REAP 交易以及 REAP 区块约束都是合法的。
 
 #### 7.1.1 isLikelyReapTx——REAP 交易识别
 
@@ -1046,7 +1047,29 @@ func checkReapMarker(tx *wire.MsgTx, txHeight int32) error
 3. 检查 `count == len(tx.TxIn)`（输入数量匹配）
 4. 检查 `digest == reapInputDigest(tx)`（摘要匹配）
 
-#### 7.1.3 checkReapConsensusHardening——规范化硬化
+#### 7.1.3 checkReapBlockHardening——区块级唯一性
+
+```go
+func checkReapBlockHardening(block *btcutil.Block, txHeight int32,
+    chainParams *chaincfg.Params) error
+```
+
+从 `ReapConsensusAtHeight` 起执行：
+
+**规则：每个区块最多 1 笔 REAP**
+
+```
+REAP tx count per block <= 1
+```
+
+这条规则只限制上限：
+- `0` 笔：允许
+- `1` 笔：允许
+- `>1` 笔：区块无效
+
+它的目的不是强迫每个区块都处理到期 UTXO，而是把 v1 共识模型固定为**单块单笔系统清算交易**，避免多笔 REAP 引入新的候选集拆分、排序和预算分配歧义。
+
+#### 7.1.4 checkReapConsensusHardening——规范化硬化
 
 ```go
 func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
@@ -1072,7 +1095,7 @@ REAP 交易的输入必须按照以下优先级排序：
 
 通过 `compareReapInputOrderKey` 函数比较相邻输入，验证它们严格有序。
 
-#### 7.1.4 checkExpirySpendRules——到期花费规则
+#### 7.1.5 checkExpirySpendRules——到期花费规则
 
 ```go
 func checkExpirySpendRules(tx *wire.MsgTx, txHeight int32,
@@ -1106,6 +1129,14 @@ if err := checkExpirySpendRules(tx.MsgTx(), txHeight, utxoView, chainParams); er
 }
 if err := checkReapConsensusHardening(tx.MsgTx(), txHeight, utxoView, chainParams); err != nil {
     return 0, err
+}
+```
+
+而在 `checkConnectBlock` 中，还会执行区块级约束：
+
+```go
+if err := checkReapBlockHardening(block, node.height, b.chainParams); err != nil {
+    return err
 }
 ```
 

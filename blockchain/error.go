@@ -241,6 +241,10 @@ const (
 	// ErrBadExpiryCommitmentMismatch indicates the expiry commitment
 	// root in the coinbase does not match the locally computed state root.
 	ErrBadExpiryCommitmentMismatch
+
+	// ErrMultipleReapTx indicates a block contains more than one REAP
+	// system transaction once REAP block hardening is active.
+	ErrMultipleReapTx
 )
 
 // Map of ErrorCode values back to their constant names for pretty printing.
@@ -292,6 +296,7 @@ var errorCodeStrings = map[ErrorCode]string{
 	ErrBadExpiryCommitmentDuplicate: "ErrBadExpiryCommitmentDuplicate",
 	ErrBadExpiryCommitmentFormat:    "ErrBadExpiryCommitmentFormat",
 	ErrBadExpiryCommitmentMismatch:  "ErrBadExpiryCommitmentMismatch",
+	ErrMultipleReapTx:               "ErrMultipleReapTx",
 }
 
 // String returns the ErrorCode as a human-readable name.
