@@ -55,6 +55,7 @@
 
 - [ ] Node starts with `--obtctestnet` and remains stable
 - [ ] Connectivity verified (peer discovery and active tip)
+- [ ] Seed preflight check passes (`scripts/phase6/seed_preflight.sh`)
 - [ ] At least one observer node serves expiry RPC (`--expiryindex` enabled)
 - [ ] Testnet join documentation validated by dry run
 - [ ] Evidence/logs archived for review
@@ -75,4 +76,14 @@ scripts/phase6/collect_validation_snapshot.sh \
   --rpcpass=<p> \
   --rpcserver=127.0.0.1:19528 \
   --append docs/phase6-validation.md
+```
+
+Seed/observer preflight check:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --rpcuser=<u> \
+  --rpcpass=<p> \
+  --rpcserver=127.0.0.1:19528 \
+  --min-peers=1
 ```

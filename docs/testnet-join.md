@@ -113,6 +113,25 @@ scripts/phase6/collect_validation_snapshot.sh \
 - At this stage, bootstrap should rely on explicit `--addpeer` entries until seed rollout is finalized.
 - Keep at least one observability node with `--expiryindex` enabled.
 
+Run a preflight check before accepting a seed candidate:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --rpcuser=<u> \
+  --rpcpass=<p> \
+  --rpcserver=127.0.0.1:19528 \
+  --min-peers=1
+```
+
+For observer nodes that must expose expiry RPC:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --rpcuser=<u> \
+  --rpcpass=<p> \
+  --strict-expiryindex
+```
+
 ## 7. Common issues
 
 ### No peers

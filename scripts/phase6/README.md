@@ -10,6 +10,8 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
   - Example `systemd` unit for long-running seed/observer nodes.
 - `collect_validation_snapshot.sh`
   - Capture a markdown snapshot of key RPC evidence for `docs/phase6-validation.md`.
+- `seed_preflight.sh`
+  - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener).
 
 ## Quick start
 
@@ -37,6 +39,18 @@ scripts/phase6/collect_validation_snapshot.sh \
   --rpcpass=p \
   --append docs/phase6-validation.md
 ```
+
+Run seed-candidate preflight checks:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --rpcuser=u \
+  --rpcpass=p \
+  --rpcserver=127.0.0.1:19528 \
+  --min-peers=1
+```
+
+Use `--strict-expiryindex` for observer/validator roles that must expose expiry RPC.
 
 ## Common environment overrides
 

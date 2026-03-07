@@ -160,18 +160,21 @@ jobs:
             scripts/devnet-up.sh \
             scripts/phase6/run_testnet_node.sh \
             scripts/phase6/collect_validation_snapshot.sh \
+            scripts/phase6/seed_preflight.sh \
             scripts/validation/testnet_smoke.sh
 
           echo "Checking shell syntax..."
           bash -n scripts/devnet-up.sh
           bash -n scripts/phase6/run_testnet_node.sh
           bash -n scripts/phase6/collect_validation_snapshot.sh
+          bash -n scripts/phase6/seed_preflight.sh
           bash -n scripts/validation/testnet_smoke.sh
 
           echo "Testing help outputs..."
           ./scripts/devnet-up.sh help
           ./scripts/phase6/run_testnet_node.sh --help
           ./scripts/phase6/collect_validation_snapshot.sh --help
+          ./scripts/phase6/seed_preflight.sh --help
           ./scripts/validation/testnet_smoke.sh --help
 
           echo "✅ All scripts validated successfully"
