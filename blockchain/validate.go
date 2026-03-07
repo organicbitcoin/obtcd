@@ -1135,6 +1135,10 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 		}
 	}
 
+	if err := checkReapBlockHardening(block, node.height, b.chainParams); err != nil {
+		return err
+	}
+
 	// Load all of the utxos referenced by the inputs for all transactions
 	// in the block don't already exist in the utxo view from the cache.
 	//

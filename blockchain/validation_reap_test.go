@@ -98,6 +98,15 @@ func TestNonREAPExpiredSpendRejected(t *testing.T) {
 	}
 }
 
+func makeBlockWithTxs(txs ...*wire.MsgTx) *btcutil.Block {
+	msgBlock := &wire.MsgBlock{}
+	msgBlock.AddTransaction(wire.NewMsgTx(1))
+	for _, tx := range txs {
+		msgBlock.AddTransaction(tx)
+	}
+	return btcutil.NewBlock(msgBlock)
+}
+
 func TestREAPNonExpiredSpendRejected(t *testing.T) {
 	view := NewUtxoViewpoint()
 	op := addUtxoToView(t, view, 1000, 180)
@@ -196,6 +205,73 @@ func TestCheckReapMarkerCountMismatch(t *testing.T) {
 	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: bad})
 	if err := checkReapMarker(tx, 100); err == nil {
 		t.Fatalf("expected marker count mismatch error")
+	}
+}
+
+func TestReapBlockHardeningRejectsMultipleReapTx(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+
+	view := NewUtxoViewpoint()
+	opA := addUtxoToView(t, view, 1000, 1)
+	opB := addUtxoToView(t, view, 1200, 1)
+
+	block := makeBlockWithTxs(
+		makeValidReapTx(t, view, ep.ReapConsensusAtHeight, opA),
+		makeValidReapTx(t, view, ep.ReapConsensusAtHeight, opB),
+	)
+
+	err := checkReapBlockHardening(block, ep.ReapConsensusAtHeight, &chaincfg.ObtcRegTestParams)
+	if err == nil {
+		t.Fatalf("expected multiple REAP tx rejection")
+	}
+
+	ruleErr, ok := err.(RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T", err)
+	}
+	if ruleErr.ErrorCode != ErrMultipleReapTx {
+		t.Fatalf("unexpected error code: got %v want %v", ruleErr.ErrorCode, ErrMultipleReapTx)
+	}
+}
+
+func TestReapBlockHardeningAllowsSingleReapTx(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+
+	view := NewUtxoViewpoint()
+	op := addUtxoToView(t, view, 1000, 1)
+
+	block := makeBlockWithTxs(makeValidReapTx(t, view, ep.ReapConsensusAtHeight, op))
+	if err := checkReapBlockHardening(block, ep.ReapConsensusAtHeight, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("expected single REAP tx to pass, got %v", err)
+	}
+}
+
+func TestReapBlockHardeningNoopBeforeActivation(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+	if ep.ReapConsensusAtHeight <= 0 {
+		t.Fatalf("expected positive ReapConsensusAtHeight")
+	}
+
+	view := NewUtxoViewpoint()
+	opA := addUtxoToView(t, view, 1000, 1)
+	opB := addUtxoToView(t, view, 1200, 1)
+
+	block := makeBlockWithTxs(
+		makeValidReapTx(t, view, ep.ReapConsensusAtHeight-1, opA),
+		makeValidReapTx(t, view, ep.ReapConsensusAtHeight-1, opB),
+	)
+
+	if err := checkReapBlockHardening(block, ep.ReapConsensusAtHeight-1, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("expected no block-level REAP enforcement before activation, got %v", err)
 	}
 }
 
