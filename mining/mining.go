@@ -355,10 +355,15 @@ type BlkTmplGenerator struct {
 	sigCache    *txscript.SigCache
 	hashCache   *txscript.HashCache
 	reapIndex   *expiryindex.ExpiryIndex
+	expiryState expiryCommitmentSource
 
 	// Optional REAP hooks for deterministic testing of rare append branches.
 	reapSigOpCostFn      func(tx *btcutil.Tx, utxoView *blockchain.UtxoViewpoint, segwitActive bool) (int, error)
 	reapFetchInputViewFn func(tx *btcutil.Tx) (*blockchain.UtxoViewpoint, error)
+}
+
+type expiryCommitmentSource interface {
+	GetAccumulatorSnapshot() (expiryindex.AccumulatorSnapshot, error)
 }
 
 // NewBlkTmplGenerator returns a new block template generator for the given
@@ -387,6 +392,11 @@ func NewBlkTmplGenerator(policy *Policy, params *chaincfg.Params,
 // SetREAPIndex wires the expiry index for REAP system transaction construction.
 func (g *BlkTmplGenerator) SetREAPIndex(idx *expiryindex.ExpiryIndex) {
 	g.reapIndex = idx
+}
+
+// SetExpiryCommitmentSource wires the always-on expiry commitment state reader.
+func (g *BlkTmplGenerator) SetExpiryCommitmentSource(src expiryCommitmentSource) {
+	g.expiryState = src
 }
 
 // NewBlockTemplate returns a new block template that is ready to be solved
@@ -877,16 +887,23 @@ mempoolLoop:
 	}
 
 	// If the expiry commitment is active, embed Root_{n-1} in the coinbase.
-	if g.reapIndex != nil {
-		ep := chaincfg.GetExpiryParams(g.chainParams)
-		if ep != nil && nextBlockHeight >= ep.ExpiryCommitmentEnableAtHeight {
-			root, err := g.reapIndex.GetAccumulatorDigest()
-			if err != nil {
-				log.Warnf("Failed to get expiry accumulator digest: %v", err)
-			} else {
-				AddExpiryCommitment(coinbaseTx, root)
-			}
+	if ep := chaincfg.GetExpiryParams(g.chainParams); ep != nil &&
+		nextBlockHeight >= ep.ExpiryCommitmentEnableAtHeight {
+
+		if g.expiryState == nil {
+			return nil, fmt.Errorf("expiry commitment state source is unavailable at height %d", nextBlockHeight)
 		}
+
+		snapshot, err := g.expiryState.GetAccumulatorSnapshot()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get expiry accumulator snapshot: %w", err)
+		}
+		if snapshot.TipHeight != best.Height || snapshot.TipHash != best.Hash {
+			return nil, fmt.Errorf("expiry accumulator snapshot out of sync: got (%d,%s), want (%d,%s)",
+				snapshot.TipHeight, snapshot.TipHash, best.Height, best.Hash)
+		}
+
+		AddExpiryCommitment(coinbaseTx, snapshot.Root)
 	}
 
 	// Calculate the required difficulty for the block.  The timestamp

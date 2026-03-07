@@ -53,13 +53,12 @@ func ExtractExpiryCommitment(tx *btcutil.Tx) (version byte, root [AccumulatorDig
 	msgTx := tx.MsgTx()
 	for i := len(msgTx.TxOut) - 1; i >= 0; i-- {
 		pk := msgTx.TxOut[i].PkScript
-		if len(pk) < ExpiryCommitmentScriptLen {
+		if len(pk) != ExpiryCommitmentScriptLen {
 			continue
 		}
-		if pk[0] != txscript.OP_RETURN {
+		if pk[0] != txscript.OP_RETURN || pk[1] != txscript.OP_DATA_37 {
 			continue
 		}
-		// Check tag at bytes [2:6].
 		if !bytes.Equal(pk[2:6], ExpiryCommitmentTag) {
 			continue
 		}
@@ -78,8 +77,9 @@ func CountExpiryCommitments(tx *btcutil.Tx) int {
 	msgTx := tx.MsgTx()
 	for _, txOut := range msgTx.TxOut {
 		pk := txOut.PkScript
-		if len(pk) >= ExpiryCommitmentScriptLen &&
+		if len(pk) == ExpiryCommitmentScriptLen &&
 			pk[0] == txscript.OP_RETURN &&
+			pk[1] == txscript.OP_DATA_37 &&
 			bytes.Equal(pk[2:6], ExpiryCommitmentTag) {
 			count++
 		}

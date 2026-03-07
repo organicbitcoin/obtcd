@@ -12,7 +12,9 @@ import (
 	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -226,7 +228,10 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 	blockHeight := block.Height()
 	if !idx.expiryParams.IsIndexingEnabled(blockHeight) {
 		// Update tip height but don't process the block
-		return dbPutTipHeightIndexed(dbTx, blockHeight)
+		if err := dbPutTipHeightIndexed(dbTx, blockHeight); err != nil {
+			return err
+		}
+		return dbPutAccumulatorTipHash(dbTx, block.Hash())
 	}
 
 	// Load current accumulator state (represents Root_{n-1}).
@@ -268,7 +273,7 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 		// Process new UTXOs (add to index), skip provably unspendable outputs.
 		for voutIdx, txOut := range msgTx.TxOut {
-			if isUnspendable(txOut.PkScript) {
+			if txscript.IsUnspendable(txOut.PkScript) {
 				continue
 			}
 
@@ -295,6 +300,9 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 	// Store updated accumulator (now represents Root_n).
 	if err := dbPutAccumulatorState(dbTx, mh); err != nil {
 		return fmt.Errorf("failed to store accumulator: %v", err)
+	}
+	if err := dbPutAccumulatorTipHash(dbTx, block.Hash()); err != nil {
+		return fmt.Errorf("failed to store accumulator tip hash: %v", err)
 	}
 
 	// Update the tip height
@@ -324,7 +332,11 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	// Check if indexing was enabled at this height
 	if !idx.expiryParams.IsIndexingEnabled(blockHeight) {
 		// Update tip height but don't process the block
-		return dbPutTipHeightIndexed(dbTx, blockHeight-1)
+		if err := dbPutTipHeightIndexed(dbTx, blockHeight-1); err != nil {
+			return err
+		}
+		prevHash := &block.MsgBlock().Header.PrevBlock
+		return dbPutAccumulatorTipHash(dbTx, prevHash)
 	}
 
 	// Load current accumulator state.
@@ -357,7 +369,7 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 		// Remove new UTXOs that were created by this block (reverse of Add).
 		for voutIdx := len(msgTx.TxOut) - 1; voutIdx >= 0; voutIdx-- {
-			if isUnspendable(msgTx.TxOut[voutIdx].PkScript) {
+			if txscript.IsUnspendable(msgTx.TxOut[voutIdx].PkScript) {
 				continue
 			}
 
@@ -402,6 +414,10 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	// Store rolled-back accumulator (now represents Root_{n-1}).
 	if err := dbPutAccumulatorState(dbTx, mh); err != nil {
 		return fmt.Errorf("failed to store accumulator: %v", err)
+	}
+	prevHash := &block.MsgBlock().Header.PrevBlock
+	if err := dbPutAccumulatorTipHash(dbTx, prevHash); err != nil {
+		return fmt.Errorf("failed to store accumulator tip hash: %v", err)
 	}
 
 	// Update the tip height
@@ -522,17 +538,6 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 	return nil
 }
 
-// isUnspendable returns true if the given pkScript is provably unspendable.
-// These outputs (e.g. OP_RETURN) are not added to the UTXO set and should
-// not be tracked by the expiry index.
-func isUnspendable(pkScript []byte) bool {
-	// OP_RETURN scripts and empty scripts are unspendable.
-	if len(pkScript) == 0 {
-		return true
-	}
-	return pkScript[0] == 0x6a // txscript.OP_RETURN
-}
-
 // isCommitmentActive returns true if the expiry commitment is mandatory
 // at the given block height.
 func (idx *ExpiryIndex) isCommitmentActive(height int32) bool {
@@ -593,22 +598,40 @@ func (idx *ExpiryIndex) validateExpiryCommitment(
 	return nil
 }
 
-// GetAccumulatorDigest returns the current MuHash digest (Root at current tip).
-// Used by mining code to read Root_{n-1} for embedding in block n's coinbase.
-func (idx *ExpiryIndex) GetAccumulatorDigest() ([AccumulatorDigestSize]byte, error) {
-	var digest [AccumulatorDigestSize]byte
+// GetAccumulatorSnapshot returns the current accumulator root together with the
+// indexed tip it corresponds to. Mining uses this to avoid building a block on
+// one tip while embedding a root for another.
+func (idx *ExpiryIndex) GetAccumulatorSnapshot() (AccumulatorSnapshot, error) {
+	var snapshot AccumulatorSnapshot
 	if idx.disabled {
-		return digest, fmt.Errorf("expiry index is disabled")
+		return snapshot, fmt.Errorf("expiry index is disabled")
 	}
 	err := idx.db.View(func(dbTx database.Tx) error {
 		mh, err := dbGetAccumulatorState(dbTx)
 		if err != nil {
 			return err
 		}
-		digest = mh.Digest()
+		snapshot.Root = mh.Digest()
+		snapshot.TipHeight, err = dbGetTipHeightIndexed(dbTx)
+		if err != nil {
+			return err
+		}
+		snapshot.TipHash, err = dbGetAccumulatorTipHash(dbTx)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
-	return digest, err
+	return snapshot, err
+}
+
+// GetAccumulatorDigest returns the current MuHash digest (Root at current tip).
+func (idx *ExpiryIndex) GetAccumulatorDigest() ([AccumulatorDigestSize]byte, error) {
+	snapshot, err := idx.GetAccumulatorSnapshot()
+	if err != nil {
+		return [AccumulatorDigestSize]byte{}, err
+	}
+	return snapshot.Root, nil
 }
 
 // ScanExpiringUTXOs scans for UTXOs expiring within the specified range.
@@ -924,6 +947,20 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		if err := dbPutAccumulatorState(dbTx, mh); err != nil {
 			return fmt.Errorf("failed to store accumulator: %v", err)
 		}
+		if chainTipHeight >= 0 {
+			block, err := idx.getBlockByHeight(chainTipHeight)
+			if err != nil {
+				return fmt.Errorf("failed to get block hash for height %d: %v", chainTipHeight, err)
+			}
+			if err := dbPutAccumulatorTipHash(dbTx, block.Hash()); err != nil {
+				return fmt.Errorf("failed to store accumulator tip hash: %v", err)
+			}
+		} else {
+			var zero chainhash.Hash
+			if err := dbPutAccumulatorTipHash(dbTx, &zero); err != nil {
+				return fmt.Errorf("failed to reset accumulator tip hash: %v", err)
+			}
+		}
 		if err := dbPutTipHeightIndexed(dbTx, chainTipHeight); err != nil {
 			return fmt.Errorf("failed to update tip height: %v", err)
 		}
@@ -1025,6 +1062,10 @@ func (idx *ExpiryIndex) clearIndexBuckets(dbTx database.Tx) error {
 	// Reset accumulator to identity state.
 	if err := dbPutAccumulatorState(dbTx, NewMuHash()); err != nil {
 		return fmt.Errorf("failed to reset accumulator: %v", err)
+	}
+	var zero chainhash.Hash
+	if err := dbPutAccumulatorTipHash(dbTx, &zero); err != nil {
+		return fmt.Errorf("failed to reset accumulator tip hash: %v", err)
 	}
 
 	return nil

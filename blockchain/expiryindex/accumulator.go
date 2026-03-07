@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -43,4 +44,37 @@ func dbGetAccumulatorState(dbTx database.Tx) (*MuHash, error) {
 // dbPutAccumulatorState stores the MuHash accumulator in the metadata bucket.
 func dbPutAccumulatorState(dbTx database.Tx, mh *MuHash) error {
 	return dbPutIndexMeta(dbTx, keyAccumulatorState, mh.Serialize())
+}
+
+// AccumulatorSnapshot is an atomic view of the expiry commitment state.
+type AccumulatorSnapshot struct {
+	Root      [AccumulatorDigestSize]byte
+	TipHash   chainhash.Hash
+	TipHeight int32
+}
+
+func dbGetAccumulatorTipHash(dbTx database.Tx) (chainhash.Hash, error) {
+	var hash chainhash.Hash
+
+	data, err := dbGetIndexMeta(dbTx, keyAccumulatorTipHash)
+	if err != nil {
+		return hash, fmt.Errorf("failed to read accumulator tip hash: %v", err)
+	}
+	if data == nil {
+		return hash, nil
+	}
+	if len(data) != chainhash.HashSize {
+		return hash, fmt.Errorf("invalid accumulator tip hash length: got %d, want %d",
+			len(data), chainhash.HashSize)
+	}
+
+	copy(hash[:], data)
+	return hash, nil
+}
+
+func dbPutAccumulatorTipHash(dbTx database.Tx, hash *chainhash.Hash) error {
+	if hash == nil {
+		return dbPutIndexMeta(dbTx, keyAccumulatorTipHash, make([]byte, chainhash.HashSize))
+	}
+	return dbPutIndexMeta(dbTx, keyAccumulatorTipHash, hash.CloneBytes())
 }

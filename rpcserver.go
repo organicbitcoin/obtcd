@@ -4003,7 +4003,7 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 	if s.cfg.ExpiryIndex == nil {
 		return nil, &btcjson.RPCError{
 			Code:    btcjson.ErrRPCMisc,
-			Message: "ExpiryIndex is not enabled. Use --expiryindex to enable it.",
+			Message: "ExpiryIndex scan/RPC is disabled. Use --expiryindex to enable it.",
 		}
 	}
 

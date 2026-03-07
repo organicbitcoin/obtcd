@@ -273,6 +273,48 @@ func TestConnectBlockBasic(t *testing.T) {
 	}
 }
 
+func TestGetAccumulatorSnapshotTracksTip(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+
+	err = db.Update(func(dbTx database.Tx) error {
+		return idx.Create(dbTx)
+	})
+	if err != nil {
+		t.Fatalf("Failed to create index: %v", err)
+	}
+	if err := idx.Init(); err != nil {
+		t.Fatalf("Failed to initialize index: %v", err)
+	}
+
+	identityRoot := NewMuHash().Digest()
+	block := createTestBlockWithCommitment(t, 150, &identityRoot)
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.ConnectBlock(dbTx, block, nil)
+	}); err != nil {
+		t.Fatalf("Failed to connect block: %v", err)
+	}
+
+	snapshot, err := idx.GetAccumulatorSnapshot()
+	if err != nil {
+		t.Fatalf("GetAccumulatorSnapshot failed: %v", err)
+	}
+	if snapshot.TipHeight != block.Height() {
+		t.Fatalf("tip height mismatch: got %d want %d", snapshot.TipHeight, block.Height())
+	}
+	if snapshot.TipHash != *block.Hash() {
+		t.Fatalf("tip hash mismatch: got %v want %v", snapshot.TipHash, block.Hash())
+	}
+}
+
 // TestConnectDisconnectBlock tests connecting and disconnecting blocks
 func TestConnectDisconnectBlock(t *testing.T) {
 	db, teardown, err := createCoreTestDB()

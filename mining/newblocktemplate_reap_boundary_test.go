@@ -151,6 +151,7 @@ func setupBoundaryHarness(t *testing.T) *boundaryHarness {
 		txscript.NewSigCache(1000),
 		txscript.NewHashCache(1000),
 	)
+	generator.SetExpiryCommitmentSource(idx)
 	generator.SetREAPIndex(idx)
 
 	cleanup := func() {

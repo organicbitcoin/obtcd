@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -92,6 +93,41 @@ func TestCountExpiryCommitments(t *testing.T) {
 	tx = btcutil.NewTx(msgTx)
 	if CountExpiryCommitments(tx) != 2 {
 		t.Fatal("expected 2 commitments")
+	}
+}
+
+func TestExtractCommitmentRejectsNonCanonicalLength(t *testing.T) {
+	var root [AccumulatorDigestSize]byte
+	script := append(BuildExpiryCommitmentScript(root), 0x00)
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 0, PkScript: script})
+	tx := btcutil.NewTx(msgTx)
+
+	if _, _, found := ExtractExpiryCommitment(tx); found {
+		t.Fatal("should not accept overlong commitment script")
+	}
+	if got := CountExpiryCommitments(tx); got != 0 {
+		t.Fatalf("expected 0 canonical commitments, got %d", got)
+	}
+}
+
+func TestExtractCommitmentRejectsWrongPushOpcode(t *testing.T) {
+	var root [AccumulatorDigestSize]byte
+	script := BuildExpiryCommitmentScript(root)
+	script[1] = txscript.OP_PUSHDATA1
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 0, PkScript: script})
+	tx := btcutil.NewTx(msgTx)
+
+	if _, _, found := ExtractExpiryCommitment(tx); found {
+		t.Fatal("should not accept non-canonical push opcode")
+	}
+	if got := CountExpiryCommitments(tx); got != 0 {
+		t.Fatalf("expected 0 canonical commitments, got %d", got)
 	}
 }
 

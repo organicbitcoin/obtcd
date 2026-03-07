@@ -44,6 +44,10 @@ var (
 	// keyAccumulatorState stores the MuHash accumulator state (768 bytes)
 	// for the expiry commitment. Updated atomically with tip height.
 	keyAccumulatorState = []byte("accumulator-state")
+
+	// keyAccumulatorTipHash stores the block hash corresponding to the
+	// accumulator/tip-height snapshot.
+	keyAccumulatorTipHash = []byte("accumulator-tip-hash")
 )
 
 // Index configuration constants

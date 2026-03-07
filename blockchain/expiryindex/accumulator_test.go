@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -105,21 +106,21 @@ func TestMuHashMultiEntryOrderIndependence(t *testing.T) {
 	}
 }
 
-func TestIsUnspendable(t *testing.T) {
+func TestIsUnspendableParity(t *testing.T) {
 	tests := []struct {
 		name   string
 		script []byte
 		want   bool
 	}{
 		{"OP_RETURN", []byte{0x6a, 0x04, 0x01, 0x02, 0x03, 0x04}, true},
-		{"empty", []byte{}, true},
-		{"normal P2PKH", []byte{0x76, 0xa9, 0x14}, false},
+		{"empty", []byte{}, false},
+		{"normal P2PKH", append([]byte{0x76, 0xa9, 0x14}, make([]byte, 20)...), false},
 		{"OP_RETURN only", []byte{0x6a}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isUnspendable(tt.script); got != tt.want {
-				t.Fatalf("isUnspendable(%x) = %v, want %v", tt.script, got, tt.want)
+			if got := txscript.IsUnspendable(tt.script); got != tt.want {
+				t.Fatalf("IsUnspendable(%x) = %v, want %v", tt.script, got, tt.want)
 			}
 		})
 	}
