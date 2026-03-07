@@ -40,13 +40,21 @@ var (
 
 	// keyIndexVersion tracks the index format version for future upgrades
 	keyIndexVersion = []byte("version")
+
+	// keyAccumulatorState stores the MuHash accumulator state (768 bytes)
+	// for the expiry commitment. Updated atomically with tip height.
+	keyAccumulatorState = []byte("accumulator-state")
+
+	// keyAccumulatorTipHash stores the block hash corresponding to the
+	// accumulator/tip-height snapshot.
+	keyAccumulatorTipHash = []byte("accumulator-tip-hash")
 )
 
 // Index configuration constants
 const (
 	// CurrentIndexVersion tracks the current index format version
 	// Increment this when making breaking changes to the index format
-	CurrentIndexVersion = 1
+	CurrentIndexVersion = 2
 
 	// MaxOutpointsPerKey limits the size of outpoint lists to prevent
 	// unbounded memory usage for keys with many UTXOs

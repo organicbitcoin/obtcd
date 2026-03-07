@@ -2900,19 +2900,21 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 		s.cfIndex = indexers.NewCfIndex(db, chainParams)
 		indexes = append(indexes, s.cfIndex)
 	}
-	if cfg.ExpiryIndex {
-		// Only enable ExpiryIndex for OBTC networks
-		if chaincfg.IsOBTC(chainParams) {
-			indxLog.Info("OBTC expiry index is enabled")
-			var err error
-			s.expiryIndex, err = expiryindex.NewExpiryIndex(db, chainParams)
-			if err != nil {
-				return nil, err
-			}
-			indexes = append(indexes, s.expiryIndex)
-		} else {
-			indxLog.Info("ExpiryIndex requires OBTC network - skipping")
+	if chaincfg.IsOBTC(chainParams) {
+		indxLog.Info("OBTC expiry commitment state is enabled")
+		var err error
+		s.expiryIndex, err = expiryindex.NewExpiryIndex(db, chainParams)
+		if err != nil {
+			return nil, err
 		}
+		indexes = append(indexes, s.expiryIndex)
+		if cfg.ExpiryIndex {
+			indxLog.Info("OBTC expiry scan/RPC features are enabled")
+		} else {
+			indxLog.Info("OBTC expiry scan/RPC features are disabled; consensus state remains enabled")
+		}
+	} else if cfg.ExpiryIndex {
+		indxLog.Info("ExpiryIndex requires OBTC network - skipping")
 	}
 
 	// Create an index manager if any of the optional indexes are enabled.
@@ -3044,7 +3046,10 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 		s.chainParams, s.txMemPool, s.chain, s.timeSource,
 		s.sigCache, s.hashCache)
 	if s.expiryIndex != nil {
-		blockTemplateGenerator.SetREAPIndex(s.expiryIndex)
+		blockTemplateGenerator.SetExpiryCommitmentSource(s.expiryIndex)
+		if cfg.ExpiryIndex {
+			blockTemplateGenerator.SetREAPIndex(s.expiryIndex)
+		}
 	}
 	s.cpuMiner = cpuminer.New(&cpuminer.Config{
 		ChainParams:            chainParams,
@@ -3153,6 +3158,11 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 			return nil, errors.New("RPCS: No valid listen address")
 		}
 
+		rpcExpiryIndex := s.expiryIndex
+		if !cfg.ExpiryIndex {
+			rpcExpiryIndex = nil
+		}
+
 		s.rpcServer, err = newRPCServer(&rpcserverConfig{
 			Listeners:    rpcListeners,
 			StartupTime:  s.startupTime,
@@ -3168,7 +3178,7 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 			TxIndex:      s.txIndex,
 			AddrIndex:    s.addrIndex,
 			CfIndex:      s.cfIndex,
-			ExpiryIndex:  s.expiryIndex,
+			ExpiryIndex:  rpcExpiryIndex,
 			FeeEstimator: s.feeEstimator,
 		})
 		if err != nil {

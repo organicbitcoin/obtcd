@@ -111,7 +111,7 @@ func setupBoundaryHarness(t *testing.T) *boundaryHarness {
 
 	var prev *btcutil.Block
 	for h := int32(1); h <= 243; h++ {
-		blk := mineCoinbaseBlockNoPoW(t, chain, &params, prev)
+		blk := mineCoinbaseBlockNoPoWWithIdx(t, chain, &params, prev, idx)
 		if err := db.Update(func(dbTx database.Tx) error {
 			return idx.ConnectBlock(dbTx, blk, nil)
 		}); err != nil {
@@ -151,6 +151,7 @@ func setupBoundaryHarness(t *testing.T) *boundaryHarness {
 		txscript.NewSigCache(1000),
 		txscript.NewHashCache(1000),
 	)
+	generator.SetExpiryCommitmentSource(idx)
 	generator.SetREAPIndex(idx)
 
 	cleanup := func() {
@@ -172,6 +173,12 @@ func setupBoundaryHarness(t *testing.T) *boundaryHarness {
 
 func mineCoinbaseBlockNoPoW(t *testing.T, chain *blockchain.BlockChain,
 	params *chaincfg.Params, prev *btcutil.Block) *btcutil.Block {
+	return mineCoinbaseBlockNoPoWWithIdx(t, chain, params, prev, nil)
+}
+
+func mineCoinbaseBlockNoPoWWithIdx(t *testing.T, chain *blockchain.BlockChain,
+	params *chaincfg.Params, prev *btcutil.Block,
+	idx *expiryindex.ExpiryIndex) *btcutil.Block {
 	t.Helper()
 
 	var (
@@ -197,6 +204,16 @@ func mineCoinbaseBlockNoPoW(t *testing.T, chain *blockchain.BlockChain,
 	coinbaseTx, err := createCoinbaseTx(params, coinbaseScript, nextHeight, nil)
 	if err != nil {
 		t.Fatalf("coinbase tx: %v", err)
+	}
+
+	// Add expiry commitment if the ExpiryIndex is provided and the
+	// commitment is active at this height.
+	ep := chaincfg.GetExpiryParams(params)
+	if idx != nil && ep != nil && nextHeight >= ep.ExpiryCommitmentEnableAtHeight {
+		root, err := idx.GetAccumulatorDigest()
+		if err == nil {
+			AddExpiryCommitment(coinbaseTx, root)
+		}
 	}
 
 	ts := prevTime.Add(time.Second)

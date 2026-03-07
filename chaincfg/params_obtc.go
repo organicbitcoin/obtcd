@@ -28,6 +28,12 @@ type ExpiryParams struct {
 	ReapConsensusAtHeight    int32  // Height to enforce canonical REAP ordering / limits
 	ReplayProtectionAtHeight int32  // Height to enforce OBTC replay-protected sighash domain
 	ReapMaxInputs            int    // Consensus max REAP inputs per transaction (0 = disabled)
+
+	// ExpiryCommitmentEnableAtHeight is the height at which the expiry
+	// commitment in coinbase becomes mandatory. Before this height the
+	// commitment is optional; at or above it, blocks must include a valid
+	// expiry commitment and the root must match the local state.
+	ExpiryCommitmentEnableAtHeight int32
 }
 
 // OBTC Hard Fork Heights
@@ -424,35 +430,38 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 	switch params.Net {
 	case wire.ObtcMainNet:
 		return &ExpiryParams{
-			WindowBlocks:             362880, // 9! (factorial of 9) ≈ 6.91 years at 10min blocks
-			ListBatchLimit:           10000,
-			StartScanHeight:          ObtcMainNetForkHeight,
-			EnableAtHeight:           ObtcMainNetForkHeight + 100000, // Week 3+
-			ReapConsensusAtHeight:    ObtcMainNetForkHeight + 110000, // staged consensus hardening
-			ReplayProtectionAtHeight: ObtcMainNetForkHeight + 115000, // staged replay-domain activation
-			ReapMaxInputs:            256,
+			WindowBlocks:                   362880, // 9! (factorial of 9) ≈ 6.91 years at 10min blocks
+			ListBatchLimit:                 10000,
+			StartScanHeight:                ObtcMainNetForkHeight,
+			EnableAtHeight:                 ObtcMainNetForkHeight + 100000, // Week 3+
+			ReapConsensusAtHeight:          ObtcMainNetForkHeight + 110000, // staged consensus hardening
+			ReplayProtectionAtHeight:       ObtcMainNetForkHeight + 115000, // staged replay-domain activation
+			ReapMaxInputs:                  256,
+			ExpiryCommitmentEnableAtHeight: ObtcMainNetForkHeight + 100000,
 		}
 
 	case wire.ObtcTestNet:
 		return &ExpiryParams{
-			WindowBlocks:             1008, // ~1 week for testing (144 * 7)
-			ListBatchLimit:           5000,
-			StartScanHeight:          ObtcTestNetForkHeight,
-			EnableAtHeight:           ObtcTestNetForkHeight + 100,
-			ReapConsensusAtHeight:    ObtcTestNetForkHeight + 120,
-			ReplayProtectionAtHeight: ObtcTestNetForkHeight + 130,
-			ReapMaxInputs:            500,
+			WindowBlocks:                   1008, // ~1 week for testing (144 * 7)
+			ListBatchLimit:                 5000,
+			StartScanHeight:                ObtcTestNetForkHeight,
+			EnableAtHeight:                 ObtcTestNetForkHeight + 100,
+			ReapConsensusAtHeight:          ObtcTestNetForkHeight + 120,
+			ReplayProtectionAtHeight:       ObtcTestNetForkHeight + 130,
+			ReapMaxInputs:                  500,
+			ExpiryCommitmentEnableAtHeight: ObtcTestNetForkHeight + 100,
 		}
 
 	case wire.ObtcRegNet:
 		return &ExpiryParams{
-			WindowBlocks:             144, // ~1 day for development
-			ListBatchLimit:           1000,
-			StartScanHeight:          ObtcRegTestForkHeight,
-			EnableAtHeight:           ObtcRegTestForkHeight + 10,
-			ReapConsensusAtHeight:    ObtcRegTestForkHeight + 12,
-			ReplayProtectionAtHeight: ObtcRegTestForkHeight + 14,
-			ReapMaxInputs:            200,
+			WindowBlocks:                   144, // ~1 day for development
+			ListBatchLimit:                 1000,
+			StartScanHeight:                ObtcRegTestForkHeight,
+			EnableAtHeight:                 ObtcRegTestForkHeight + 10,
+			ReapConsensusAtHeight:          ObtcRegTestForkHeight + 12,
+			ReplayProtectionAtHeight:       ObtcRegTestForkHeight + 14,
+			ReapMaxInputs:                  200,
+			ExpiryCommitmentEnableAtHeight: ObtcRegTestForkHeight + 10,
 		}
 
 	default:

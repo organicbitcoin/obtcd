@@ -53,6 +53,12 @@ func createMiningTestExpiryIndexWithOutputs(t *testing.T, createBuckets bool, ou
 		for i := 0; i < outputs; i++ {
 			cb.AddTxOut(&wire.TxOut{Value: int64(1000 + i), PkScript: []byte{txscript.OP_TRUE}})
 		}
+		// Add expiry commitment with identity root (accumulator is empty).
+		identityRoot := expiryindex.NewMuHash().Digest()
+		cb.AddTxOut(&wire.TxOut{
+			Value:    0,
+			PkScript: expiryindex.BuildExpiryCommitmentScript(identityRoot),
+		})
 		if err := msgBlock.AddTransaction(cb); err != nil {
 			t.Fatalf("add tx: %v", err)
 		}

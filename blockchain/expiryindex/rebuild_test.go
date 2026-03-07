@@ -5,11 +5,44 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/database"
 	_ "github.com/btcsuite/btcd/database/ffldb"
 	"github.com/btcsuite/btcd/wire"
 )
+
+type rebuildMockChain struct {
+	bestHeight int32
+	blocks     map[int32]*btcutil.Block
+	utxos      map[wire.OutPoint]int32
+}
+
+func (m *rebuildMockChain) BestHeight() int32 {
+	return m.bestHeight
+}
+
+func (m *rebuildMockChain) BlockByHeight(height int32) (*btcutil.Block, error) {
+	block, ok := m.blocks[height]
+	if !ok {
+		return nil, database.Error{ErrorCode: database.ErrBlockNotFound, Description: "mock block not found"}
+	}
+	return block, nil
+}
+
+func (m *rebuildMockChain) FetchSpendJournal(block *btcutil.Block) ([]blockchain.SpentTxOut, error) {
+	return nil, nil
+}
+
+func (m *rebuildMockChain) ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) error) error {
+	for outpoint, height := range m.utxos {
+		if err := fn(outpoint, height); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // TestSmartRebuild tests the smart rebuild decision logic
 func TestSmartRebuild(t *testing.T) {
@@ -436,6 +469,111 @@ func TestIndexConsistencyAfterRebuild(t *testing.T) {
 
 	if err != nil {
 		t.Errorf("Bucket consistency check failed: %v", err)
+	}
+}
+
+func TestFastRebuildAccumulatorMatchesLiveIndexingBeforeEnableAtHeight(t *testing.T) {
+	params := &chaincfg.ObtcRegTestParams
+	expiryParams := GetExpiryParams(params)
+	if expiryParams == nil {
+		t.Fatal("expected OBTC regtest expiry params")
+	}
+	if expiryParams.StartScanHeight >= expiryParams.EnableAtHeight {
+		t.Fatalf("test requires StartScanHeight < EnableAtHeight, got %d >= %d",
+			expiryParams.StartScanHeight, expiryParams.EnableAtHeight)
+	}
+
+	liveDB, liveTeardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("create live db: %v", err)
+	}
+	defer liveTeardown()
+
+	liveIdx, err := NewExpiryIndex(liveDB, params)
+	if err != nil {
+		t.Fatalf("new live index: %v", err)
+	}
+	if err := liveDB.Update(func(dbTx database.Tx) error { return liveIdx.Create(dbTx) }); err != nil {
+		t.Fatalf("create live index: %v", err)
+	}
+	if err := liveIdx.Init(); err != nil {
+		t.Fatalf("init live index: %v", err)
+	}
+
+	seedOut := makeOutPoint(42, 0)
+	prevOut := seedOut
+	prevCreateHeight := expiryParams.StartScanHeight - 1
+	mock := &rebuildMockChain{
+		blocks: make(map[int32]*btcutil.Block),
+		utxos:  make(map[wire.OutPoint]int32),
+	}
+
+	// The seed outpoint is spent by the first indexed block, but since it
+	// predates StartScanHeight it must not affect either live indexing or rebuild.
+	mock.utxos[seedOut] = prevCreateHeight
+
+	lastHeight := expiryParams.EnableAtHeight - 1
+	for height := expiryParams.StartScanHeight; height <= lastHeight; height++ {
+		block, newOut := buildSpendBlock(height, prevOut, nil)
+		mock.blocks[height] = block
+
+		stxos := []blockchain.SpentTxOut{{Height: prevCreateHeight}}
+		if err := liveDB.Update(func(dbTx database.Tx) error {
+			return liveIdx.ConnectBlock(dbTx, block, stxos)
+		}); err != nil {
+			t.Fatalf("connect block %d: %v", height, err)
+		}
+
+		delete(mock.utxos, prevOut)
+		coinbaseOut := wire.OutPoint{Hash: *block.Transactions()[0].Hash(), Index: 0}
+		mock.utxos[coinbaseOut] = height
+		mock.utxos[newOut] = height
+		prevOut = newOut
+		prevCreateHeight = height
+		mock.bestHeight = height
+	}
+
+	liveSnapshot, err := liveIdx.GetAccumulatorSnapshot()
+	if err != nil {
+		t.Fatalf("live snapshot: %v", err)
+	}
+	if liveSnapshot.TipHeight != lastHeight {
+		t.Fatalf("live tip height mismatch: got %d want %d", liveSnapshot.TipHeight, lastHeight)
+	}
+
+	rebuildDB, rebuildTeardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("create rebuild db: %v", err)
+	}
+	defer rebuildTeardown()
+
+	rebuildIdx, err := NewExpiryIndex(rebuildDB, params)
+	if err != nil {
+		t.Fatalf("new rebuild index: %v", err)
+	}
+	if err := rebuildDB.Update(func(dbTx database.Tx) error { return rebuildIdx.Create(dbTx) }); err != nil {
+		t.Fatalf("create rebuild index: %v", err)
+	}
+	rebuildIdx.SetChainAccessor(mock)
+	if err := rebuildIdx.fastRebuildFromUTXO(lastHeight); err != nil {
+		t.Fatalf("fast rebuild: %v", err)
+	}
+
+	rebuildSnapshot, err := rebuildIdx.GetAccumulatorSnapshot()
+	if err != nil {
+		t.Fatalf("rebuild snapshot: %v", err)
+	}
+	if rebuildSnapshot.Root != liveSnapshot.Root {
+		t.Fatalf("accumulator root mismatch after rebuild: live=%x rebuild=%x",
+			liveSnapshot.Root, rebuildSnapshot.Root)
+	}
+	if rebuildSnapshot.TipHeight != liveSnapshot.TipHeight {
+		t.Fatalf("tip height mismatch after rebuild: live=%d rebuild=%d",
+			liveSnapshot.TipHeight, rebuildSnapshot.TipHeight)
+	}
+	if rebuildSnapshot.TipHash != liveSnapshot.TipHash {
+		t.Fatalf("tip hash mismatch after rebuild: live=%s rebuild=%s",
+			liveSnapshot.TipHash, rebuildSnapshot.TipHash)
 	}
 }
 

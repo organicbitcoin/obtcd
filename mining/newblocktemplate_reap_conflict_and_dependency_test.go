@@ -73,7 +73,7 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 	values := make(map[int32]int64)
 	var prev *btcutil.Block
 	for h := int32(1); h <= tipHeight; h++ {
-		blk := mineCoinbaseBlockNoPoW(t, chain, &params, prev)
+		blk := mineCoinbaseBlockNoPoWWithIdx(t, chain, &params, prev, idx)
 		if err := db.Update(func(dbTx database.Tx) error {
 			return idx.ConnectBlock(dbTx, blk, nil)
 		}); err != nil {
@@ -113,6 +113,7 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 		txscript.NewSigCache(1000),
 		txscript.NewHashCache(1000),
 	)
+	generator.SetExpiryCommitmentSource(idx)
 	generator.SetREAPIndex(idx)
 
 	cleanup := func() {
@@ -162,6 +163,18 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 		t.Fatalf("new chain: %v", err)
 	}
 
+	idx, err := expiryindex.NewExpiryIndex(db, &params)
+	if err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("new expiry index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("create expiry index buckets: %v", err)
+	}
+
 	needSet := make(map[int32]struct{}, len(needHeights))
 	for _, h := range needHeights {
 		needSet[h] = struct{}{}
@@ -171,7 +184,14 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 	values := make(map[int32]int64)
 	var prev *btcutil.Block
 	for h := int32(1); h <= tipHeight; h++ {
-		blk := mineCoinbaseBlockNoPoW(t, chain, &params, prev)
+		blk := mineCoinbaseBlockNoPoWWithIdx(t, chain, &params, prev, idx)
+		if err := db.Update(func(dbTx database.Tx) error {
+			return idx.ConnectBlock(dbTx, blk, nil)
+		}); err != nil {
+			db.Close()
+			os.RemoveAll(tmpDir)
+			t.Fatalf("connect block to expiry index at height %d: %v", h, err)
+		}
 		if _, ok := needSet[h]; ok {
 			coinbase := blk.Transactions()[0]
 			spendable[h] = wire.OutPoint{Hash: *coinbase.Hash(), Index: 0}
@@ -203,6 +223,7 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 		txscript.NewSigCache(1000),
 		txscript.NewHashCache(1000),
 	)
+	generator.SetExpiryCommitmentSource(idx)
 
 	cleanup := func() {
 		db.Close()
@@ -213,6 +234,7 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 		params:    &params,
 		chain:     chain,
 		db:        db,
+		reapIndex: idx,
 		generator: generator,
 		spendable: spendable,
 		values:    values,
@@ -394,14 +416,70 @@ func injectCoinbaseIntoExpiryIndexAtHeight(t *testing.T, h *boundaryHarness,
 	}
 }
 
+func newForgedExpiryScanIndex(t *testing.T, params *chaincfg.Params, coinbase *wire.MsgTx,
+	fakeCreateHeight int32) (*expiryindex.ExpiryIndex, func()) {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "forged_expiry_scan_")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+
+	dbPath := filepath.Join(tmpDir, "forged.db")
+	db, err := database.Create("ffldb", dbPath, params.Net)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("create db: %v", err)
+	}
+
+	idx, err := expiryindex.NewExpiryIndex(db, params)
+	if err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("new expiry index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("create expiry index buckets: %v", err)
+	}
+
+	fakeMsg := wire.NewMsgBlock(&wire.BlockHeader{})
+	if err := fakeMsg.AddTransaction(coinbase.Copy()); err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("add copied coinbase tx: %v", err)
+	}
+	fakeBlock := btcutil.NewBlock(fakeMsg)
+	fakeBlock.SetHeight(fakeCreateHeight)
+
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.ConnectBlock(dbTx, fakeBlock, nil)
+	}); err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("inject forged expiry mapping failed: %v", err)
+	}
+
+	cleanup := func() {
+		db.Close()
+		os.RemoveAll(tmpDir)
+	}
+	return idx, cleanup
+}
+
 func TestNewBlockTemplateREAPConflictWithNormalSkipsREAP(t *testing.T) {
 	h := setupBoundaryHarness(t)
 	defer h.cleanup()
 
-	// Forge one non-expired coinbase output (height 120) into an "expired" index row
-	// so the REAP planner selects it. This allows us to validate that a regular
-	// mempool tx consuming that outpoint can block REAP append in NewBlockTemplate.
-	injectCoinbaseIntoExpiryIndexAtHeight(t, h, 120, 100)
+	sourceBlock, err := h.chain.BlockByHeight(120)
+	if err != nil {
+		t.Fatalf("BlockByHeight(120): %v", err)
+	}
+	queryIdx, queryCleanup := newForgedExpiryScanIndex(t, h.params,
+		sourceBlock.MsgBlock().Transactions[0], 100)
+	defer queryCleanup()
+	h.generator.SetREAPIndex(queryIdx)
 
 	nextHeight := h.chain.BestSnapshot().Height + 1
 	reapTx, _, err := h.generator.maybeBuildREAPTx(nextHeight)
