@@ -1,198 +1,234 @@
-# Phase 8 计划（主网候选发布 | Mainnet-Candidate）— 参数冻结、发布、72h 观察
+# Phase 8 计划（主网候选发布）— 按当前代码基线对齐
 
-> 修订（2026-02-11）：建议把“主网候选”改为“公开候选测试网里程碑”。若必须主网候选，需新增独立安全审计与外部回放验证门槛（至少 1 次外部审计）。
+> 对齐日期：2026-03-07
+> 目标：在当前 `master` 已有主网参数与共识规则基础上，完成真正需要的主网候选发布准备，而不是按“新创世链上线”去规划。
 
-**时间预算：18–20 小时** ｜ **目标**：冻结 **OBTC-Mainnet** 共识参数与创世，构建并签名发布产物，部署 ≥3 个地域的主网种子节点，完成 **72 小时**稳定出块与外部可同步验证，达到门槛后对外宣布“Mainnet-Candidate 上线”。
+## 1. 当前主网基线
 
----
+当前代码已经定义了 [`ObtcMainNetParams`](../chaincfg/params_obtc.go)。
 
-## 🎯 本周目标（Definition of Done）
+最重要的事实：
 
-* **参数冻结**：主网 **魔数/端口/HRP/WIF/BIP32/创世/税率/上限/REAP\_VERSION/BurnPolicy** 写入代码与文档，打标签。
-* **发布产物**：三平台二进制 + Docker 镜像 + `SHA256SUMS` + `minisign` 签名；复现构建指引更新。
-* **主网种子**：EU / US / AS 至少各一台，互联可见，状态页正常。
-* **对外文档**：`mainnet-join.md`（一键接入、校验、常见问题），发布说明 `release-notes-v1.0.0-candidate.md`。
-* **运行验证**：连续 **≥72h** 稳定出块；外部新节点 **<2h** 同步到头；REAP 正常触发；无 >1 深度重组。
+- OBTC Mainnet 是 **Bitcoin mainnet 的硬分叉**
+- 当前代码复用 **Bitcoin genesis**
+- 真正需要冻结的是：
+  - fork height
+  - 网络命名空间
+  - OBTC 共识参数
+  - 种子节点
 
----
+不是去“重新生成主网创世块”。
 
-## 🗺️ 主网参数（本周一次性冻结）
+当前主网关键参数：
 
-> 数值示例为占位，**实际以你在仓库中写入的常量为准**（一旦发布即不可更改）。
+| 项目 | 当前值 |
+|------|--------|
+| 网络名 | `obtcmainnet` |
+| 网络标志 | `--obtcmainnet` |
+| P2P 默认端口 | `9527` |
+| Bech32 HRP | `obtc` |
+| Fork Height | `950000` |
+| `WindowBlocks` | `362880` |
+| `EnableAtHeight` | `ObtcMainNetForkHeight + 100000` |
+| `ReapConsensusAtHeight` | `ObtcMainNetForkHeight + 110000` |
+| `ReplayProtectionAtHeight` | `ObtcMainNetForkHeight + 115000` |
+| `ReapMaxInputs` | `256` |
+| `ExpiryCommitmentEnableAtHeight` | `ObtcMainNetForkHeight + 100000` |
 
-* **网络名**：`obtc-mainnet`
-* **魔数**：`wire.OBTCNet = 0xF1C0B7C1`（示例；需与所有 BTC 网络不同）
-* **端口**：P2P `38555`，RPC `38556`
-* **地址 HRP**：`"ob"`（或 `"obtc"`，保持唯一性）
-* **WIF/BIP32 前缀**：自定义，**不得**为 `0x80 / 0xEF` 与 `xpub/xprv` 系列（写入参数表与 README）
-* **到期窗口**：`ExpiryMode=ByHeight`，`WindowBlocks ≈ 7 年 = 52,596 × 7 = 368,172`
-* **税率**：`TaxRate = 30/100`（逐输入 `floor` 累加）
-* **REAP 上限**：`MaxREAPInputsPerBlock`（例如 200）；`MaxReapTaxPerBlock`（例如 ≤ BlockSubsidy 的 20%）
-* **BurnPolicy**：`OP_RETURN` 或 `P2WSH_Zero`（二选一，**冻结**）
-* **REAP\_VERSION**：整数常量（与交易识别强绑定）
-* **Seeds**：三地域静态 IP（后续可补 DNSSeeds）
+当前还有一个现实问题：
 
-> ⚠️ 主网**不可**像 Testnet 一样“重启链”，所以创世与参数必须先在文档中二次复核（见下文“Go/No-Go 清单”）。
+- `DNSSeeds` 仍是 placeholder：`seed.obtc.example.com`
 
----
+这意味着 Phase 8 的重点首先应该是**替换 placeholder seeds**，而不是创世生成器。
 
-## 📦 本周交付物（Deliverables）
+## 2. 当前缺口
 
-* 代码：
+主网候选发布文档里原先写的很多产物，仓库里还没有：
 
-  * `chaincfg/params_obtc.go`：`OBTCMainNetParams` 填实并 `Register()`
-  * `cmd/gengenesis/` & `cmd/checkgenesis/`：用于生成/校验创世（输出常量、再计算校验）
-  * `build/release.sh` & `Dockerfile.release`：三平台产物、校验与签名
-  * `cmd/obtc-status/`：状态页构建与服务（沿用 Phase 6）
-* 基础设施：
+- 没有 `cmd/gengenesis/`
+- 没有 `cmd/checkgenesis/`
+- 没有 `cmd/obtc-status/`
+- 没有 `docs/mainnet-join.md`
+- 没有 `docs/mainnet-params.md`
+- 没有 `docs/phase8-validation.md`
+- 没有 `build/release.sh`
+- 没有 `Dockerfile.release`
 
-  * `infra/mainnet-userdata.sh`：一键初始化种子节点（systemd、UFW、日志轮转）
-  * `systemd` 单元：`btcd.service` / `obtc-status.service`（主网端口）
-* 文档：
+当前可直接复用的是：
 
-  * `docs/mainnet-params.md`（冻结参数表）
-  * `docs/mainnet-join.md`（下载/校验/运行/排错）
-  * `docs/release-notes-v1.0.0-candidate.md`（发布说明）
-  * `docs/phase8-validation.md`（72h 观察记录与指标快照）
+- [`release/release.sh`](../release/release.sh)
+- [`release/README.md`](../release/README.md)
+- 根目录 [`Dockerfile`](../Dockerfile)
 
----
+## 3. Phase 8 目标
 
-## 🧩 任务拆解与时间分配（≤ 20h）
+主网候选发布现在应收敛成这几件事：
 
-### 1) 参数冻结 & 创世生成（4h）
+1. 冻结并审计主网参数表
+2. 替换真实种子节点
+3. 用现有发布链路产出 `btcd` / `btcctl`
+4. 补主网接入文档
+5. 完成 72h 节点与同步观察
 
-* 填实 `OBTCMainNetParams`（见“主网参数”），`init() { Register(&OBTCMainNetParams) }`；
-* 用 `gengenesis` 生成创世（含时间戳/消息/nonce/bits），导出到常量文件；
-* 用 `checkgenesis` 复算哈希与 merkle，**双人流程**：在文档中记录两次独立计算结果（你可以自检两遍）；
-* 本地起 **两节点（mainnet）** 连通并出第一个区块（可临时自挖以验证）。
+不要再把“生成主网创世块”作为 Phase 8 的默认前提。
 
-### 2) 发布构建与签名（3h）
+## 4. 建议交付物
 
-* 锁 `go.mod`（Phase 7 已做）；
-* 容器化构建三平台产物（`-trimpath -ldflags "-s -w -buildid="`），生成 `SHA256SUMS`；
-* 用 `minisign` 对 `SHA256SUMS` 签名（私钥离线保存）；
-* 构建 `obtc/node:mainnet` Docker 镜像（包含 `btcd` 与 `obtc-status`）。
+- `docs/mainnet-params.md`
+  - 从 `chaincfg/params_obtc.go` 导出主网参数表
+- `docs/mainnet-join.md`
+  - 启动、校验、连接种子、排错
+- `docs/phase8-validation.md`
+  - 72h 观察记录
+- `infra/`
+  - 主网 seed 节点部署脚本
+- `release/`
+  - 基于现有 `release/release.sh` 的发布说明补充
 
-### 3) 主网种子节点部署（6h）
+## 5. 任务拆解
 
-* EU/US/AS 各 1 台云主机：
+### 5.1 参数冻结
 
-  * 安装二进制到 `/opt/obtc/`，数据 `/var/lib/obtc`；
-  * `btcd.conf`（主网端口/参数），`systemd` 启动；
-  * 开放 `38555/tcp`（P2P），RPC 仅本机；状态页 `:38580` 只读；
-  * 彼此 `addpeer` 互连，验证 `peerCount`；
-  * 将 IP 写入代码 `addnode` 与 `docs/mainnet-join.md`。
-* 快速健康检查：出块间隔、peer 数、状态页可用。
+需要冻结并二次审计的项目应改成：
 
-### 4) 公布接入指南 & 发布页（2h）
+- `Name = obtcmainnet`
+- `DefaultPort = 9527`
+- `Bech32HRPSegwit = "obtc"`
+- 地址 / WIF / HD namespace
+- `ForkHeight = 950000`
+- `WindowBlocks = 362880`
+- `EnableAtHeight`
+- `ReapConsensusAtHeight`
+- `ReplayProtectionAtHeight`
+- `ExpiryCommitmentEnableAtHeight`
+- `ReapMaxInputs = 256`
 
-* `docs/mainnet-join.md`：
+这里不应再写：
 
-  * 二进制与 Docker 下载地址；
-  * **校验步骤**（`sha256sum` + `minisign -Vm`）；
-  * 快速启动命令（命令行 & Compose）；
-  * 连接种子（3 IP）；
-  * 常见故障：端口占用、时钟不同步、带宽不足、区块同步慢。
-* `release-notes-v1.0.0-candidate.md`：
+- “主网创世生成”
+- “创世哈希/nonce 双人校验”
 
-  * 协议摘要、核心差异（REAP/税/上限/隔离参数）、兼容性声明、已知问题与降级开关。
+因为当前链模型不是这样。
 
-### 5) 72 小时观察与热修（3–4h）
+### 5.2 种子节点
 
-* 观察窗口从“发布页上线 + 种子正常”起计：
+当前最实际的主网候选工作是：
 
-  * 每 1–2 小时采集：高度、出块间隔中位数（近 50/288 块）、孤块率、REAP 税总额、REAP 积压（到期未清理量）。
-  * 外部新节点自零同步一次，记录总时长（目标 **<2h**）。
-  * 如出现异常：**仅做最小热修**（非共识），例如状态页/日志/阈值微调；共识问题则**保持候选状态**、发布修复说明。
-* 将结果持续写入 `docs/phase8-validation.md`。
+1. 准备真实 seed 节点
+2. 替换 `seed.obtc.example.com`
+3. 提供接入说明
 
-### 6) 宣布与标签（1h）
+建议最小化配置：
 
-* 若 72h 指标达标，打标签 `v1.0.0-candidate`（或 `v1.0.0` 视你策略），更新发布页“Mainnet-Candidate 上线”；
-* 若未达标：保持 “Candidate” 状态，发补丁版本 `-rc2` 与说明，**不改创世**。
-
-> 预留 **1–2h 机动** 用于突发排障或文档修订。
-
----
-
-## 🚀 启动顺序（Runbook 摘要）
-
-1. 合并 `OBTCMainNetParams` & 创世常量 → 构建签名 → 放出下载页；
-2. 启动三地域种子节点，确认互连；
-3. 公开 `mainnet-join.md` 与参数表；
-4. 观察窗口 T0 开始（社区可接入），你保留一台私有小矿机防“冷启动”；
-5. 每 1–2h 例行检查与记录；
-6. 72h 达标 → 公告“Mainnet-Candidate 上线”。
-
----
-
-## ✅ Go/No-Go 清单（发布前必须打勾）
-
-* [ ] **参数冻结表**与代码一致（魔数/端口/HRP/WIF/BIP32/税率/上限/REAP\_VERSION/BurnPolicy）
-* [ ] 创世哈希/merkle/nonce 经 **双重校验**；`checkgenesis` 通过
-* [ ] 三地域种子互连可见，状态页正常
-* [ ] 三平台产物可复现构建，`SHA256SUMS` 与 `minisign` 验签通过
-* [ ] `mainnet-join.md` 可让新人 15 分钟起节点并开始同步
-* [ ] 观察脚本/状态页能正确汇总 REAP 指标
-
----
-
-## 📊 指标门槛（72h 内）
-
-* **出块间隔中位数**：600s ± 20%（近 288 块）
-* **孤块率**：≤ 3%（短时峰值 ≤ 5%）
-* **REAP 覆盖率**：≥ 95%（到期后 N 块内被处理）
-* **REAP 积压**：稳态 < `3 × MaxREAPInputsPerBlock`
-* **同步时长**：外部新节点 < 2 小时到头
-* **稳定性**：无 >1 深度重组；无崩溃
-
----
-
-## 🧱 风险与回退策略
-
-* **参数/创世出错**：若未公开发布即发现 → 重新生成并重构建；若已对外发布 → **保持 Candidate，不作硬分叉**，发公告与修复计划（必要时宣布新链为 `obtc-mainnet2`，避免污染）。
-* **共识缺陷**：立即冻结发布，**不建议继续接入**；推出修复版候选（新 tag），通过 Testnet 回放后再重启观察窗口。
-* **出块停滞**：短时用私有算力“引导”恢复；如长期算力不足，评估 PoW 难度参数的策略层微调（不改共识）。
-* **种子故障**：快速替换 IP 并更新 `mainnet-join.md`；尽量保持 ≥2 台在线。
-
----
-
-## 🧰 附：示例配置片段
-
-**`/etc/obtc/btcd.conf`（主网）**
-
-```
-listen=0.0.0.0:38555
-rpclisten=127.0.0.1:38556
-network=obtc-mainnet
+```ini
+obtcmainnet=1
+listen=0.0.0.0:9527
+rpclisten=127.0.0.1:9528
 txindex=1
 notls=1
-; 固定若干种子
-addpeer=<EU-SEED-IP>
-addpeer=<US-SEED-IP>
-addpeer=<AS-SEED-IP>
-; 建议仅 v1 传输（如 v2 未全面验证）
-nov2=1
+rpcuser=<user>
+rpcpass=<pass>
+addpeer=<seed1>
+addpeer=<seed2>
 ```
 
-**Docker Compose（单机全节点 + 状态页）**
+### 5.3 发布产物
 
-```yaml
-services:
-  node:
-    image: obtc/node:mainnet
-    ports: ["38555:38555","38580:38580"]
-    volumes: ["./data:/var/lib/obtc"]
-    restart: unless-stopped
+当前本仓可以直接发布的主要是：
+
+- `btcd`
+- `btcctl`
+
+当前不应再把以下内容写成默认产物：
+
+- `btcwallet`
+- `obtc-status`
+
+建议基于现有链路：
+
+```bash
+./release/release.sh <TAG>
 ```
 
----
+当前 release 流程按 `release/README.md` 理解，更偏向：
 
-## 📑 文档清单（需要更新/新增）
+- `manifest-<TAG>.txt`
+- `shasum -a 256`
+- GPG 签名
 
-* `docs/mainnet-params.md`（参数冻结表）
-* `docs/mainnet-join.md`（一键接入指南）
-* `docs/release-notes-v1.0.0-candidate.md`（发布说明）
-* `docs/phase8-validation.md`（72h 观察与指标）
+如果项目后续要改成 `SHA256SUMS + minisign`，那是额外发布流程改造，不是当前既有能力。
 
----
+### 5.4 72h 观察窗口
+
+主网候选初期的观察重点应该按**当前激活时序**理解：
+
+- REAP 在 `EnableAtHeight` 之前不会进入真实运行阶段
+- 因此早期 72h 更关注：
+  - 出块连续性
+  - peer 连通性
+  - 同步耗时
+  - replay protection 路径
+  - expiry commitment 区块接受路径
+  - 深度重组情况
+
+REAP 覆盖率 / 积压这类指标，在未到激活窗口前应标成：
+
+- `N/A (pre-activation)`
+
+### 5.5 观测方式
+
+如果还没有状态页，主网候选阶段可以先基于：
+
+- `getblockchaininfo`
+- `getpeerinfo`
+- `getmempoolinfo`
+- `getchaintips`
+- 节点日志
+
+如果要观测 `listexpiring` / `getexpiryindexstats`：
+
+- 至少准备 1 个带 `--expiryindex` 的观测节点
+- 不要把 scan/RPC 是否启用，误写成 commitment 是否维护
+
+## 6. 验证命令
+
+### 节点启动
+
+```bash
+go build ./...
+
+./btcd --obtcmainnet --datadir=.obtc/mainnet-node \
+  --listen=0.0.0.0:9527 \
+  --rpclisten=127.0.0.1:9528 \
+  --txindex --notls --rpcuser=u --rpcpass=p
+```
+
+### 发布脚本
+
+```bash
+./release/release.sh <TAG>
+```
+
+### 基本观测
+
+```bash
+./cmd/btcctl/btcctl --obtcmainnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:9528 getblockchaininfo
+./cmd/btcctl/btcctl --obtcmainnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:9528 getpeerinfo
+./cmd/btcctl/btcctl --obtcmainnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:9528 getchaintips
+```
+
+## 7. 完成标准（DoD）
+
+- [ ] 主网参数表与 `chaincfg/params_obtc.go` 一致
+- [ ] placeholder DNS seeds 被替换
+- [ ] `docs/mainnet-join.md` 落位
+- [ ] 发布流程明确基于现有 `release/release.sh`
+- [ ] 文档不再要求“新主网创世生成”
+- [ ] 72h 观察模板与指标口径明确区分 pre-activation / post-activation
+
+## 8. 风险与约束
+
+- **继续按新创世链规划主网**：会把整个发布流程带偏
+- **placeholder seed 不替换**：候选主网无法稳定接入
+- **把本仓不产出的工具写进发布清单**：到发布时会直接缺件
+- **在 pre-activation 阶段强行要求 REAP 指标达标**：会让观察口径失真

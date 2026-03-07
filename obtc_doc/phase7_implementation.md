@@ -1,173 +1,210 @@
-# Phase 7 计划（硬化 & 封版）— 稳定性、可复现构建、发布候选
+# Phase 7 计划（硬化、恢复、发布流程）— 按当前代码基线对齐
 
-**时间预算：18–20 小时** ｜ **目标**：在 Testnet 连续运行基础上完成**压力/模糊测试**与**参数冻结**，把“系统交易/税收/上限”等关键规则**上升到共识硬约束**；锁定依赖与构建流程，形成 **Mainnet-Candidate RC（发布候选）**。
+> 对齐日期：2026-03-07
+> 目标：在当前 `master` 已有 REAP / Replay Protection / Expiry Commitment 基础上，补齐真正还缺的硬化项、恢复流程和发布流程。
 
----
+## 1. 当前已实现的基线
 
-## 🎯 本周目标（Definition of Done）
+这部分内容已经在当前代码里，不应再写成“未来才开始做”：
 
-* **共识硬化**：
+### 1.1 共识规则
 
-  * `MaxREAPInputsPerBlock`、`MaxReapTaxPerBlock`、REAP 唯一性（每块≤1 笔）、“过期仅能被 REAP 花费”等**全部在共识层校验**。
-  * ExpiryIndex **版本号/迁移**机制到位（`indexVersion`）。
-* **稳定性验证**：完成 4 组压力/故障注入（见下），**无崩溃、无错误分叉**，指标达标。
-* **可复现构建**：固定 `go.mod`、构建容器、编译参数（`-trimpath -ldflags`），生成三平台二进制与 **SHA256 + minisign**。
-* **发行资产草案**：Release Notes、参数表、校验步骤、一键部署脚本。
-* **Go/No-Go** 门槛打勾（见底部清单）。
+- 普通交易不能花费已过期 UTXO
+- REAP 只能花费已过期 UTXO
+- REAP Marker 校验
+- REAP 输入 canonical 顺序校验
+- `ReapMaxInputs` 共识上限校验
+- Replay Protection 激活与脚本验证
+- Expiry Commitment（coinbase `OP_RETURN` + MuHash 前状态承诺）
 
----
+对应代码：
 
-## 🗂️ 本周交付物（Deliverables）
+- [`blockchain/validation_reap.go`](../blockchain/validation_reap.go)
+- [`blockchain/validation_obtc_replay.go`](../blockchain/validation_obtc_replay.go)
+- [`blockchain/expiryindex/expiryindex.go`](../blockchain/expiryindex/expiryindex.go)
+- [`mining/mining.go`](../mining/mining.go)
 
-* `blockchain/validation_reap.go`：补齐/提升**共识级**上限与一致性检查（如有尚在模板层的因素）。
-* `blockchain/expiryindex/buckets.go`：`indexVersion`、迁移路径与 `reindex` 开关。
-* `tools/chaos/`：压力与故障注入脚本（小额洪水、reorg 回放、kill-9 重启、磁盘限速）。
-* `build/`：
+### 1.2 ExpiryIndex 恢复基线
 
-  * `Dockerfile.release`（固定基础镜像与 Go 版本）
-  * `release.sh`（三平台构建、`-trimpath`、产出 `SHA256SUMS` 与 `.minisig`）
-* 文档：
+当前已存在：
 
-  * `docs/phase7-validation.md`（压测与指标报告）
-  * `docs/release-notes-rc.md`（RC 发布说明）
-  * `docs/repro-build.md`（可复现构建步骤）
+- `CurrentIndexVersion = 2`
+- version mismatch 检查
+- `smartRebuild()`
+- `fastRebuildFromUTXO()`
+- `incrementalCatchUp()`
 
----
+但当前**没有**：
 
-## 🔧 硬化项（代码层，优先顺序）
+- `--reindex-expiry` 显式命令行开关
 
-1. **共识上限**（如果第 4 周仅模板侧截断，本周必须上链）：
+所以这部分文档必须写成“已有自动恢复基线，显式 reindex 入口仍待实现”。
 
-   * `Enforce(MaxREAPInputsPerBlock)`：REAP 交易输入数超限 → **区块无效**。
-   * `Enforce(MaxReapTaxPerBlock)`：税总额超限 → **区块无效**。
-2. **唯一性 & 不可绕过**：
+### 1.3 发布脚本基线
 
-   * 每块**至多 1 笔 REAP**；
-   * **非 REAP 交易**花费**过期 UTXO** → **区块无效**；
-   * REAP 输入集合必须**等于**本高度选择器产出的前缀（确定性）。
-3. **指数升级与再扫**：
+仓库当前已有：
 
-   * `indexVersion = 2`（示例），含 `meta: tipHeightIndexed`；
-   * 当版本不匹配或元数据异常：
+- [`release/release.sh`](../release/release.sh)
+- [`release/README.md`](../release/README.md)
 
-     * 若 `--reindex-expiry`：全量重建；
-     * 否则安全退出并提示参数。
-4. **参数冻结点**：
+它们当前的语义是：
 
-   * 在 `chaincfg.Params` 标注**冻结**的共识参数清单（主网与测试网分别定义）：
+- 走 `shasum -a 256`
+- 生成 `manifest-<TAG>.txt`
+- 发布链路默认基于 **GPG/manifest** 思路
 
-     * `TaxRate{num,den}`、`MaxREAPInputsPerBlock`、`MaxReapTaxPerBlock`、`BurnPolicy`、`REAP_VERSION`。
-   * 对默认日志输出这些参数值，启动时打印一次（便于审计）。
+当前**没有**：
 
----
+- `build/release.sh`
+- `Dockerfile.release`
+- `minisign` 集成
+- `obtc-status` 构建产物
 
-## 🧪 压力/模糊测试矩阵（4 组，合计 \~6–7h）
+## 2. 当前仍待补齐的硬化项
 
-> 用 Testnet 上的 3 种子 + 本地 2 节点；必要时在私有子网复现。
+### 2.1 仍未落地的共识硬化
 
-### A. 小额 UTXO 洪水 + DUST 边界（\~2h）
+以下项在当前代码里还看不到明确实现：
 
-* 生成 5–10 万笔接近 DUST 的 UTXO；推进高度至到期窗口。
-* 观察：
+- `MaxReapTaxPerBlock`
+- “每块至多 1 笔 REAP”的显式区块级唯一性检查
+- `BurnPolicy` 冻结与校验
+- 独立的 `REAP_VERSION` 冻结文档（当前实现更多体现为交易版本 `3`）
 
-  * 模板/验证不超时；REAP 每块处理量稳定；
-  * **REAP 积压 < 3×MaxInputs**；
-  * **拒绝**任何普通交易花费已过期 UTXO。
-* 产出：处理速率曲线、积压曲线、CPU/内存峰值。
+因此 Phase 7 的重点应该收敛为：
 
-### B. 深度 reorg 回放（\~1.5h）
+1. 审计已经实现的规则
+2. 列出真正未实现的硬化缺口
+3. 再补代码，而不是重复写已经存在的能力
 
-* 在私有矿工节点上构造 `+N` 区块的替代链（N=5..10），其中包含/不包含 REAP 的不同组合；
-* 切换主分支，验证：
+### 2.2 仍未落地的运维/恢复能力
 
-  * ExpiryIndex `Connect/Disconnect` 后与主链一致；
-  * 无 “双 REAP”/“漏 REAP”；
-  * coinbase 费用/税总额在最终链一致。
+- 显式 `--reindex-expiry`
+- chaos / fault injection 脚本
+- 发布说明文档
+- 可复现构建验证文档
 
-### C. 节点崩溃恢复 & I/O 干扰（\~1.5h）
+## 3. Phase 7 目标
 
-* 在写入索引/打包模板期间 `kill -9`；重启后：
+Phase 7 应改成四件事：
 
-  * 不损坏 DB；`tipHeightIndexed` 正确；
-  * 若有未完成批，能在下一个区块处理。
-* 使用 `tc`/`ionice`/`cgroups` 限速磁盘与网络，确保**不崩溃**。
+1. **硬化缺口审计**
+2. **恢复流程补齐**
+3. **chaos / failure 注入**
+4. **发布流程标准化**
 
-### D. P2P 扰动 & mempool 对抗（\~1h）
+而不是继续把“已实现能力”当成待办。
 
-* 模拟大量无效 REAP 交易注入（应被 mempool 拒收，不传播）；
-* 普通交易尝试花费过期 UTXO（节点直接拒绝）；
-* 观察对同步速度与资源占用的影响。
+## 4. 建议交付物
 
----
+- `docs/phase7-validation.md`
+  - 列出已实现 vs 未实现硬化项
+- `docs/repro-build.md`
+  - 基于 `release/release.sh` 的实际发布流程
+- `scripts/validation/chaos/`
+  - reorg、kill -9、I/O 干扰、无效 REAP 注入
+- 可选新增：
+  - `--reindex-expiry`（如果决定补显式恢复入口）
 
-## 📊 指标门槛（通过标准）
+这里建议把原文档里不存在的 `tools/chaos/` 改为贴近当前仓库结构的 `scripts/validation/chaos/`。
 
-* **出块间隔中位数**：600s ±20%（近 288 块）
-* **孤块率**：≤ 3%（短窗峰值≤5%）
-* **REAP 覆盖率**：≥ 95%（到期后 N 块内被处理）
-* **REAP 积压**：稳态 **< 3 × MaxREAPInputsPerBlock**
-* **同步时长**：外部新节点 **< 2 小时** 同步到头
-* **稳定性**：压力/故障注入中**无崩溃**、**无错误分叉**
+## 5. 任务拆解
 
----
+### 5.1 共识硬化差距清单
 
-## 🔐 可复现构建 & 签名（\~3–4h）
+先明确三类状态：
 
-1. **锁依赖**：`go.mod` 固定版本到 commit SHA；`go env -w GOFLAGS=-trimpath`。
-2. **容器化编译**：
+#### 已实现
 
-   * 基础镜像：`golang:1.22.x`（显式 tag）+ `debian:bookworm-slim@sha256:…`（固定 digest）
-   * 构建：`CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -buildid="`
-3. **产物**：`btcd`、`btcwallet`、`obtc-status`（Linux/amd64、darwin/arm64、windows/amd64）。
-4. **校验**：生成 `SHA256SUMS` 与 `SHA256SUMS.minisig`（`minisign -S -m SHA256SUMS`）。
-5. **文档**：`docs/repro-build.md`：给出**逐步命令**，他人可在容器内重现相同哈希。
+- `ReapMaxInputs` 共识校验
+- 过期花费规则
+- REAP 输入顺序
+- Replay Protection
+- Expiry Commitment
 
----
+#### 待确认
 
-## 📄 发布说明（RC 草案，\~1h）
+- 区块级 REAP 唯一性是否已有完整检查
+- 模板侧与验证侧对 REAP 识别是否完全一致
 
-* **版本号**：`v0.1.0-rc1`（示例）
-* **摘要**：OBTC 协议核心（到期税 30% 入矿工费用、系统交易、共识上限）
-* **兼容性**：与 Bitcoin 网络完全隔离（魔数/端口/HRP/WIF/BIP32）
-* **如何加入 Testnet**（二进制/Docker/参数）
-* **校验**（SHA256 + minisign 步骤）
-* **已知问题**与**降级开关**（排序 Simple 模式、禁用 BIP324、固定 DUST 等）
+#### 未实现
 
----
+- `MaxReapTaxPerBlock`
+- `--reindex-expiry`
 
-## 🕒 时间分配（≤ 20h）
+### 5.2 索引恢复与版本迁移
 
-| 任务                                   |        预估 |
-| ------------------------------------ | --------: |
-| 共识硬化（上限/唯一性/过期限制）                    |      4.0h |
-| ExpiryIndex 版本/迁移/`--reindex-expiry` |      2.0h |
-| 压力/模糊 A+B（小额洪水 + reorg）              |      3.0h |
-| 故障注入 C（崩溃恢复 + I/O 限速）                |      1.5h |
-| P2P/mempool 扰动 D                     |      1.0h |
-| 可复现构建与签名                             |      3.0h |
-| 文档：验证报告、Release Notes、repro-build    |      2.0h |
-| 机动                                   |      3.5h |
-| **合计**                               | **20.0h** |
+当前代码的真实口径应写成：
 
----
+- `indexVersion = 2` 已存在
+- mismatch 会报错退出
+- 启动后依赖 `smartRebuild()` 自动追平
 
-## ✅ Go/No-Go 门槛（本周必须全部打勾）
+如果希望更强的 operator 体验，Phase 7 应新增：
 
-* [ ] 共识硬化代码合入，单测/集成测试覆盖并通过
-* [ ] 压测各项指标达标（见“指标门槛”）
-* [ ] 崩溃/重启/重组用例均一致且无损
-* [ ] `go.mod` 锁定、容器构建稳定、三平台产物哈希固定
-* [ ] 生成并签名 `SHA256SUMS`，校验步骤文档齐全
-* [ ] `release-notes-rc.md` & `testnet-join.md` 更新完毕
+- 显式 reindex 操作入口
+- 运维文档：什么情况下依赖自动 rebuild，什么情况下要人工清理并重建
 
----
+### 5.3 故障注入
 
-## 🧱 常见坑 & 规避
+建议最小矩阵：
 
-* **只在模板侧做上限** ⇒ 升级到共识检查，避免矿工“选择性截断”导致实现差异。
-* **REAP 识别过宽** ⇒ 仅允许**固定版本 + 固定输出形态**；OP\_RETURN 长度与前缀严格校验。
-* **指数升级破坏** ⇒ 默认安全退出，需显式 `--reindex-expiry` 参数才重建。
-* **构建不可复现** ⇒ 未锁基础镜像/Go 版本/`-trimpath`；务必固定。
-* **日志过噪/隐私** ⇒ 默认 INFO，禁止外向遥测，状态页仅汇总指标不含敏感数据。
+1. reorg 回放
+2. `kill -9` 重启恢复
+3. 无效 REAP/mempool 对抗
+4. I/O 干扰
 
----
+关注结果：
+
+- 不错误分叉
+- 索引与 accumulator 不漂移
+- 重启后能继续同步
+
+### 5.4 发布流程标准化
+
+当前最务实的做法不是新造一套 `build/release.sh`，而是：
+
+1. 基于现有 `release/release.sh`
+2. 明确支持的目标平台
+3. 明确 `btcd` / `btcctl` 是本仓当前产物
+4. 如果后续要引入 `minisign`，作为**新增工作项**，不是当前基线
+
+当前 repo 里没有 `btcwallet`，所以 Phase 7 文档不应再把 `btcwallet` 写成本仓直接发布产物。
+
+## 6. 验证命令
+
+### 测试
+
+```bash
+go test ./...
+go test ./blockchain/... -count=1
+go test ./mining/... -count=1
+```
+
+### 发布脚本基线
+
+```bash
+./release/release.sh <TAG>
+```
+
+产物和校验当前按 `release/README.md` 理解，应先基于：
+
+- `manifest-<TAG>.txt`
+- `shasum -a 256`
+- GPG 签名
+
+如果项目后续确定切到 `minisign`，应在文档里单独作为切换项记录。
+
+## 7. 完成标准（DoD）
+
+- [ ] `docs/phase7-validation.md` 明确列出已实现与未实现硬化项
+- [ ] 至少完成一轮 reorg / kill -9 / 无效 REAP 对抗验证
+- [ ] 发布流程文档与当前 `release/release.sh` 对齐
+- [ ] 文档不再引用不存在的 `build/release.sh`、`Dockerfile.release`、`btcwallet`、`obtc-status`
+
+## 8. 风险与约束
+
+- **把已实现能力继续当待办**：会掩盖真正缺口
+- **把不存在的发布链路写成默认流程**：到发布阶段会直接卡住
+- **没有显式 reindex 入口**：operator 体验仍偏弱
+- **未补 `MaxReapTaxPerBlock`**：若该约束仍是目标，必须单独落代码与测试

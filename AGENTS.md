@@ -37,10 +37,9 @@ obtc/ (repo root)
   obtc_doc/
     AGENTS.md
     obtc_roadmap_plan.md
-    phase1_implementation.md
-    phase2_implementation.md
-    phase3_implementation.md
-    phase4_implementation.md
+    newcomer_reading_guide.md
+    expiry_commitment_implementation.md
+    reap_dust_behavior.md
     phase5_implementation.md
     phase6_implementation.md
     phase7_implementation.md
