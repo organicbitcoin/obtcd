@@ -1,27 +1,31 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# OBTC CI Validation Script
-# Simulates GitHub Actions CI pipeline locally
+set -euo pipefail
 
-set -e
+readonly MAIN_WORKFLOW_FILE=".github/workflows/main.yml"
+readonly RELEASE_WORKFLOW_FILE=".github/workflows/dimagespub.yml"
+readonly RELEASE_DOCKERFILE=".github/workflows/Dockerfile"
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 print_status() {
-    echo -e "${BLUE}[CI-TEST]${NC} $1"
+    echo -e "${BLUE}[CI]${NC} $1"
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+print_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 print_error() {
-    echo -e "${RED}[FAILED]${NC} $1"
+    echo -e "${RED}[FAIL]${NC} $1"
 }
 
 print_section() {
@@ -31,219 +35,321 @@ print_section() {
     echo -e "${YELLOW}========================================${NC}"
 }
 
-# Test 1: Build
-test_build() {
-    print_section "Testing Build"
-    print_status "Running go build..."
-    
-    if go build; then
-        print_success "Build test passed"
-    else
-        print_error "Build test failed"
+usage() {
+    cat <<'EOF'
+OBTC local GitHub Actions runner
+
+Usage:
+  scripts/ci-validate.sh [--release] [--docker-only] [--help]
+
+Options:
+  --release      Include the release/tag workflow local simulation.
+  --docker-only  Run only the release/tag workflow local simulation.
+  --help         Show this help text.
+
+Behavior:
+  - Default run mirrors jobs in .github/workflows/main.yml.
+  - --release additionally simulates .github/workflows/dimagespub.yml.
+  - Coveralls upload and Docker push are replaced with local-only validation.
+EOF
+}
+
+require_command() {
+    local command_name="$1"
+
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        print_error "Missing required command: ${command_name}"
         return 1
     fi
 }
 
-# Test 2: Unit Tests
-test_unit() {
-    print_section "Testing Unit Tests"
-    print_status "Running go test..."
-    
-    if go test ./...; then
-        print_success "Unit tests passed"
-    else
-        print_error "Unit tests failed"
-        return 1
-    fi
+run_cmd() {
+    local description="$1"
+    shift
+
+    print_status "${description}"
+    "$@" || return 1
 }
 
-# Test 3: Race Detection
-test_race() {
-    print_section "Testing Race Conditions"
-    print_status "Running go test -race..."
-    
-    if go test -race -short ./...; then
-        print_success "Race condition tests passed"
-    else
-        print_error "Race condition tests failed"
-        return 1
-    fi
+workflow_go_version() {
+    awk -F': ' '/GO_VERSION:/ {print $2; exit}' "${MAIN_WORKFLOW_FILE}"
 }
 
-# Test 4: OBTC Specific Tests
-test_obtc() {
-    print_section "Testing OBTC Integration"
-    
-    print_status "Running OBTC network tests..."
-    if go test ./chaincfg ./wire -v -run "OBTC"; then
-        print_success "OBTC network tests passed"
-    else
-        print_error "OBTC network tests failed"
-        return 1
+release_platforms() {
+    awk -F': ' '/TPLATFORMS:/ {print $2; exit}' "${RELEASE_WORKFLOW_FILE}"
+}
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+run_main_workflow=1
+run_release_workflow=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --release)
+            run_release_workflow=1
+            ;;
+        --docker-only)
+            run_main_workflow=0
+            run_release_workflow=1
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            echo "Run 'scripts/ci-validate.sh --help' for usage."
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if [[ "${run_main_workflow}" -eq 0 && "${run_release_workflow}" -eq 0 ]]; then
+    print_error "Nothing to run."
+    exit 1
+fi
+
+require_command go
+require_command make
+require_command bash
+
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/obtc-ci.XXXXXX")"
+go_cache_root="${OBTC_GO_CACHE_ROOT:-${TMPDIR:-/tmp}/obtc-go-cache}"
+validate_file="${repo_root}/validate_obtc_local.go"
+btcec_coverage_backup_existed=0
+
+export GOCACHE="${GOCACHE:-${go_cache_root}/build}"
+export GOTMPDIR="${GOTMPDIR:-${go_cache_root}/tmp}"
+mkdir -p "${GOCACHE}" "${GOTMPDIR}"
+
+if [[ -e btcec/coverage.txt.bak ]]; then
+    btcec_coverage_backup_existed=1
+fi
+
+cleanup() {
+    rm -rf "${tmp_root}"
+    rm -f "${validate_file}"
+    if [[ "${btcec_coverage_backup_existed}" -eq 0 ]]; then
+        rm -f btcec/coverage.txt.bak
     fi
-    
-    print_status "Running OBTC fork height tests..."
-    if go test ./chaincfg -v -run "Fork"; then
-        print_success "OBTC fork height tests passed"
-    else
-        print_error "OBTC fork height tests failed"
-        return 1
+}
+trap cleanup EXIT
+
+check_go_version() {
+    local expected current
+
+    expected="$(workflow_go_version)"
+    current="$(go version | awk '{print $3}' | sed 's/^go//')"
+
+    if [[ -z "${expected}" ]]; then
+        print_warn "Unable to read Go version from ${MAIN_WORKFLOW_FILE}"
+        return 0
     fi
-    
-    print_status "Validating OBTC parameters..."
-    cat > validate_obtc_temp.go << 'EOF'
+
+    if [[ "${current}" != "${expected}" ]]; then
+        print_warn "Workflow uses Go ${expected}, local environment is Go ${current}"
+        return 0
+    fi
+
+    print_status "Go version matches workflow: ${current}"
+}
+
+job_build() {
+    run_cmd "Running make build" make build
+}
+
+job_unit_cover() {
+    run_cmd "Running make unit-cover" make unit-cover
+    print_warn "Coveralls upload is a GitHub-hosted step; local runner only produces coverage artifacts."
+}
+
+job_unit_race() {
+    run_cmd "Running make unit-race" make unit-race
+}
+
+job_obtc_tests() {
+    local script_files=(
+        scripts/devnet-up.sh
+        scripts/phase6/run_testnet_node.sh
+        scripts/phase6/collect_validation_snapshot.sh
+        scripts/phase6/seed_preflight.sh
+        scripts/phase6/gen_testnet_conf.sh
+        scripts/validation/testnet_smoke.sh
+    )
+
+    run_cmd "Running OBTC network tests" go test ./chaincfg ./wire -v -run "OBTC"
+
+    run_cmd "Running OBTC fork height tests" go test ./chaincfg -v -run "Fork"
+
+    print_status "Validating OBTC parameters"
+    cat > "${validate_file}" <<'EOF'
 package main
+
 import (
-  "fmt"
-  "github.com/btcsuite/btcd/chaincfg"
+	"fmt"
+
+	"github.com/btcsuite/btcd/chaincfg"
 )
+
 func main() {
-  if !chaincfg.IsOBTC(&chaincfg.ObtcMainNetParams) {
-    panic("OBTC MainNet not properly registered")
-  }
-  if !chaincfg.IsOBTC(&chaincfg.ObtcTestNetParams) {
-    panic("OBTC TestNet not properly registered")
-  }
-  if !chaincfg.IsOBTC(&chaincfg.ObtcRegTestParams) {
-    panic("OBTC RegTest not properly registered")
-  }
-  
-  mainnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcMainNetParams)
-  testnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcTestNetParams)
-  regtestFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcRegTestParams)
-  
-  if mainnetFork <= 0 || testnetFork <= 0 || regtestFork <= 0 {
-    panic("Invalid fork heights detected")
-  }
-  
-  fmt.Println("✅ All OBTC parameters validated successfully")
-  fmt.Printf("Fork heights - MainNet: %d, TestNet: %d, RegTest: %d\n", 
-    mainnetFork, testnetFork, regtestFork)
+	if !chaincfg.IsOBTC(&chaincfg.ObtcMainNetParams) {
+		panic("OBTC MainNet not properly registered")
+	}
+	if !chaincfg.IsOBTC(&chaincfg.ObtcTestNetParams) {
+		panic("OBTC TestNet not properly registered")
+	}
+	if !chaincfg.IsOBTC(&chaincfg.ObtcRegTestParams) {
+		panic("OBTC RegTest not properly registered")
+	}
+
+	mainnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcMainNetParams)
+	testnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcTestNetParams)
+	regtestFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcRegTestParams)
+
+	if mainnetFork <= 0 || testnetFork <= 0 || regtestFork <= 0 {
+		panic("Invalid fork heights detected")
+	}
+
+	fmt.Println("OBTC parameters validated successfully")
+	fmt.Printf(
+		"Fork heights - MainNet: %d, TestNet: %d, RegTest: %d\n",
+		mainnetFork,
+		testnetFork,
+		regtestFork,
+	)
 }
 EOF
-    
-    if go run validate_obtc_temp.go; then
-        print_success "OBTC parameter validation passed"
-    else
-        print_error "OBTC parameter validation failed"
-        return 1
-    fi
-    
-    rm -f validate_obtc_temp.go
+    go run "${validate_file}" || return 1
+    rm -f "${validate_file}"
+
+    run_cmd "Listing scripts directory" ls -la scripts/
+
+    run_cmd "Normalizing script execute bits" chmod +x "${script_files[@]}"
+
+    run_cmd "Checking shell syntax" bash -n "${script_files[@]}"
+
+    print_status "Checking help outputs"
+    ./scripts/devnet-up.sh help >/dev/null || return 1
+    ./scripts/phase6/run_testnet_node.sh --help >/dev/null || return 1
+    ./scripts/phase6/collect_validation_snapshot.sh --help >/dev/null || return 1
+    ./scripts/phase6/seed_preflight.sh --help >/dev/null || return 1
+    ./scripts/phase6/gen_testnet_conf.sh --help >/dev/null || return 1
+    ./scripts/validation/testnet_smoke.sh --help >/dev/null || return 1
 }
 
-# Test 5: Scripts Validation
-test_scripts() {
-    print_section "Testing DevNet Scripts"
-    
-    if [ ! -f "scripts/devnet-up.sh" ]; then
-        print_error "Required script not found: scripts/devnet-up.sh"
-        return 1
-    fi
-    
-    print_status "Checking script permissions..."
-    chmod +x scripts/devnet-up.sh
-    
-    print_status "Testing devnet-up.sh help..."
-    if ./scripts/devnet-up.sh help > /dev/null; then
-        print_success "devnet-up.sh help works"
-    else
-        print_error "devnet-up.sh help failed"
-        return 1
-    fi
-    
-    print_success "All scripts validated successfully"
+job_rpctest() {
+    run_cmd "Building btcd for rpctest harness" go build -o btcd .
+
+    run_cmd "Running rpctest integration suite" go test -p 1 -tags=rpctest ./integration/... -count=1 -v
 }
 
-# Test 6: Code Quality
-test_quality() {
-    print_section "Testing Code Quality"
-    
-    print_status "Running go vet..."
-    if go vet ./...; then
-        print_success "go vet passed"
-    else
-        print_error "go vet failed"
-        return 1
-    fi
-    
-    print_status "Checking go fmt..."
-    if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+job_quality() {
+    local unformatted
+
+    run_cmd "Running go vet ./..." go vet ./...
+
+    print_status "Checking gofmt -s -l ."
+    unformatted="$(gofmt -s -l .)"
+    if [[ -n "${unformatted}" ]]; then
         print_error "Code is not properly formatted. Run 'gofmt -s -w .'"
-        gofmt -s -l .
+        echo "${unformatted}"
         return 1
-    else
-        print_success "Code formatting is correct"
     fi
 }
 
-# Main function
+job_build_matrix() {
+    local build_dir os suffix
+    build_dir="${tmp_root}/build-matrix"
+    mkdir -p "${build_dir}"
+
+    for os in linux windows darwin; do
+        suffix=""
+        if [[ "${os}" == "windows" ]]; then
+            suffix=".exe"
+        fi
+
+        print_status "Cross-building btcd for ${os}/amd64"
+        GOOS="${os}" GOARCH=amd64 go build -o "${build_dir}/btcd-${os}-amd64${suffix}" . || return 1
+
+        print_status "Cross-building btcctl for ${os}/amd64"
+        GOOS="${os}" GOARCH=amd64 go build -o "${build_dir}/btcctl-${os}-amd64${suffix}" ./cmd/btcctl || return 1
+    done
+}
+
+job_release_docker() {
+    local platforms image_tag
+
+    require_command docker || return 1
+
+    if ! docker buildx version >/dev/null 2>&1; then
+        print_error "docker buildx is required for release workflow simulation"
+        return 1
+    fi
+
+    platforms="$(release_platforms)"
+    if [[ -z "${platforms}" ]]; then
+        print_error "Unable to read TPLATFORMS from ${RELEASE_WORKFLOW_FILE}"
+        return 1
+    fi
+
+    image_tag="obtcd-local:$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)"
+
+    print_warn "Docker registry login, metadata extraction, and push are replaced by a local build-only check."
+    print_status "Running docker buildx build for platforms: ${platforms}"
+    docker buildx build \
+        --platform "${platforms}" \
+        --file "${RELEASE_DOCKERFILE}" \
+        --tag "${image_tag}" \
+        . || return 1
+}
+
+run_job() {
+    local job_name="$1"
+    local job_func="$2"
+
+    print_section "${job_name}"
+    if "${job_func}"; then
+        print_success "${job_name} passed"
+    else
+        failed_jobs+=("${job_name}")
+        print_error "${job_name} failed"
+    fi
+}
+
+failed_jobs=()
+
 main() {
-    print_section "OBTC CI Validation Pipeline"
-    echo "Simulating GitHub Actions CI locally..."
-    echo ""
-    
-    local failed_tests=()
-    
-    # Run all tests
-    test_build || failed_tests+=("Build")
-    test_unit || failed_tests+=("Unit Tests")
-    test_race || failed_tests+=("Race Detection")
-    test_obtc || failed_tests+=("OBTC Integration")
-    test_scripts || failed_tests+=("Scripts Validation")
-    test_quality || failed_tests+=("Code Quality")
-    
-    # Summary
-    print_section "CI Validation Results"
-    
-    if [ ${#failed_tests[@]} -eq 0 ]; then
-        print_success "🎉 All CI tests passed! Your changes are ready for GitHub Actions."
-        print_status "You can safely push to GitHub - the CI pipeline should succeed."
-        echo ""
-        print_status "To push your changes:"
-        print_status "  git add ."
-        print_status "  git commit -m 'your commit message'"
-        print_status "  git push origin your-branch-name"
-        return 0
-    else
-        print_error "❌ Some CI tests failed:"
-        for test in "${failed_tests[@]}"; do
-            echo "  - $test"
-        done
-        echo ""
-        print_status "Please fix the failing tests before pushing to GitHub."
-        return 1
+    print_section "OBTC local Actions runner"
+    check_go_version
+
+    if [[ "${run_main_workflow}" -eq 1 ]]; then
+        run_job "Build" job_build
+        run_job "Unit coverage" job_unit_cover
+        run_job "Unit race" job_unit_race
+        run_job "OBTC integration" job_obtc_tests
+        run_job "RPC integration (rpctest)" job_rpctest
+        run_job "Code quality" job_quality
+        run_job "Build matrix" job_build_matrix
     fi
+
+    if [[ "${run_release_workflow}" -eq 1 ]]; then
+        run_job "Docker release build" job_release_docker
+    fi
+
+    print_section "Summary"
+    if [[ "${#failed_jobs[@]}" -eq 0 ]]; then
+        print_success "All selected local workflow simulations passed"
+        return 0
+    fi
+
+    print_error "The following workflow groups failed:"
+    for job_name in "${failed_jobs[@]}"; do
+        echo "  - ${job_name}"
+    done
+    return 1
 }
 
-# Handle command line arguments
-case "${1:-}" in
-    "--help"|"-h")
-        echo "OBTC CI Validation Script"
-        echo ""
-        echo "Usage: $0 [options]"
-        echo ""
-        echo "This script simulates the GitHub Actions CI pipeline locally"
-        echo "to ensure your changes will pass CI before pushing."
-        echo ""
-        echo "Options:"
-        echo "  --help    Show this help message"
-        echo ""
-        echo "Tests performed:"
-        echo "  - Build compilation"
-        echo "  - Unit tests"
-        echo "  - Race condition detection"
-        echo "  - OBTC-specific integration tests"
-        echo "  - Script validation"
-        echo "  - Code quality (vet, fmt)"
-        exit 0
-        ;;
-    "")
-        main
-        ;;
-    *)
-        print_error "Unknown option: $1"
-        echo "Run '$0 --help' for usage information."
-        exit 1
-        ;;
-esac
+main

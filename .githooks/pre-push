@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+args=()
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [[ "${local_ref}" == refs/tags/* ]]; then
+        args+=(--release)
+        break
+    fi
+done
+
+echo "[pre-push] running local GitHub Actions simulation..."
+if [[ "${#args[@]}" -gt 0 ]]; then
+    scripts/ci-validate.sh "${args[@]}"
+else
+    scripts/ci-validate.sh
+fi
+echo "[pre-push] OK"

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -60,8 +61,7 @@ var (
 	// ListenAddressGenerator is a function that is used to generate two
 	// listen addresses (host:port), one for the P2P listener and one for
 	// the RPC listener. This is exported to allow overwriting of the
-	// default behavior which isn't very concurrency safe (just selecting
-	// a random port can produce collisions and therefore flakes).
+	// default behavior when a custom test harness needs explicit ports.
 	ListenAddressGenerator = generateListeningAddresses
 
 	// defaultNodePort is the start of the range for listening ports of
@@ -536,31 +536,12 @@ func generateListeningAddresses() (string, string) {
 }
 
 // NextAvailablePort returns the first port that is available for listening by
-// a new node. It panics if no port is found and the maximum available TCP port
-// is reached.
+// a new node. It coordinates across test processes by using a shared port
+// cursor file protected by a lock file to avoid reusing the same recently
+// closed ports across packages.
 func NextAvailablePort() int {
-	port := atomic.AddUint32(&lastPort, 1)
-	for port < 65535 {
-		// If there are no errors while attempting to listen on this
-		// port, close the socket and return it as available. While it
-		// could be the case that some other process picks up this port
-		// between the time the socket is closed and it's reopened in
-		// the harness node, in practice in CI servers this seems much
-		// less likely than simply some other process already being
-		// bound at the start of the tests.
-		addr := fmt.Sprintf(ListenerFormat, port)
-		l, err := net.Listen("tcp4", addr)
-		if err == nil {
-			err := l.Close()
-			if err == nil {
-				return int(port)
-			}
-		}
-		port = atomic.AddUint32(&lastPort, 1)
-	}
-
-	// No ports available? Must be a mistake.
-	panic("no ports available for listening")
+	lockFile, portFile := globalPortStateFiles()
+	return nextAvailablePortFromFile(lockFile, portFile)
 }
 
 // NextAvailablePortForProcess returns the first port that is available for
@@ -571,101 +552,131 @@ func NextAvailablePortForProcess(pid int) int {
 	lockFile := filepath.Join(
 		os.TempDir(), fmt.Sprintf("rpctest-port-pid-%d.lock", pid),
 	)
+	portFile := filepath.Join(
+		os.TempDir(), fmt.Sprintf("rpctest-port-pid-%d", pid),
+	)
+	return nextAvailablePortFromFile(lockFile, portFile)
+}
+
+// GenerateProcessUniqueListenerAddresses is a function that returns two
+// listener addresses with unique ports per the given process id. This remains
+// useful for tests that want isolated allocation state per worker process.
+func GenerateProcessUniqueListenerAddresses(pid int) (string, string) {
+	port1 := NextAvailablePortForProcess(pid)
+	port2 := NextAvailablePortForProcess(pid)
+	return fmt.Sprintf(ListenerFormat, port1),
+		fmt.Sprintf(ListenerFormat, port2)
+}
+
+func globalPortStateFiles() (string, string) {
+	testDir, err := baseDir()
+	if err != nil {
+		panic(fmt.Errorf("error preparing rpctest base dir: %w", err))
+	}
+
+	return filepath.Join(testDir, "rpctest-port.lock"),
+		filepath.Join(testDir, "rpctest-port")
+}
+
+func nextAvailablePortFromFile(lockFile, portFile string) int {
+	lockFileHandle := acquirePortLock(lockFile)
+	defer releasePortLock(lockFileHandle, lockFile)
+
+	lastAllocatedPort := readLastAllocatedPort(portFile)
+	startPort := normalizePortCursor(lastAllocatedPort) + 1
+
+	if port, ok := findAvailablePort(startPort, 65535); ok {
+		writeLastAllocatedPort(portFile, port)
+		return port
+	}
+
+	if port, ok := findAvailablePort(int(defaultNodePort)+1, startPort); ok {
+		writeLastAllocatedPort(portFile, port)
+		return port
+	}
+
+	panic("no ports available for listening")
+}
+
+func acquirePortLock(lockFile string) *os.File {
 	timeout := time.After(time.Second)
 
-	var (
-		lockFileHandle *os.File
-		err            error
-	)
 	for {
-		// Attempt to acquire the lock file. If it already exists, wait
-		// for a bit and retry.
-		lockFileHandle, err = os.OpenFile(
+		lockFileHandle, err := os.OpenFile(
 			lockFile, os.O_CREATE|os.O_EXCL, 0600,
 		)
 		if err == nil {
-			// Lock acquired.
-			break
+			return lockFileHandle
 		}
 
-		// Wait for a bit and retry.
 		select {
 		case <-timeout:
 			panic("timeout waiting for lock file")
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-
-	// Release the lock file when we're done.
-	defer func() {
-		// Always close file first, Windows won't allow us to remove it
-		// otherwise.
-		_ = lockFileHandle.Close()
-		err := os.Remove(lockFile)
-		if err != nil {
-			panic(fmt.Errorf("couldn't remove lock file: %w", err))
-		}
-	}()
-
-	portFile := filepath.Join(
-		os.TempDir(), fmt.Sprintf("rpctest-port-pid-%d", pid),
-	)
-	port, err := os.ReadFile(portFile)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			panic(fmt.Errorf("error reading port file: %w", err))
-		}
-		port = []byte(strconv.Itoa(int(defaultNodePort)))
-	}
-
-	lastPort, err := strconv.Atoi(string(port))
-	if err != nil {
-		panic(fmt.Errorf("error parsing port: %w", err))
-	}
-
-	// We take the next one.
-	lastPort++
-	for lastPort < 65535 {
-		// If there are no errors while attempting to listen on this
-		// port, close the socket and return it as available. While it
-		// could be the case that some other process picks up this port
-		// between the time the socket is closed and it's reopened in
-		// the harness node, in practice in CI servers this seems much
-		// less likely than simply some other process already being
-		// bound at the start of the tests.
-		addr := fmt.Sprintf(ListenerFormat, lastPort)
-		l, err := net.Listen("tcp4", addr)
-		if err == nil {
-			err := l.Close()
-			if err == nil {
-				err := os.WriteFile(
-					portFile,
-					[]byte(strconv.Itoa(lastPort)), 0600,
-				)
-				if err != nil {
-					panic(fmt.Errorf("error updating "+
-						"port file: %w", err))
-				}
-
-				return lastPort
-			}
-		}
-		lastPort++
-	}
-
-	// No ports available? Must be a mistake.
-	panic("no ports available for listening")
 }
 
-// GenerateProcessUniqueListenerAddresses is a function that returns two
-// listener addresses with unique ports per the given process id and should be
-// used to overwrite rpctest's default generator which is prone to use colliding
-// ports.
-func GenerateProcessUniqueListenerAddresses(pid int) (string, string) {
-	port1 := NextAvailablePortForProcess(pid)
-	port2 := NextAvailablePortForProcess(pid)
-	return fmt.Sprintf(ListenerFormat, port1),
-		fmt.Sprintf(ListenerFormat, port2)
+func releasePortLock(lockFileHandle *os.File, lockFile string) {
+	if lockFileHandle == nil {
+		return
+	}
+
+	_ = lockFileHandle.Close()
+	if err := os.Remove(lockFile); err != nil {
+		panic(fmt.Errorf("couldn't remove lock file: %w", err))
+	}
+}
+
+func readLastAllocatedPort(portFile string) int {
+	port, err := os.ReadFile(portFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return int(defaultNodePort)
+		}
+		panic(fmt.Errorf("error reading port file: %w", err))
+	}
+
+	lastAllocatedPort, err := strconv.Atoi(strings.TrimSpace(string(port)))
+	if err != nil {
+		return int(defaultNodePort)
+	}
+
+	return lastAllocatedPort
+}
+
+func writeLastAllocatedPort(portFile string, port int) {
+	err := os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0600)
+	if err != nil {
+		panic(fmt.Errorf("error updating port file: %w", err))
+	}
+}
+
+func normalizePortCursor(port int) int {
+	if port < int(defaultNodePort) || port >= 65535 {
+		return int(defaultNodePort)
+	}
+
+	return port
+}
+
+func findAvailablePort(startPort, endExclusive int) (int, bool) {
+	for port := startPort; port < endExclusive; port++ {
+		addr := fmt.Sprintf(ListenerFormat, port)
+		l, err := net.Listen("tcp4", addr)
+		if err != nil {
+			continue
+		}
+
+		if err := l.Close(); err != nil {
+			continue
+		}
+
+		atomic.StoreUint32(&lastPort, uint32(port))
+		return port, true
+	}
+
+	return 0, false
 }
 
 // baseDir is the directory path of the temp directory for all rpctest files.

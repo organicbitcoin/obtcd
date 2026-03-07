@@ -1493,7 +1493,20 @@ if reap.IsLikelyREAPTx(tx.MsgTx()) {
 
 ### 11.2 文件：`scripts/ci-validate.sh`
 
-CI 验证脚本，运行 lint + 单元测试 + 构建检查。
+本地 GitHub Actions 模拟脚本。
+
+默认行为对应 `.github/workflows/main.yml`：
+- `make build`
+- `make unit-cover`（仅生成 coverage 文件，不上传 Coveralls）
+- `make unit-race`
+- OBTC 专项测试、参数校验、脚本入口校验
+- `rpctest` 集成测试
+- `go vet` + `gofmt -s -l .`
+- `linux/windows/macos` 的 build matrix 本地交叉编译模拟
+
+附加参数：
+- `--release`：额外模拟 tag/release 的 Docker workflow
+- `--docker-only`：只跑 Docker release 本地模拟
 
 ### 11.3 文件：`scripts/validation/`
 
@@ -1506,8 +1519,19 @@ CI 验证脚本，运行 lint + 单元测试 + 构建检查。
 ### 11.4 文件：`.githooks/`
 
 Git 钩子：
-- `pre-commit`：提交前检查（lint、fmt）
-- `pre-push`：推送前运行完整测试
+- `pre-commit`：提交前执行 `gofmt` 检查和 `go test ./...`
+- `pre-push`：推送前执行 `scripts/ci-validate.sh`
+
+启用方式：
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit .githooks/pre-push scripts/ci-validate.sh
+```
+
+说明：
+- 普通分支 push 只跑 `main.yml` 对应流程
+- 推送 tag 时，`pre-push` 会自动附加 `--release`，本地执行 Docker buildx 构建校验
 
 ---
 
