@@ -14,5 +14,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 done
 
 echo "[pre-push] running local GitHub Actions simulation..."
-scripts/ci-validate.sh "${args[@]}"
+if [[ "${#args[@]}" -gt 0 ]]; then
+    scripts/ci-validate.sh "${args[@]}"
+else
+    scripts/ci-validate.sh
+fi
 echo "[pre-push] OK"
