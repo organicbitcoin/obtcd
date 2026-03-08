@@ -1,10 +1,16 @@
 package integration
 
 import (
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/integration/rpctest"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInvalidateAndReconsiderBlock(t *testing.T) {
@@ -241,4 +247,64 @@ func TestInvalidateAndReconsiderBlock(t *testing.T) {
 		t.Fatalf("TestInvalidateAndReconsiderBlock fail. "+
 			"Expected to check %d chaintips, checked %d", 2, checkedTips)
 	}
+}
+
+func TestInvalidateAndReconsiderBlockErrorPaths(t *testing.T) {
+	r, err := rpctest.New(&chaincfg.RegressionNetParams, nil, nil, "")
+	require.NoError(t, err)
+	require.NoError(t, r.SetUp(true, 0))
+	t.Cleanup(func() {
+		require.NoError(t, r.TearDown())
+	})
+
+	_, err = r.Client.Generate(2)
+	require.NoError(t, err)
+
+	block1Hash, err := r.Client.GetBlockHash(1)
+	require.NoError(t, err)
+
+	assertRPCErrorCodeContains := func(err error, code btcjson.RPCErrorCode,
+		substr string) {
+
+		t.Helper()
+
+		var rpcErr *btcjson.RPCError
+		require.Error(t, err)
+		require.True(t, errors.As(err, &rpcErr), "expected RPC error, got %T", err)
+		require.Equal(t, code, rpcErr.Code)
+		if substr != "" {
+			require.True(t, strings.Contains(rpcErr.Message, substr),
+				"expected %q to contain %q", rpcErr.Message, substr)
+		}
+	}
+
+	_, err = r.Client.RawRequest("invalidateblock", []json.RawMessage{
+		json.RawMessage(`"not-a-hash"`),
+	})
+	assertRPCErrorCodeContains(err, btcjson.ErrRPCDeserialization,
+		"not-a-hash")
+
+	_, err = r.Client.RawRequest("reconsiderblock", []json.RawMessage{
+		json.RawMessage(`"still-not-a-hash"`),
+	})
+	assertRPCErrorCodeContains(err, btcjson.ErrRPCDeserialization,
+		"still-not-a-hash")
+
+	unknownHash := &chainhash.Hash{0xaa, 0xbb, 0xcc}
+	err = r.Client.InvalidateBlock(unknownHash)
+	assertRPCErrorCodeContains(err, btcjson.ErrRPCInternal.Code,
+		"cannot be invalidated")
+
+	err = r.Client.ReconsiderBlock(unknownHash)
+	assertRPCErrorCodeContains(err, btcjson.ErrRPCInternal.Code,
+		"cannot be reconsidered")
+
+	err = r.Client.InvalidateBlock(chaincfg.RegressionNetParams.GenesisHash)
+	assertRPCErrorCodeContains(err, btcjson.ErrRPCInternal.Code,
+		"genesis block")
+
+	require.NoError(t, r.Client.InvalidateBlock(block1Hash))
+	require.NoError(t, r.Client.InvalidateBlock(block1Hash))
+	require.NoError(t, r.Client.ReconsiderBlock(block1Hash))
+	require.NoError(t, r.Client.ReconsiderBlock(block1Hash))
 }

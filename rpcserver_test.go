@@ -495,3 +495,35 @@ func TestGetTxSpendingPrevOut(t *testing.T) {
 	require.NoError(err)
 	require.Equal(expectedResults, results)
 }
+
+func TestHandleInvalidateBlockInvalidHash(t *testing.T) {
+	t.Parallel()
+
+	require := require.New(t)
+
+	cmd := btcjson.NewInvalidateBlockCmd("not-a-hash")
+	result, err := handleInvalidateBlock(&rpcServer{}, cmd, make(chan struct{}))
+	require.Nil(result)
+	require.Error(err)
+
+	rpcErr, ok := err.(*btcjson.RPCError)
+	require.True(ok)
+	require.Equal(btcjson.ErrRPCDeserialization, rpcErr.Code)
+	require.Contains(rpcErr.Message, "not-a-hash")
+}
+
+func TestHandleReconsiderBlockInvalidHash(t *testing.T) {
+	t.Parallel()
+
+	require := require.New(t)
+
+	cmd := btcjson.NewReconsiderBlockCmd("still-not-a-hash")
+	result, err := handleReconsiderBlock(&rpcServer{}, cmd, make(chan struct{}))
+	require.Nil(result)
+	require.Error(err)
+
+	rpcErr, ok := err.(*btcjson.RPCError)
+	require.True(ok)
+	require.Equal(btcjson.ErrRPCDeserialization, rpcErr.Code)
+	require.Contains(rpcErr.Message, "still-not-a-hash")
+}
