@@ -17,6 +17,10 @@ import (
 
 const reapTxVersion = 3
 
+// unminedInputHeight matches mining.UnminedHeight and marks UTXOs that come
+// from an unconfirmed mempool parent rather than a mined block.
+const unminedInputHeight = int32(0x7fffffff)
+
 func isLikelyReapTx(tx *wire.MsgTx) bool {
 	if tx == nil || tx.Version != reapTxVersion || len(tx.TxOut) < 1 {
 		return false
@@ -324,6 +328,14 @@ func checkExpirySpendRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoi
 				"utxo %v missing from view during expiry check",
 				txIn.PreviousOutPoint))
 		}
+		if utxo.BlockHeight() == unminedInputHeight {
+			if isReap {
+				return ruleError(ErrBadTxInput,
+					"reap transaction spends unconfirmed utxo")
+			}
+			continue
+		}
+
 		expiryHeight := int32(expiryParams.CalculateExpiryKey(utxo.BlockHeight()))
 		expired := txHeight >= expiryHeight
 

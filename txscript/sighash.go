@@ -723,10 +723,11 @@ func calcTaprootSignatureHashRaw(sigHashes *TxSigHashes, hType SigHashType,
 // specified.
 func CalcTaprootSignatureHash(sigHashes *TxSigHashes, hType SigHashType,
 	tx *wire.MsgTx, idx int,
-	prevOutFetcher PrevOutputFetcher) ([]byte, error) {
+	prevOutFetcher PrevOutputFetcher,
+	sigHashOpts ...TaprootSigHashOption) ([]byte, error) {
 
 	return calcTaprootSignatureHashRaw(
-		sigHashes, hType, tx, idx, prevOutFetcher,
+		sigHashes, hType, tx, idx, prevOutFetcher, sigHashOpts...,
 	)
 }
 

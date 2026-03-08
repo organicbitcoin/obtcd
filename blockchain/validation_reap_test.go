@@ -441,3 +441,40 @@ func TestCheckExpirySpendRulesDirect(t *testing.T) {
 		t.Fatalf("expected reap non-expired spend error")
 	}
 }
+
+func TestCheckExpirySpendRulesAllowsUnconfirmedParentSpend(t *testing.T) {
+	view := NewUtxoViewpoint()
+	tx := wire.NewMsgTx(1)
+	tx.AddTxOut(&wire.TxOut{Value: 1_000, PkScript: []byte{txscript.OP_TRUE}})
+	parent := btcutil.NewTx(tx)
+	view.AddTxOut(parent, 0, unminedInputHeight)
+
+	spend := wire.NewMsgTx(1)
+	spend.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Hash: *parent.Hash(), Index: 0},
+	})
+	spend.AddTxOut(&wire.TxOut{Value: 900, PkScript: []byte{txscript.OP_TRUE}})
+
+	if err := checkExpirySpendRules(spend, 500, view, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("expected non-REAP spend of unconfirmed parent to bypass expiry enforcement, got %v", err)
+	}
+}
+
+func TestCheckExpirySpendRulesRejectsReapUnconfirmedParentSpend(t *testing.T) {
+	view := NewUtxoViewpoint()
+	tx := wire.NewMsgTx(1)
+	tx.AddTxOut(&wire.TxOut{Value: 1_000, PkScript: []byte{txscript.OP_TRUE}})
+	parent := btcutil.NewTx(tx)
+	view.AddTxOut(parent, 0, unminedInputHeight)
+
+	reapTx := wire.NewMsgTx(reapTxVersion)
+	reapTx.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Hash: *parent.Hash(), Index: 0},
+	})
+	reapTx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, reapTx, 500)})
+
+	err := checkExpirySpendRules(reapTx, 500, view, &chaincfg.ObtcRegTestParams)
+	if err == nil || !strings.Contains(err.Error(), "unconfirmed utxo") {
+		t.Fatalf("expected REAP unconfirmed spend rejection, got %v", err)
+	}
+}

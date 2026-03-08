@@ -2869,7 +2869,7 @@ func handleInvalidateBlock(s *rpcServer, cmd interface{}, closeChan <-chan struc
 		return nil, &btcjson.RPCError{
 			Code: btcjson.ErrRPCDeserialization,
 			Message: fmt.Sprintf("Failed to deserialize blockhash from string of %s",
-				invalidateHash),
+				c.BlockHash),
 		}
 	}
 
@@ -3159,7 +3159,7 @@ func handleReconsiderBlock(s *rpcServer, cmd interface{}, closeChan <-chan struc
 		return nil, &btcjson.RPCError{
 			Code: btcjson.ErrRPCDeserialization,
 			Message: fmt.Sprintf("Failed to deserialize blockhash from string of %s",
-				reconsiderHash),
+				c.BlockHash),
 		}
 	}
 

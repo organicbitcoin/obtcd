@@ -219,6 +219,302 @@ func TestProcessTransactionOBTCReplayProtectionActivation(t *testing.T) {
 	}
 }
 
+func TestProcessTransactionOBTCReplayProtectionOrphanResolution(t *testing.T) {
+	tests := []struct {
+		name                  string
+		height                int32
+		parentHashType        txscript.SigHashType
+		expectedAcceptedCount int
+		expectChildInPool     bool
+	}{
+		{
+			name:                  "pre-activation replay orphan removed",
+			height:                112,
+			parentHashType:        txscript.SigHashAll,
+			expectedAcceptedCount: 1,
+			expectChildInPool:     false,
+		},
+		{
+			name:                  "post-activation replay orphan accepted",
+			height:                113,
+			parentHashType:        txscript.SigHashOBTCReplayProtection | txscript.SigHashAll,
+			expectedAcceptedCount: 2,
+			expectChildInPool:     true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			harness, outputs, err := newPoolHarness(&chaincfg.ObtcRegTestParams)
+			if err != nil {
+				t.Fatalf("unable to create pool harness: %v", err)
+			}
+
+			harness.chain.SetHeight(test.height)
+
+			parent, err := createSignedTxWithInputsHashType(
+				harness, []spendableOutput{outputs[0]}, 1, 1_000, false,
+				test.parentHashType,
+			)
+			if err != nil {
+				t.Fatalf("unable to create parent tx: %v", err)
+			}
+
+			childInput := txOutToSpendableOut(parent, 0)
+			child, err := createSignedTxWithInputsHashType(
+				harness, []spendableOutput{childInput}, 1, 1_000, false,
+				txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+			)
+			if err != nil {
+				t.Fatalf("unable to create child tx: %v", err)
+			}
+
+			accepted, err := harness.txPool.ProcessTransaction(child, true, false, 0)
+			if err != nil {
+				t.Fatalf("unable to add orphan child: %v", err)
+			}
+			if len(accepted) != 0 {
+				t.Fatalf("expected orphan child to return no accepted txs, got %d", len(accepted))
+			}
+			if !harness.txPool.IsOrphanInPool(child.Hash()) {
+				t.Fatalf("expected child to be tracked as orphan")
+			}
+
+			accepted, err = harness.txPool.ProcessTransaction(parent, false, false, 0)
+			if err != nil {
+				t.Fatalf("unable to add parent tx: %v", err)
+			}
+
+			childStillOrphan := harness.txPool.IsOrphanInPool(child.Hash())
+			childInPool := harness.txPool.IsTransactionInPool(child.Hash())
+			if childStillOrphan {
+				t.Fatalf("expected child to be removed from orphan pool")
+			}
+			if childInPool != test.expectChildInPool {
+				_, _, replayErr := harness.txPool.MaybeAcceptTransaction(child, true, true)
+				t.Fatalf("unexpected child mempool membership: want %v, recheckErr=%v",
+					test.expectChildInPool, replayErr)
+			}
+			if len(accepted) != test.expectedAcceptedCount {
+				t.Fatalf("expected %d accepted txs, got %d (childInPool=%v)",
+					test.expectedAcceptedCount, len(accepted), childInPool)
+			}
+		})
+	}
+}
+
+func TestProcessTransactionOBTCReplayProtectionReplacementMatrix(t *testing.T) {
+	const defaultFee = btcutil.SatoshiPerBitcoin
+
+	tests := []struct {
+		name           string
+		setup          func(*testing.T, *poolHarness, spendableOutput) (*btcutil.Tx, *btcutil.Tx, *btcutil.Tx)
+		shouldPass     bool
+		originalInPool bool
+		childInPool    bool
+	}{
+		{
+			name: "non-replay replacement rejected",
+			setup: func(t *testing.T, harness *poolHarness, baseOut spendableOutput) (*btcutil.Tx, *btcutil.Tx, *btcutil.Tx) {
+				t.Helper()
+
+				original, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{baseOut}, 1, defaultFee, true,
+					txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create original tx: %v", err)
+				}
+				if _, err := harness.txPool.ProcessTransaction(original, false, false, 0); err != nil {
+					t.Fatalf("unable to add original tx: %v", err)
+				}
+
+				replacement, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{baseOut}, 1, defaultFee*3, false,
+					txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create replacement tx: %v", err)
+				}
+
+				return original, nil, replacement
+			},
+			shouldPass:     false,
+			originalInPool: true,
+			childInPool:    false,
+		},
+		{
+			name: "replay replacement accepted",
+			setup: func(t *testing.T, harness *poolHarness, baseOut spendableOutput) (*btcutil.Tx, *btcutil.Tx, *btcutil.Tx) {
+				t.Helper()
+
+				original, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{baseOut}, 1, defaultFee, true,
+					txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create original tx: %v", err)
+				}
+				if _, err := harness.txPool.ProcessTransaction(original, false, false, 0); err != nil {
+					t.Fatalf("unable to add original tx: %v", err)
+				}
+
+				replacement, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{baseOut}, 1, defaultFee*3, false,
+					txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create replacement tx: %v", err)
+				}
+
+				return original, nil, replacement
+			},
+			shouldPass:     true,
+			originalInPool: false,
+			childInPool:    false,
+		},
+		{
+			name: "inherited replay replacement accepted",
+			setup: func(t *testing.T, harness *poolHarness, baseOut spendableOutput) (*btcutil.Tx, *btcutil.Tx, *btcutil.Tx) {
+				t.Helper()
+
+				parent, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{baseOut}, 1, defaultFee, true,
+					txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create parent tx: %v", err)
+				}
+				if _, err := harness.txPool.ProcessTransaction(parent, false, false, 0); err != nil {
+					t.Fatalf("unable to add parent tx: %v", err)
+				}
+
+				parentOut := txOutToSpendableOut(parent, 0)
+				child, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{parentOut}, 1, defaultFee, false,
+					txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create child tx: %v", err)
+				}
+				if _, err := harness.txPool.ProcessTransaction(child, false, false, 0); err != nil {
+					t.Fatalf("unable to add child tx: %v", err)
+				}
+
+				replacement, err := createSignedTxWithInputsHashType(
+					harness, []spendableOutput{parentOut}, 1, defaultFee*3, false,
+					txscript.SigHashOBTCReplayProtection|txscript.SigHashAll,
+				)
+				if err != nil {
+					t.Fatalf("unable to create replacement tx: %v", err)
+				}
+
+				return parent, child, replacement
+			},
+			shouldPass:     true,
+			originalInPool: true,
+			childInPool:    false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			harness, outputs, err := newPoolHarness(&chaincfg.ObtcRegTestParams)
+			if err != nil {
+				t.Fatalf("unable to create pool harness: %v", err)
+			}
+
+			harness.chain.SetHeight(113)
+
+			original, child, replacement := test.setup(t, harness, outputs[0])
+			accepted, err := harness.txPool.ProcessTransaction(
+				replacement, false, false, 0,
+			)
+			if test.shouldPass && err != nil {
+				t.Fatalf("expected replacement to be accepted: %v", err)
+			}
+			if !test.shouldPass && err == nil {
+				t.Fatalf("expected replacement to be rejected")
+			}
+			if test.shouldPass && len(accepted) != 1 {
+				t.Fatalf("expected accepted replacement list size 1, got %d", len(accepted))
+			}
+
+			if harness.txPool.IsTransactionInPool(replacement.Hash()) != test.shouldPass {
+				t.Fatalf("unexpected replacement mempool membership: want %v", test.shouldPass)
+			}
+			if harness.txPool.IsTransactionInPool(original.Hash()) != test.originalInPool {
+				t.Fatalf("unexpected original mempool membership: want %v", test.originalInPool)
+			}
+			if child != nil && harness.txPool.IsTransactionInPool(child.Hash()) != test.childInPool {
+				t.Fatalf("unexpected child mempool membership: want %v", test.childInPool)
+			}
+		})
+	}
+}
+
+func TestProcessTransactionWitnessDeploymentRejectsOrphanBeforePooling(t *testing.T) {
+	harness, _, err := newPoolHarness(&chaincfg.MainNetParams)
+	if err != nil {
+		t.Fatalf("unable to create pool harness: %v", err)
+	}
+
+	harness.txPool.cfg.IsDeploymentActive = func(deploymentID uint32) (bool, error) {
+		return false, nil
+	}
+
+	msg := wire.NewMsgTx(wire.TxVersion)
+	msg.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Index: 1},
+		Sequence:         wire.MaxTxInSequenceNum,
+		Witness:          wire.TxWitness{[]byte{0x01}},
+	})
+	msg.AddTxOut(&wire.TxOut{Value: 1_000, PkScript: []byte{txscript.OP_TRUE}})
+
+	tx := btcutil.NewTx(msg)
+	_, err = harness.txPool.ProcessTransaction(tx, true, false, 0)
+	if err == nil {
+		t.Fatal("expected witness tx to be rejected before segwit activation")
+	}
+	if !strings.Contains(err.Error(), "segwit isn't active yet") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if harness.txPool.IsOrphanInPool(tx.Hash()) {
+		t.Fatalf("witness tx should not be added to orphan pool")
+	}
+}
+
+func TestProcessTransactionREAPRejectsOrphanBeforePooling(t *testing.T) {
+	harness, _, err := newPoolHarness(&chaincfg.MainNetParams)
+	if err != nil {
+		t.Fatalf("unable to create pool harness: %v", err)
+	}
+
+	harness.txPool.cfg.Policy.MaxTxVersion = 3
+
+	msg := wire.NewMsgTx(3)
+	msg.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Index: 1},
+		Sequence:         wire.MaxTxInSequenceNum,
+	})
+	burn, _ := txscript.NewScriptBuilder().AddOp(txscript.OP_RETURN).AddData([]byte("REAP_BURN")).Script()
+	marker, _ := txscript.NewScriptBuilder().AddOp(txscript.OP_RETURN).AddData([]byte("REAP:100:1:abcd")).Script()
+	msg.AddTxOut(&wire.TxOut{Value: 1000, PkScript: burn})
+	msg.AddTxOut(&wire.TxOut{Value: 0, PkScript: marker})
+
+	tx := btcutil.NewTx(msg)
+	_, err = harness.txPool.ProcessTransaction(tx, true, false, 0)
+	if err == nil {
+		t.Fatal("expected REAP tx to be rejected before orphan handling")
+	}
+	if !strings.Contains(err.Error(), "reap system transaction") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if harness.txPool.IsOrphanInPool(tx.Hash()) {
+		t.Fatalf("REAP tx should not be added to orphan pool")
+	}
+}
+
 func createSignedTxWithHashType(harness *poolHarness, input spendableOutput,
 	version int32, fee btcutil.Amount,
 	hashType txscript.SigHashType) (*btcutil.Tx, error) {
@@ -240,6 +536,55 @@ func createSignedTxWithHashType(harness *poolHarness, input spendableOutput,
 		return nil, err
 	}
 	tx.TxIn[0].SignatureScript = sigScript
+
+	return btcutil.NewTx(tx), nil
+}
+
+func createSignedTxWithInputsHashType(harness *poolHarness, inputs []spendableOutput,
+	numOutputs uint32, fee btcutil.Amount, signalsReplacement bool,
+	hashType txscript.SigHashType) (*btcutil.Tx, error) {
+
+	var totalInput btcutil.Amount
+	for _, input := range inputs {
+		totalInput += input.amount
+	}
+	totalInput -= fee
+
+	amountPerOutput := int64(totalInput) / int64(numOutputs)
+	remainder := int64(totalInput) - amountPerOutput*int64(numOutputs)
+
+	tx := wire.NewMsgTx(wire.TxVersion)
+	sequence := wire.MaxTxInSequenceNum
+	if signalsReplacement {
+		sequence = MaxRBFSequence
+	}
+
+	for _, input := range inputs {
+		tx.AddTxIn(&wire.TxIn{
+			PreviousOutPoint: input.outPoint,
+			Sequence:         sequence,
+		})
+	}
+	for i := uint32(0); i < numOutputs; i++ {
+		amount := amountPerOutput
+		if i == numOutputs-1 {
+			amount += remainder
+		}
+		tx.AddTxOut(&wire.TxOut{
+			PkScript: harness.payScript,
+			Value:    amount,
+		})
+	}
+
+	for i := range tx.TxIn {
+		sigScript, err := txscript.SignatureScript(
+			tx, i, harness.payScript, hashType, harness.signKey, true,
+		)
+		if err != nil {
+			return nil, err
+		}
+		tx.TxIn[i].SignatureScript = sigScript
+	}
 
 	return btcutil.NewTx(tx), nil
 }

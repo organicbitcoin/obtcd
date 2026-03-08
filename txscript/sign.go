@@ -69,12 +69,13 @@ func WitnessSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int, amt int64
 // additional byte to denote the sighash type.
 func RawTxInTaprootSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int,
 	amt int64, pkScript []byte, tapScriptRootHash []byte, hashType SigHashType,
-	key *btcec.PrivateKey) ([]byte, error) {
+	key *btcec.PrivateKey,
+	sigHashOpts ...TaprootSigHashOption) ([]byte, error) {
 
 	// First, we'll start by compute the top-level taproot sighash.
 	sigHash, err := calcTaprootSignatureHashRaw(
 		sigHashes, hashType, tx, idx,
-		NewCannedPrevOutputFetcher(pkScript, amt),
+		NewCannedPrevOutputFetcher(pkScript, amt), sigHashOpts...,
 	)
 	if err != nil {
 		return nil, err
@@ -113,7 +114,8 @@ func RawTxInTaprootSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int,
 // TODO(roasbeef): add support for annex even tho it's non-standard?
 func TaprootWitnessSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int,
 	amt int64, pkScript []byte, hashType SigHashType,
-	key *btcec.PrivateKey) (wire.TxWitness, error) {
+	key *btcec.PrivateKey,
+	sigHashOpts ...TaprootSigHashOption) (wire.TxWitness, error) {
 
 	// As we're assuming this was a BIP 86 key, we use an empty root hash
 	// which means output key commits to just the public key.
@@ -121,7 +123,7 @@ func TaprootWitnessSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int,
 
 	sig, err := RawTxInTaprootSignature(
 		tx, sigHashes, idx, amt, pkScript, fakeTapscriptRootHash,
-		hashType, key,
+		hashType, key, sigHashOpts...,
 	)
 	if err != nil {
 		return nil, err
@@ -142,14 +144,18 @@ func TaprootWitnessSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int,
 // anywhere....
 func RawTxInTapscriptSignature(tx *wire.MsgTx, sigHashes *TxSigHashes, idx int,
 	amt int64, pkScript []byte, tapLeaf TapLeaf, hashType SigHashType,
-	privKey *btcec.PrivateKey) ([]byte, error) {
+	privKey *btcec.PrivateKey,
+	sigHashOpts ...TaprootSigHashOption) ([]byte, error) {
 
 	// First, we'll start by compute the top-level taproot sighash.
 	tapLeafHash := tapLeaf.TapHash()
+	opts := []TaprootSigHashOption{
+		WithBaseTapscriptVersion(blankCodeSepValue, tapLeafHash[:]),
+	}
+	opts = append(opts, sigHashOpts...)
 	sigHash, err := calcTaprootSignatureHashRaw(
 		sigHashes, hashType, tx, idx,
-		NewCannedPrevOutputFetcher(pkScript, amt),
-		WithBaseTapscriptVersion(blankCodeSepValue, tapLeafHash[:]),
+		NewCannedPrevOutputFetcher(pkScript, amt), opts...,
 	)
 	if err != nil {
 		return nil, err

@@ -96,3 +96,27 @@ func TestLegacyAndWitnessReplayDomainTagGated(t *testing.T) {
 		t.Fatalf("expected witness replay-protected and base domains to differ")
 	}
 }
+
+func TestCalcWitnessSigHashOBTCReplayProtectionWrapper(t *testing.T) {
+	tx, _, sigHashes := makeOBTCReplaySighashTestTx()
+	hashType := SigHashOBTCReplayProtection | SigHashAll
+	subScript := []byte{OP_TRUE}
+
+	got, err := CalcWitnessSigHash(
+		subScript, sigHashes, hashType, tx, 0, 10_000,
+	)
+	if err != nil {
+		t.Fatalf("unexpected witness wrapper error: %v", err)
+	}
+
+	want, err := calcWitnessSignatureHashRawWithReplayProtection(
+		subScript, sigHashes, hashType, tx, 0, 10_000, true,
+	)
+	if err != nil {
+		t.Fatalf("unexpected witness raw error: %v", err)
+	}
+
+	if !bytes.Equal(got, want) {
+		t.Fatalf("expected witness wrapper hash to match raw helper")
+	}
+}

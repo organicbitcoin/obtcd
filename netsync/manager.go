@@ -274,6 +274,11 @@ func (sm *SyncManager) startSync() {
 	best := sm.chain.BestSnapshot()
 	var higherPeers, equalPeers []*peerpkg.Peer
 	for peer, state := range sm.peerStates {
+		if !peer.Connected() {
+			log.Debugf("peer %v is disconnected, skipping", peer)
+			continue
+		}
+
 		if !state.syncCandidate {
 			continue
 		}
