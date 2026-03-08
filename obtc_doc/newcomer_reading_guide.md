@@ -1530,10 +1530,10 @@ chmod +x .githooks/pre-commit .githooks/pre-push scripts/ci-validate.sh
 ```
 
 说明：
-- 普通分支 push 默认走轻量 `quick` 模式，跑 `build + unit-cover + unit-race + OBTC smoke + rpctest + quality`
+- 普通分支 push 默认走 `quick` 模式，当前会跑 `build + unit-cover + unit-race + OBTC smoke + rpctest + quality + build-matrix`
 - 如需完整本地闸门，可用 `OBTC_PRE_PUSH_MODE=full git push`
 - 如需临时跳过，可用 `OBTC_PRE_PUSH_MODE=skip git push`
-- `quick` 只跳过 `build-matrix`
+- 当前 `quick` 与 `full` 的 main workflow 校验一致；只有 tag push 才会额外自动带上 `--release`
 - 推送 tag 时，`pre-push` 会自动切到 `full --release`，本地执行完整校验和 Docker buildx 构建校验
 
 ---
