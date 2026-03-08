@@ -6,6 +6,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
 args=()
+validate_args=()
 mode="${OBTC_PRE_PUSH_MODE:-quick}"
 
 while read -r local_ref local_sha remote_ref remote_sha; do
@@ -18,11 +19,11 @@ done
 
 case "${mode}" in
     quick)
-        args=(--quick "${args[@]}")
+        validate_args+=(--quick)
         echo "[pre-push] running quick local validation..."
         ;;
     full)
-        args=(--full "${args[@]}")
+        validate_args+=(--full)
         echo "[pre-push] running full local validation..."
         ;;
     skip)
@@ -35,5 +36,8 @@ case "${mode}" in
         ;;
 esac
 
-scripts/ci-validate.sh "${args[@]}"
+if [[ "${#args[@]}" -gt 0 ]]; then
+    validate_args+=("${args[@]}")
+fi
+scripts/ci-validate.sh "${validate_args[@]}"
 echo "[pre-push] OK"
