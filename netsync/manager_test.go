@@ -223,7 +223,8 @@ func TestHandleDonePeerMsgPromotesBackupPeerAndClearsRequestedState(t *testing.T
 
 	sm.handleDonePeerMsg(syncPeer)
 
-	require.NotContains(t, sm.peerStates, syncPeer)
+	_, exists := sm.peerStates[syncPeer]
+	require.False(t, exists)
 	require.Empty(t, sm.requestedTxns)
 	require.Empty(t, sm.requestedBlocks)
 	require.Same(t, backupPeer, sm.syncPeer)
