@@ -6,17 +6,38 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
 args=()
+validate_args=()
+mode="${OBTC_PRE_PUSH_MODE:-quick}"
+
 while read -r local_ref local_sha remote_ref remote_sha; do
     if [[ "${local_ref}" == refs/tags/* ]]; then
+        mode="full"
         args+=(--release)
         break
     fi
 done
 
-echo "[pre-push] running local GitHub Actions simulation..."
+case "${mode}" in
+    quick)
+        validate_args+=(--quick)
+        echo "[pre-push] running quick local validation..."
+        ;;
+    full)
+        validate_args+=(--full)
+        echo "[pre-push] running full local validation..."
+        ;;
+    skip)
+        echo "[pre-push] skipping local validation because OBTC_PRE_PUSH_MODE=skip"
+        exit 0
+        ;;
+    *)
+        echo "[pre-push] unsupported OBTC_PRE_PUSH_MODE=${mode} (expected quick, full, or skip)" >&2
+        exit 1
+        ;;
+esac
+
 if [[ "${#args[@]}" -gt 0 ]]; then
-    scripts/ci-validate.sh "${args[@]}"
-else
-    scripts/ci-validate.sh
+    validate_args+=("${args[@]}")
 fi
+scripts/ci-validate.sh "${validate_args[@]}"
 echo "[pre-push] OK"

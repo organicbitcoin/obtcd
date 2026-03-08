@@ -56,3 +56,5 @@ obtc/ (repo root)
 
 - 对话回复一律中文。
 - 提交记录（commit message）使用英文。
+- 严格禁止使用 `--no-verify` 跳过 `pre-commit` 或 `pre-push`。
+- 如果 hook 失败，必须修复问题或明确说明阻塞原因，不得绕过本地校验。
