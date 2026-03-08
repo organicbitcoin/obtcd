@@ -43,7 +43,7 @@ Usage:
   scripts/ci-validate.sh [--quick|--full] [--release] [--docker-only] [--help]
 
 Options:
-  --quick        Run the fast local profile (build + OBTC smoke + quality).
+  --quick        Run the default local profile (build + coverage + OBTC smoke + rpctest + quality).
   --full         Run the full main workflow simulation (default).
   --release      Include the release/tag workflow local simulation.
   --docker-only  Run only the release/tag workflow local simulation.
@@ -51,7 +51,7 @@ Options:
 
 Behavior:
   - Default run mirrors jobs in .github/workflows/main.yml.
-  - --quick skips unit-cover, unit-race, rpctest, and build-matrix jobs.
+  - --quick skips only unit-race and build-matrix.
   - --release additionally simulates .github/workflows/dimagespub.yml.
   - Coveralls upload and Docker push are replaced with local-only validation.
 EOF
@@ -337,9 +337,11 @@ main() {
 
     if [[ "${run_main_workflow}" -eq 1 ]]; then
         if [[ "${validation_profile}" == "quick" ]]; then
-            print_warn "Quick profile enabled: skipping unit-cover, unit-race, rpctest, and build-matrix."
+            print_warn "Quick profile enabled: skipping unit-race and build-matrix."
             run_job "Build" job_build
+            run_job "Unit coverage" job_unit_cover
             run_job "OBTC smoke" job_obtc_tests
+            run_job "RPC integration (rpctest)" job_rpctest
             run_job "Code quality" job_quality
         else
             run_job "Build" job_build
