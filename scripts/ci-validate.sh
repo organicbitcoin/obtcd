@@ -40,15 +40,18 @@ usage() {
 OBTC local GitHub Actions runner
 
 Usage:
-  scripts/ci-validate.sh [--release] [--docker-only] [--help]
+  scripts/ci-validate.sh [--quick|--full] [--release] [--docker-only] [--help]
 
 Options:
+  --quick        Run the fast local profile (build + OBTC smoke + quality).
+  --full         Run the full main workflow simulation (default).
   --release      Include the release/tag workflow local simulation.
   --docker-only  Run only the release/tag workflow local simulation.
   --help         Show this help text.
 
 Behavior:
   - Default run mirrors jobs in .github/workflows/main.yml.
+  - --quick skips unit-cover, unit-race, rpctest, and build-matrix jobs.
   - --release additionally simulates .github/workflows/dimagespub.yml.
   - Coveralls upload and Docker push are replaced with local-only validation.
 EOF
@@ -84,9 +87,16 @@ cd "${repo_root}"
 
 run_main_workflow=1
 run_release_workflow=0
+validation_profile="full"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --quick)
+            validation_profile="quick"
+            ;;
+        --full)
+            validation_profile="full"
+            ;;
         --release)
             run_release_workflow=1
             ;;
@@ -326,13 +336,20 @@ main() {
     check_go_version
 
     if [[ "${run_main_workflow}" -eq 1 ]]; then
-        run_job "Build" job_build
-        run_job "Unit coverage" job_unit_cover
-        run_job "Unit race" job_unit_race
-        run_job "OBTC integration" job_obtc_tests
-        run_job "RPC integration (rpctest)" job_rpctest
-        run_job "Code quality" job_quality
-        run_job "Build matrix" job_build_matrix
+        if [[ "${validation_profile}" == "quick" ]]; then
+            print_warn "Quick profile enabled: skipping unit-cover, unit-race, rpctest, and build-matrix."
+            run_job "Build" job_build
+            run_job "OBTC smoke" job_obtc_tests
+            run_job "Code quality" job_quality
+        else
+            run_job "Build" job_build
+            run_job "Unit coverage" job_unit_cover
+            run_job "Unit race" job_unit_race
+            run_job "OBTC integration" job_obtc_tests
+            run_job "RPC integration (rpctest)" job_rpctest
+            run_job "Code quality" job_quality
+            run_job "Build matrix" job_build_matrix
+        fi
     fi
 
     if [[ "${run_release_workflow}" -eq 1 ]]; then
