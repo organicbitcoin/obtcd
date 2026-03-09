@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,6 +51,76 @@ type minerHarness struct {
 	minerAddr btcutil.Address
 	tip       *btcutil.Block
 	cleanup   func()
+}
+
+func TestStartStopSetNumWorkersDynamicControl(t *testing.T) {
+	var connectedCalls atomic.Int32
+
+	miner := New(&Config{
+		ConnectedCount: func() int32 {
+			connectedCalls.Add(1)
+			return 0
+		},
+		IsCurrent: func() bool { return true },
+	})
+
+	if miner.IsMining() {
+		t.Fatalf("expected miner to start stopped")
+	}
+	if got := miner.HashesPerSecond(); got != 0 {
+		t.Fatalf("expected idle hash rate to be 0, got %v", got)
+	}
+
+	miner.SetNumWorkers(1)
+	if got := miner.NumWorkers(); got != 1 {
+		t.Fatalf("unexpected worker count after explicit set: got %d want %d", got, 1)
+	}
+
+	miner.Start()
+	if !miner.IsMining() {
+		t.Fatalf("expected miner to be started")
+	}
+
+	waitForAtLeastCalls(t, &connectedCalls, 1, 2*time.Second, "initial worker startup")
+
+	beforeScaleUp := connectedCalls.Load()
+	miner.SetNumWorkers(3)
+	if got := miner.NumWorkers(); got != 3 {
+		t.Fatalf("unexpected worker count after scale up: got %d want %d", got, 3)
+	}
+	waitForAtLeastCalls(t, &connectedCalls, beforeScaleUp+2, 2*time.Second, "new workers to start")
+
+	if got := miner.HashesPerSecond(); got != 0 {
+		t.Fatalf("expected idle miner hash rate to remain 0, got %v", got)
+	}
+
+	// Start is idempotent while mining.
+	miner.Start()
+	if !miner.IsMining() {
+		t.Fatalf("expected miner to remain started after duplicate Start")
+	}
+
+	miner.SetNumWorkers(0)
+	if miner.IsMining() {
+		t.Fatalf("expected SetNumWorkers(0) to stop the miner")
+	}
+	if got := miner.NumWorkers(); got != 0 {
+		t.Fatalf("unexpected worker count after stop: got %d want %d", got, 0)
+	}
+	if got := miner.HashesPerSecond(); got != 0 {
+		t.Fatalf("expected stopped miner hash rate to be 0, got %v", got)
+	}
+
+	// Stop is also idempotent after the miner is already stopped.
+	miner.Stop()
+	if miner.IsMining() {
+		t.Fatalf("expected miner to stay stopped after duplicate Stop")
+	}
+
+	miner.SetNumWorkers(-1)
+	if got := miner.NumWorkers(); got != int32(defaultNumWorkers) {
+		t.Fatalf("unexpected worker count after default reset: got %d want %d", got, defaultNumWorkers)
+	}
 }
 
 func TestSubmitBlockStateChecksAndErrors(t *testing.T) {
@@ -301,6 +372,93 @@ func TestGenerateNBlocksREAPActivationBoundary(t *testing.T) {
 			t.Fatalf("expected miner discrete state to reset after GenerateNBlocks")
 		}
 	})
+}
+
+func TestSolveBlockAbortConditions(t *testing.T) {
+	t.Run("quit_signal", func(t *testing.T) {
+		h := setupMinerHarness(t, 1)
+		defer h.cleanup()
+
+		template, err := h.generator.NewBlockTemplate(h.minerAddr)
+		if err != nil {
+			t.Fatalf("NewBlockTemplate: %v", err)
+		}
+		template.Block.Header.Bits = 1
+
+		miner := newTestMiner(h)
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+
+		quit := make(chan struct{})
+		close(quit)
+
+		if miner.solveBlock(template.Block, h.chain.BestSnapshot().Height+1, ticker, quit) {
+			t.Fatalf("expected solveBlock to abort when quit is signalled")
+		}
+	})
+
+	t.Run("stale_best_hash", func(t *testing.T) {
+		h := setupMinerHarness(t, 1)
+		defer h.cleanup()
+
+		template, err := h.generator.NewBlockTemplate(h.minerAddr)
+		if err != nil {
+			t.Fatalf("NewBlockTemplate: %v", err)
+		}
+		template.Block.Header.Bits = 1
+
+		miner := newTestMiner(h)
+		startSpeedMonitor(t, miner)
+
+		h.tip = advanceChainNoPoW(t, h, h.tip)
+		best := h.chain.BestSnapshot()
+		if template.Block.Header.PrevBlock.IsEqual(&best.Hash) {
+			t.Fatalf("expected template prev hash to become stale")
+		}
+
+		ticker := time.NewTicker(time.Nanosecond)
+		defer ticker.Stop()
+
+		if miner.solveBlock(template.Block, best.Height, ticker, nil) {
+			t.Fatalf("expected solveBlock to abort when work becomes stale")
+		}
+	})
+}
+
+func startSpeedMonitor(t *testing.T, miner *CPUMiner) {
+	t.Helper()
+
+	miner.speedMonitorQuit = make(chan struct{})
+	miner.wg.Add(1)
+	go miner.speedMonitor()
+	t.Cleanup(func() {
+		close(miner.speedMonitorQuit)
+		miner.wg.Wait()
+	})
+}
+
+func newTestMiner(h *minerHarness) *CPUMiner {
+	return New(&Config{
+		ChainParams:            h.params,
+		BlockTemplateGenerator: h.generator,
+		MiningAddrs:            []btcutil.Address{h.minerAddr},
+		ConnectedCount:         func() int32 { return 1 },
+		IsCurrent:              func() bool { return true },
+	})
+}
+
+func waitForAtLeastCalls(t *testing.T, calls *atomic.Int32, want int32, timeout time.Duration, label string) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if calls.Load() >= want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("timed out waiting for %s: got %d want at least %d", label, calls.Load(), want)
 }
 
 func setupMinerHarness(t *testing.T, targetHeight int32) *minerHarness {
