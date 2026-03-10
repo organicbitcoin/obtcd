@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -38,6 +39,7 @@ import (
 	"github.com/btcsuite/btcd/mempool"
 	"github.com/btcsuite/btcd/mining"
 	"github.com/btcsuite/btcd/mining/cpuminer"
+	"github.com/btcsuite/btcd/mining/reap"
 	"github.com/btcsuite/btcd/peer"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -191,6 +193,8 @@ var rpcHandlersBeforeInit = map[string]commandHandler{
 	// OBTC-specific commands
 	"listexpiring":        handleListExpiring,
 	"getexpiryindexstats": handleGetExpiryIndexStats,
+	"getreapplan":         handleGetReapPlan,
+	"getexpirycommitment": handleGetExpiryCommitment,
 }
 
 // list of commands that we recognize, but for which btcd has no support because
@@ -4038,6 +4042,14 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 		}
 	}
 
+	// Validate optional min_amount_sat
+	if c.MinAmountSat != nil && *c.MinAmountSat < 0 {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInvalidParameter,
+			Message: "min_amount_sat must be non-negative",
+		}
+	}
+
 	// Set default max results
 	maxResults := 1000
 	if c.MaxResults != nil {
@@ -4067,8 +4079,19 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 		startAfter = parsed
 	}
 
-	// Scan for expiring UTXOs
-	expiringUTXOs, hasMore, err := s.cfg.ExpiryIndex.ScanExpiringUTXOs(fromKey, toKey, maxResults, startAfter)
+	// Compute expiry window for create height derivation once.
+	var windowBlocks uint64
+	if s.cfg.ChainParams != nil {
+		if ep := chaincfg.GetExpiryParams(s.cfg.ChainParams); ep != nil {
+			windowBlocks = ep.WindowBlocks
+		}
+	}
+
+	// Scan for expiring UTXOs.  We always scan exactly maxResults items from
+	// the DB and rely on hasMore for pagination.  Under a min_amount_sat
+	// filter, fewer items may be returned per page, but the cursor always
+	// advances past the last *scanned* item, ensuring reliable iteration.
+	scanned, hasMore, err := s.cfg.ExpiryIndex.ScanExpiringUTXOs(fromKey, toKey, maxResults, startAfter)
 	if err != nil {
 		return nil, &btcjson.RPCError{
 			Code:    btcjson.ErrRPCInternal.Code,
@@ -4076,39 +4099,50 @@ func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 		}
 	}
 
-	// Convert to result format
-	results := make([]btcjson.ExpiringUTXOResult, len(expiringUTXOs))
-	for i, utxo := range expiringUTXOs {
-		// Calculate blocks to expiry
+	// Build results, optionally filtering by amount.
+	results := make([]btcjson.ExpiringUTXOResult, 0, len(scanned))
+	var lastScanned *btcjson.ExpiringUTXOResult
+	for _, utxo := range scanned {
 		blocksToExpiry := int64(utxo.ExpiryKey) - int64(currentHeight)
-
-		// Calculate create height from expiry key (requires network params)
 		var createHeight uint64
-		if s.cfg.ChainParams != nil {
-			if expiryParams := chaincfg.GetExpiryParams(s.cfg.ChainParams); expiryParams != nil {
-				if utxo.ExpiryKey >= expiryParams.WindowBlocks {
-					createHeight = utxo.ExpiryKey - expiryParams.WindowBlocks
-				}
-			}
+		if windowBlocks > 0 && utxo.ExpiryKey >= windowBlocks {
+			createHeight = utxo.ExpiryKey - windowBlocks
 		}
 
-		results[i] = btcjson.ExpiringUTXOResult{
+		// Fetch UTXO amount from the UTXO set.
+		var amountSat int64
+		entry, fetchErr := s.cfg.Chain.FetchUtxoEntry(utxo.OutPoint)
+		if fetchErr == nil && entry != nil && !entry.IsSpent() {
+			amountSat = entry.Amount()
+		}
+
+		r := btcjson.ExpiringUTXOResult{
 			TxID:           utxo.OutPoint.Hash.String(),
 			Vout:           utxo.OutPoint.Index,
 			ExpiryHeight:   utxo.ExpiryKey,
 			CreateHeight:   createHeight,
 			BlocksToExpiry: blocksToExpiry,
+			AmountSat:      amountSat,
 		}
+
+		// Track last scanned for pagination cursor (regardless of filter).
+		lastScanned = &r
+
+		// Apply min_amount_sat filter.
+		if c.MinAmountSat != nil && amountSat < *c.MinAmountSat {
+			continue
+		}
+		results = append(results, r)
 	}
 
-	// Calculate next cursor for pagination
+	// Pagination cursor is based on the last *scanned* item (not the last
+	// filtered-in item) so clients can always make progress.
 	var nextHeight *int32
 	var nextOutpoint *string
-	if hasMore && len(results) > 0 {
-		last := results[len(results)-1]
-		next := int32(last.ExpiryHeight)
+	if hasMore && lastScanned != nil {
+		next := int32(lastScanned.ExpiryHeight)
 		nextHeight = &next
-		cursor := fmt.Sprintf("%s:%d", last.TxID, last.Vout)
+		cursor := fmt.Sprintf("%s:%d", lastScanned.TxID, lastScanned.Vout)
 		nextOutpoint = &cursor
 	}
 
@@ -4179,6 +4213,204 @@ func handleGetExpiryIndexStats(s *rpcServer, cmd interface{}, closeChan <-chan s
 				StartScanHeight: expiryParams.StartScanHeight,
 				EnableAtHeight:  expiryParams.EnableAtHeight,
 			}
+		}
+	}
+
+	return result, nil
+}
+
+// OBTC-only: REAP dry-run observability RPC.
+// handleGetReapPlan implements the getreapplan command.
+// It performs a read-only dry-run of REAP candidate selection for the next
+// block without broadcasting or committing any transaction.
+func handleGetReapPlan(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	_ = cmd.(*btcjson.GetReapPlanCmd) // no parameters
+
+	nextHeight := int32(0)
+	if s.cfg.Chain != nil {
+		nextHeight = s.cfg.Chain.BestSnapshot().Height + 1
+	}
+
+	// Index must be present.
+	if s.cfg.ExpiryIndex == nil {
+		return &btcjson.GetReapPlanResult{
+			Height:  nextHeight,
+			Enabled: false,
+			Active:  false,
+			Reason:  "expiry index disabled; use --expiryindex to enable",
+		}, nil
+	}
+
+	// OBTC chain params must be set.
+	if s.cfg.ChainParams == nil || !chaincfg.IsOBTC(s.cfg.ChainParams) {
+		return &btcjson.GetReapPlanResult{
+			Height:  nextHeight,
+			Enabled: false,
+			Active:  false,
+			Reason:  "not an OBTC network",
+		}, nil
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(s.cfg.ChainParams)
+	if expiryParams == nil {
+		return &btcjson.GetReapPlanResult{
+			Height:  nextHeight,
+			Enabled: false,
+			Active:  false,
+			Reason:  "expiry parameters unavailable",
+		}, nil
+	}
+
+	// Check activation.
+	if nextHeight < expiryParams.EnableAtHeight {
+		return &btcjson.GetReapPlanResult{
+			Height:  nextHeight,
+			Enabled: true,
+			Active:  false,
+			Reason:  fmt.Sprintf("REAP not yet active; activates at height %d", expiryParams.EnableAtHeight),
+		}, nil
+	}
+
+	// Build REAP params and collect candidates.
+	p := reap.DefaultREAPParamsForNet(s.cfg.ChainParams, reap.SortModeStrict)
+	if err := p.Validate(); err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("invalid REAP params: %v", err),
+		}
+	}
+
+	// Collect expired outpoints to build the UTXO view.
+	fromKey := uint64(0)
+	toKey := uint64(nextHeight)
+	scanBatch := p.ScanBatch
+	maxCandidates := p.MaxInputs * 20
+	if maxCandidates < p.MaxInputs {
+		maxCandidates = p.MaxInputs
+	}
+	if maxCandidates > 50000 {
+		maxCandidates = 50000
+	}
+
+	outpoints := make([]wire.OutPoint, 0, maxCandidates)
+	var cursorAfter *wire.OutPoint
+	for len(outpoints) < maxCandidates {
+		rows, hasMore, err := s.cfg.ExpiryIndex.ScanExpiringUTXOs(fromKey, toKey, scanBatch, cursorAfter)
+		if err != nil {
+			return nil, &btcjson.RPCError{
+				Code:    btcjson.ErrRPCInternal.Code,
+				Message: fmt.Sprintf("failed to scan expiring UTXOs: %v", err),
+			}
+		}
+		for _, r := range rows {
+			outpoints = append(outpoints, r.OutPoint)
+			if len(outpoints) >= maxCandidates {
+				break
+			}
+		}
+		if !hasMore || len(rows) == 0 {
+			break
+		}
+		last := rows[len(rows)-1]
+		fromKey = last.ExpiryKey
+		op := last.OutPoint
+		cursorAfter = &op
+	}
+
+	if len(outpoints) == 0 {
+		return &btcjson.GetReapPlanResult{
+			Height:  nextHeight,
+			Enabled: true,
+			Active:  true,
+			Picked:  0,
+		}, nil
+	}
+
+	// Build a dummy tx to fetch the required UTXO view.
+	dummy := wire.NewMsgTx(1)
+	for _, op := range outpoints {
+		op := op
+		dummy.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
+	}
+	view, err := s.cfg.Chain.FetchUtxoView(btcutil.NewTx(dummy))
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("failed to fetch UTXO view: %v", err),
+		}
+	}
+
+	// Run REAP candidate selection (read-only).
+	plan, err := reap.SelectCandidates(context.Background(), nextHeight, s.cfg.ExpiryIndex, view, p)
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("REAP candidate selection failed: %v", err),
+		}
+	}
+
+	if len(plan.Inputs) == 0 {
+		return &btcjson.GetReapPlanResult{
+			Height:  nextHeight,
+			Enabled: true,
+			Active:  true,
+			Picked:  0,
+		}, nil
+	}
+
+	// Build dry-run summary.
+	summary, err := reap.BuildDryRunSummary(plan, view, p)
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("REAP dry-run summary failed: %v", err),
+		}
+	}
+
+	return &btcjson.GetReapPlanResult{
+		Height:      nextHeight,
+		Enabled:     true,
+		Active:      true,
+		Picked:      summary.Picked,
+		TaxTotal:    summary.TaxTotal,
+		RefundTotal: summary.RefundTotal,
+		EstWeight:   summary.EstWeight,
+		MarkerHash:  summary.MarkerHash,
+	}, nil
+}
+
+// OBTC-only: Expiry commitment observability RPC.
+// handleGetExpiryCommitment implements the getexpirycommitment command.
+func handleGetExpiryCommitment(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	_ = cmd.(*btcjson.GetExpiryCommitmentCmd) // no parameters
+
+	if s.cfg.ExpiryIndex == nil {
+		return &btcjson.GetExpiryCommitmentResult{
+			Enabled: false,
+		}, nil
+	}
+
+	snapshot, err := s.cfg.ExpiryIndex.GetAccumulatorSnapshot()
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInternal.Code,
+			Message: fmt.Sprintf("failed to get accumulator snapshot: %v", err),
+		}
+	}
+
+	result := &btcjson.GetExpiryCommitmentResult{
+		Enabled:   true,
+		Root:      hex.EncodeToString(snapshot.Root[:]),
+		TipHeight: snapshot.TipHeight,
+		TipHash:   snapshot.TipHash.String(),
+	}
+
+	// Populate activation metadata from network params.
+	if s.cfg.ChainParams != nil {
+		if ep := chaincfg.GetExpiryParams(s.cfg.ChainParams); ep != nil {
+			result.EnableAtHeight = ep.ExpiryCommitmentEnableAtHeight
+			result.Active = snapshot.TipHeight >= ep.ExpiryCommitmentEnableAtHeight
+			result.ActiveAtNextHeight = (snapshot.TipHeight + 1) >= ep.ExpiryCommitmentEnableAtHeight
 		}
 	}
 

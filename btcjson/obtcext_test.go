@@ -83,6 +83,27 @@ func TestListExpiringCmd(t *testing.T) {
 		require.Nil(cmd.EndHeight)
 		require.Nil(cmd.MaxResults)
 	})
+
+	t.Run("marshal with min_amount_sat filter", func(t *testing.T) {
+		startHeight := int32(1000)
+		minAmt := int64(50000)
+		cmd := NewListExpiringCmd(&startHeight, nil, nil, nil, &minAmt)
+
+		data, err := json.Marshal(cmd)
+		require.NoError(err)
+
+		var unmarshaled ListExpiringCmd
+		err = json.Unmarshal(data, &unmarshaled)
+		require.NoError(err)
+		require.Equal(startHeight, *unmarshaled.StartHeight)
+		require.NotNil(unmarshaled.MinAmountSat)
+		require.Equal(minAmt, *unmarshaled.MinAmountSat)
+	})
+
+	t.Run("marshal without min_amount_sat yields nil", func(t *testing.T) {
+		cmd := NewListExpiringCmd(nil, nil, nil, nil)
+		require.Nil(cmd.MinAmountSat)
+	})
 }
 
 // TestGetExpiryIndexStatsCmd tests the GetExpiryIndexStatsCmd JSON marshaling and unmarshaling
@@ -109,6 +130,32 @@ func TestGetExpiryIndexStatsCmd(t *testing.T) {
 	})
 }
 
+// TestGetReapPlanCmd tests GetReapPlanCmd marshaling.
+func TestGetReapPlanCmd(t *testing.T) {
+	cmd := NewGetReapPlanCmd()
+	require.NotNil(t, cmd)
+
+	data, err := json.Marshal(cmd)
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+
+	var unmarshaled GetReapPlanCmd
+	require.NoError(t, json.Unmarshal(data, &unmarshaled))
+}
+
+// TestGetExpiryCommitmentCmd tests GetExpiryCommitmentCmd marshaling.
+func TestGetExpiryCommitmentCmd(t *testing.T) {
+	cmd := NewGetExpiryCommitmentCmd()
+	require.NotNil(t, cmd)
+
+	data, err := json.Marshal(cmd)
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+
+	var unmarshaled GetExpiryCommitmentCmd
+	require.NoError(t, json.Unmarshal(data, &unmarshaled))
+}
+
 // TestExpiringUTXOResult tests the ExpiringUTXOResult JSON marshaling and unmarshaling
 func TestExpiringUTXOResult(t *testing.T) {
 	require := require.New(t)
@@ -120,6 +167,7 @@ func TestExpiringUTXOResult(t *testing.T) {
 			ExpiryHeight:   1000,
 			CreateHeight:   900,
 			BlocksToExpiry: 100,
+			AmountSat:      100_000,
 		}
 
 		// Test that the result can be marshaled to JSON
@@ -136,6 +184,7 @@ func TestExpiringUTXOResult(t *testing.T) {
 		require.Equal(result.ExpiryHeight, unmarshaled.ExpiryHeight)
 		require.Equal(result.CreateHeight, unmarshaled.CreateHeight)
 		require.Equal(result.BlocksToExpiry, unmarshaled.BlocksToExpiry)
+		require.Equal(result.AmountSat, unmarshaled.AmountSat)
 	})
 
 	t.Run("json tags", func(t *testing.T) {
@@ -145,6 +194,7 @@ func TestExpiringUTXOResult(t *testing.T) {
 			ExpiryHeight:   500,
 			CreateHeight:   400,
 			BlocksToExpiry: 50,
+			AmountSat:      546,
 		}
 
 		data, err := json.Marshal(result)
@@ -157,6 +207,7 @@ func TestExpiringUTXOResult(t *testing.T) {
 		require.Contains(jsonStr, "expiry_height")
 		require.Contains(jsonStr, "create_height")
 		require.Contains(jsonStr, "blocks_to_expiry")
+		require.Contains(jsonStr, "amount_sat")
 	})
 }
 
@@ -174,6 +225,7 @@ func TestListExpiringResult(t *testing.T) {
 					ExpiryHeight:   1000,
 					CreateHeight:   900,
 					BlocksToExpiry: 100,
+					AmountSat:      200_000,
 				},
 				{
 					TxID:           "def456",
@@ -181,6 +233,7 @@ func TestListExpiringResult(t *testing.T) {
 					ExpiryHeight:   1100,
 					CreateHeight:   1000,
 					BlocksToExpiry: 200,
+					AmountSat:      50_000,
 				},
 			},
 			StartHeight:  1000,
@@ -203,6 +256,7 @@ func TestListExpiringResult(t *testing.T) {
 		require.Equal(result.EndHeight, unmarshaled.EndHeight)
 		require.Equal(result.TotalResults, unmarshaled.TotalResults)
 		require.Equal(*result.NextHeight, *unmarshaled.NextHeight)
+		require.Equal(result.ExpiringUTXOs[0].AmountSat, unmarshaled.ExpiringUTXOs[0].AmountSat)
 	})
 
 	t.Run("marshal and unmarshal without next height", func(t *testing.T) {
@@ -327,5 +381,138 @@ func TestExpiryParamsResult(t *testing.T) {
 		require.Contains(jsonStr, "list_batch_limit")
 		require.Contains(jsonStr, "start_scan_height")
 		require.Contains(jsonStr, "enable_at_height")
+	})
+}
+
+// TestGetReapPlanResult tests GetReapPlanResult marshaling.
+func TestGetReapPlanResult(t *testing.T) {
+	t.Run("active plan with inputs", func(t *testing.T) {
+		result := GetReapPlanResult{
+			Height:      145,
+			Enabled:     true,
+			Active:      true,
+			Picked:      3,
+			TaxTotal:    90000,
+			RefundTotal: 210000,
+			EstWeight:   1500,
+			MarkerHash:  "deadbeef",
+		}
+
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+
+		var got GetReapPlanResult
+		require.NoError(t, json.Unmarshal(data, &got))
+		require.Equal(t, result.Height, got.Height)
+		require.Equal(t, result.Enabled, got.Enabled)
+		require.Equal(t, result.Active, got.Active)
+		require.Equal(t, result.Picked, got.Picked)
+		require.Equal(t, result.TaxTotal, got.TaxTotal)
+		require.Equal(t, result.RefundTotal, got.RefundTotal)
+		require.Equal(t, result.EstWeight, got.EstWeight)
+		require.Equal(t, result.MarkerHash, got.MarkerHash)
+	})
+
+	t.Run("reason omitted when empty", func(t *testing.T) {
+		result := GetReapPlanResult{
+			Height:  145,
+			Enabled: true,
+			Active:  true,
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+		require.NotContains(t, string(data), "reason")
+	})
+
+	t.Run("disabled result", func(t *testing.T) {
+		result := GetReapPlanResult{
+			Height:  1,
+			Enabled: false,
+			Active:  false,
+			Reason:  "expiry index disabled",
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+
+		var got GetReapPlanResult
+		require.NoError(t, json.Unmarshal(data, &got))
+		require.False(t, got.Enabled)
+		require.False(t, got.Active)
+		require.Equal(t, "expiry index disabled", got.Reason)
+	})
+
+	t.Run("json field names", func(t *testing.T) {
+		result := GetReapPlanResult{
+			Height:      200,
+			Enabled:     true,
+			Active:      true,
+			Picked:      5,
+			TaxTotal:    1000,
+			RefundTotal: 2000,
+			EstWeight:   3000,
+			MarkerHash:  "aabbcc",
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+		s := string(data)
+		for _, field := range []string{"height", "enabled", "active", "picked", "tax_total", "refund_total", "est_weight", "marker_hash"} {
+			require.Contains(t, s, field)
+		}
+	})
+}
+
+// TestGetExpiryCommitmentResult tests GetExpiryCommitmentResult marshaling.
+func TestGetExpiryCommitmentResult(t *testing.T) {
+	t.Run("enabled with root", func(t *testing.T) {
+		result := GetExpiryCommitmentResult{
+			Enabled:            true,
+			Root:               "abcdef1234",
+			TipHeight:          144,
+			TipHash:            "000000000000000000",
+			EnableAtHeight:     112,
+			Active:             true,
+			ActiveAtNextHeight: true,
+		}
+
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+
+		var got GetExpiryCommitmentResult
+		require.NoError(t, json.Unmarshal(data, &got))
+		require.Equal(t, result.Enabled, got.Enabled)
+		require.Equal(t, result.Root, got.Root)
+		require.Equal(t, result.TipHeight, got.TipHeight)
+		require.Equal(t, result.TipHash, got.TipHash)
+		require.Equal(t, result.EnableAtHeight, got.EnableAtHeight)
+		require.Equal(t, result.Active, got.Active)
+		require.Equal(t, result.ActiveAtNextHeight, got.ActiveAtNextHeight)
+	})
+
+	t.Run("disabled omits root and tip_hash", func(t *testing.T) {
+		result := GetExpiryCommitmentResult{
+			Enabled: false,
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+		s := string(data)
+		require.NotContains(t, s, `"root"`)
+		require.NotContains(t, s, `"tip_hash"`)
+	})
+
+	t.Run("json field names", func(t *testing.T) {
+		result := GetExpiryCommitmentResult{
+			Enabled:            true,
+			Root:               "aa",
+			TipHeight:          10,
+			EnableAtHeight:     5,
+			Active:             true,
+			ActiveAtNextHeight: false,
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+		s := string(data)
+		for _, field := range []string{"enabled", "root", "tip_height", "enable_at_height", "active", "active_at_next_height"} {
+			require.Contains(t, s, field)
+		}
 	})
 }

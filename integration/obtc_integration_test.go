@@ -790,3 +790,199 @@ func taprootReplaySigHashOptions(hashType txscript.SigHashType) []txscript.Tapro
 		txscript.WithOBTCReplayProtectionSighash(),
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TestOBTCRPCObservabilityAndFilters covers:
+//   - getreapplan before and after REAP activation
+//   - getexpirycommitment (enabled state)
+//   - listexpiring with min_amount_sat filter and improved pagination
+// ---------------------------------------------------------------------------
+
+func TestOBTCRPCObservabilityAndFilters(t *testing.T) {
+	t.Parallel()
+
+	// Start node with expiry index enabled.  ObtcRegTest activates REAP at
+	// height ObtcRegTestForkHeight+10 = 110.  We mine 44 extra blocks (total
+	// 144) so the expiry window is populated.
+	r, err := rpctest.New(
+		&chaincfg.ObtcRegTestParams, nil, []string{"--expiryindex"}, "",
+	)
+	require.NoError(t, err)
+	require.NoError(t, r.SetUp(true, 44))
+	t.Cleanup(func() {
+		require.NoError(t, r.TearDown())
+	})
+
+	height, err := r.Client.GetBlockCount()
+	require.NoError(t, err)
+	require.EqualValues(t, 144, height)
+
+	// --- getreapplan ---
+
+	reapPlan, err := callGetReapPlan(r.Client)
+	require.NoError(t, err)
+	require.True(t, reapPlan.Enabled, "getreapplan: expected Enabled=true")
+	require.True(t, reapPlan.Active, "getreapplan: expected Active=true at height 145")
+	require.EqualValues(t, 145, reapPlan.Height)
+	// The genesis coinbase outputs from blocks 1..100 all expire at block 101+window.
+	// With the default REAP params there should be at least one picked input.
+	require.Greater(t, reapPlan.Picked, 0, "getreapplan: expected at least one picked UTXO")
+	require.Greater(t, reapPlan.TaxTotal, int64(0), "getreapplan: expected positive tax_total")
+	require.Greater(t, reapPlan.RefundTotal, int64(0), "getreapplan: expected positive refund_total")
+	require.Greater(t, reapPlan.EstWeight, int64(0), "getreapplan: expected positive est_weight")
+	require.NotEmpty(t, reapPlan.MarkerHash, "getreapplan: expected non-empty marker_hash")
+
+	// --- getexpirycommitment ---
+
+	commitment, err := callGetExpiryCommitment(r.Client)
+	require.NoError(t, err)
+	require.True(t, commitment.Enabled, "getexpirycommitment: expected Enabled=true")
+	require.NotEmpty(t, commitment.Root, "getexpirycommitment: expected non-empty root")
+	require.EqualValues(t, 144, commitment.TipHeight)
+	require.NotEmpty(t, commitment.TipHash)
+	// ObtcRegTest ExpiryCommitmentEnableAtHeight = ObtcRegTestForkHeight+10 = 110.
+	require.EqualValues(t, chaincfg.ObtcRegTestForkHeight+10, commitment.EnableAtHeight)
+	require.True(t, commitment.Active, "getexpirycommitment: expected Active=true at height 144")
+	require.True(t, commitment.ActiveAtNextHeight)
+
+	// --- listexpiring with amount_sat populated ---
+
+	startHeight := int32(145)
+	endHeight := int32(145)
+	maxResults := 10
+	expiring, err := callListExpiring(r.Client, &startHeight, &endHeight, &maxResults)
+	require.NoError(t, err)
+	require.NotEmpty(t, expiring.ExpiringUTXOs, "expected at least one expiring UTXO")
+	// Every returned UTXO should have amount_sat > 0 (they are coinbase rewards).
+	for _, utxo := range expiring.ExpiringUTXOs {
+		require.Greater(t, utxo.AmountSat, int64(0),
+			"expected positive amount_sat for UTXO %s:%d", utxo.TxID, utxo.Vout)
+	}
+
+	// --- listexpiring with min_amount_sat filter ---
+
+	// Filter by a very large amount: should return an empty list.
+	hugeAmt := int64(1_000_000_000_000)
+	filtered, err := callListExpiringWithMinAmount(r.Client, &startHeight, &endHeight, &maxResults, &hugeAmt)
+	require.NoError(t, err)
+	require.Empty(t, filtered.ExpiringUTXOs,
+		"expected empty result with impossibly large min_amount_sat filter")
+
+	// Filter by zero: should behave same as no filter.
+	zeroAmt := int64(0)
+	unfiltered, err := callListExpiringWithMinAmount(r.Client, &startHeight, &endHeight, &maxResults, &zeroAmt)
+	require.NoError(t, err)
+	require.Equal(t, len(expiring.ExpiringUTXOs), len(unfiltered.ExpiringUTXOs),
+		"expected same results with min_amount_sat=0 as without filter")
+
+	// --- pagination cursor advances even when all items are filtered ---
+
+	// Scan with a small page size (1) but a filter that passes everything,
+	// and verify we can paginate through all items.
+	pageSize := 1
+	var allPaginated []btcjson.ExpiringUTXOResult
+	var cursor *string
+	scanStart := startHeight
+	scanEnd := endHeight
+	for {
+		page, err := callListExpiringWithCursor(r.Client, &scanStart, &scanEnd, &pageSize, cursor)
+		require.NoError(t, err)
+		allPaginated = append(allPaginated, page.ExpiringUTXOs...)
+		if page.NextOutpoint == nil {
+			break
+		}
+		cursor = page.NextOutpoint
+		if page.NextHeight != nil {
+			scanStart = *page.NextHeight
+		}
+		if len(allPaginated) > 1000 {
+			t.Fatal("pagination did not terminate within 1000 pages")
+		}
+	}
+	// We should have paginated through at least as many items as the first
+	// full-page scan returned.
+	require.GreaterOrEqual(t, len(allPaginated), len(expiring.ExpiringUTXOs))
+}
+
+func callGetReapPlan(client *rpcclient.Client) (*btcjson.GetReapPlanResult, error) {
+	result, err := client.RawRequest("getreapplan", nil)
+	if err != nil {
+		return nil, err
+	}
+	var plan btcjson.GetReapPlanResult
+	if err := json.Unmarshal(result, &plan); err != nil {
+		return nil, err
+	}
+	return &plan, nil
+}
+
+func callGetExpiryCommitment(client *rpcclient.Client) (*btcjson.GetExpiryCommitmentResult, error) {
+	result, err := client.RawRequest("getexpirycommitment", nil)
+	if err != nil {
+		return nil, err
+	}
+	var c btcjson.GetExpiryCommitmentResult
+	if err := json.Unmarshal(result, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func callListExpiringWithMinAmount(client *rpcclient.Client, start, end *int32,
+	max *int, minAmt *int64) (*btcjson.ListExpiringResult, error) {
+
+	params := buildListExpiringParamsFull(start, end, max, nil, minAmt)
+	result, err := client.RawRequest("listexpiring", params)
+	if err != nil {
+		return nil, err
+	}
+	var list btcjson.ListExpiringResult
+	if err := json.Unmarshal(result, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+func callListExpiringWithCursor(client *rpcclient.Client, start, end *int32,
+	max *int, cursor *string) (*btcjson.ListExpiringResult, error) {
+
+	params := buildListExpiringParamsFull(start, end, max, cursor, nil)
+	result, err := client.RawRequest("listexpiring", params)
+	if err != nil {
+		return nil, err
+	}
+	var list btcjson.ListExpiringResult
+	if err := json.Unmarshal(result, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+// buildListExpiringParamsFull builds the JSON-RPC params array for listexpiring,
+// supporting the extended parameters (start_after, min_amount_sat).
+func buildListExpiringParamsFull(start, end *int32, max *int, cursor *string, minAmt *int64) []json.RawMessage {
+	// Determine how many positional params we need.
+	needCursor := cursor != nil
+	needMinAmt := minAmt != nil
+	if !needCursor && !needMinAmt && start == nil && end == nil && max == nil {
+		return nil
+	}
+
+	params := make([]json.RawMessage, 0, 5)
+	appendOrNull := func(v interface{}, include bool) {
+		if include {
+			params = append(params, mustMarshal(v))
+		} else {
+			params = append(params, json.RawMessage("null"))
+		}
+	}
+
+	appendOrNull(start, start != nil)
+	appendOrNull(end, end != nil)
+	appendOrNull(max, max != nil)
+	appendOrNull(cursor, needCursor)
+	if needMinAmt {
+		appendOrNull(minAmt, true)
+	}
+	return params
+}

@@ -756,11 +756,12 @@ var helpDescsEnUS = map[string]string{
 	"gettxspendingprevoutresult-spendingtxid": "The hash of the transaction that spends the output.",
 
 	// ListExpiringCmd help.
-	"listexpiring--synopsis":   "Returns a list of UTXOs that will expire within a specified height range",
-	"listexpiring-startheight": "The minimum height at which UTXOs expire (optional)",
-	"listexpiring-endheight":   "The maximum height at which UTXOs expire (optional)",
-	"listexpiring-maxresults":  "Maximum number of results to return (optional)",
-	"listexpiring-startafter":  "Pagination cursor in the form txid:vout (optional)",
+	"listexpiring--synopsis":    "Returns a list of UTXOs that will expire within a specified height range",
+	"listexpiring-startheight":  "The minimum height at which UTXOs expire (optional)",
+	"listexpiring-endheight":    "The maximum height at which UTXOs expire (optional)",
+	"listexpiring-maxresults":   "Maximum number of results to return (optional)",
+	"listexpiring-startafter":   "Pagination cursor in the form txid:vout (optional)",
+	"listexpiring-minamountsat": "Only return UTXOs with value >= min_amount_sat (optional)",
 
 	// ListExpiringCmd result help.
 	"listexpiringresult-expiring_utxos":   "Array of expiring UTXOs",
@@ -774,6 +775,7 @@ var helpDescsEnUS = map[string]string{
 	"expiringutxoresult-expiry_height":    "Block height when UTXO expires",
 	"expiringutxoresult-create_height":    "Block height where transaction was confirmed",
 	"expiringutxoresult-blocks_to_expiry": "Number of blocks until expiry",
+	"expiringutxoresult-amount_sat":       "UTXO value in satoshis (0 if not found in UTXO set)",
 
 	// GetExpiryIndexStatsCmd help.
 	"getexpiryindexstats--synopsis": "Returns statistics about the expiry index",
@@ -788,6 +790,32 @@ var helpDescsEnUS = map[string]string{
 	"expiryparamsresult-list_batch_limit":      "Maximum number of items returned in one RPC scan",
 	"expiryparamsresult-start_scan_height":     "Block height at which to start building the index",
 	"expiryparamsresult-enable_at_height":      "Block height at which expiry enforcement begins",
+
+	// GetReapPlanCmd help.
+	"getreapplan--synopsis": "Returns a dry-run REAP plan for the next block without broadcasting",
+
+	// GetReapPlanCmd result help.
+	"getreapplanresult-height":       "Next block height the plan is computed for",
+	"getreapplanresult-enabled":      "True when expiry index and OBTC params are available",
+	"getreapplanresult-active":       "True when REAP enforcement is active at the next block height",
+	"getreapplanresult-reason":       "Human-readable explanation when enabled or active is false (optional)",
+	"getreapplanresult-picked":       "Number of expiring UTXOs selected as REAP inputs",
+	"getreapplanresult-tax_total":    "Total miner reward (tax) in satoshis",
+	"getreapplanresult-refund_total": "Total refund to output addresses in satoshis",
+	"getreapplanresult-est_weight":   "Estimated transaction weight units of the REAP tx",
+	"getreapplanresult-marker_hash":  "Hex-encoded SHA-256 commitment digest over ordered REAP inputs (optional)",
+
+	// GetExpiryCommitmentCmd help.
+	"getexpirycommitment--synopsis": "Returns the expiry accumulator snapshot and commitment activation metadata",
+
+	// GetExpiryCommitmentCmd result help.
+	"getexpirycommitmentresult-enabled":               "True when the expiry index is available",
+	"getexpirycommitmentresult-root":                  "Hex-encoded MuHash accumulator digest at the indexed tip (optional)",
+	"getexpirycommitmentresult-tip_height":            "Block height the accumulator root corresponds to",
+	"getexpirycommitmentresult-tip_hash":              "Hex-encoded block hash the accumulator root corresponds to (optional)",
+	"getexpirycommitmentresult-enable_at_height":      "Block height at which expiry commitments become mandatory",
+	"getexpirycommitmentresult-active":                "True when expiry commitments are required at tip_height",
+	"getexpirycommitmentresult-active_at_next_height": "True when expiry commitments will be required at tip_height+1",
 }
 
 // rpcResultTypes specifies the result types that each RPC command can return.
@@ -851,6 +879,8 @@ var rpcResultTypes = map[string][]interface{}{
 	// OBTC specific extensions
 	"listexpiring":        {(*btcjson.ListExpiringResult)(nil)},
 	"getexpiryindexstats": {(*btcjson.ExpiryIndexStatsResult)(nil)},
+	"getreapplan":         {(*btcjson.GetReapPlanResult)(nil)},
+	"getexpirycommitment": {(*btcjson.GetExpiryCommitmentResult)(nil)},
 
 	// Websocket commands.
 	"loadtxfilter":              nil,

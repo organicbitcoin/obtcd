@@ -22,6 +22,10 @@ type ExpiringUTXOResult struct {
 
 	// BlocksToExpiry is the number of blocks until expiry
 	BlocksToExpiry int64 `json:"blocks_to_expiry"`
+
+	// AmountSat is the value of the UTXO in satoshis.
+	// Zero if the UTXO could not be found in the UTXO set.
+	AmountSat int64 `json:"amount_sat"`
 }
 
 // ListExpiringResult models the data returned from the listexpiring command.
@@ -77,4 +81,64 @@ type ExpiryParamsResult struct {
 
 	// EnableAtHeight is the block height at which expiry enforcement begins
 	EnableAtHeight int32 `json:"enable_at_height"`
+}
+
+// GetReapPlanResult models the data returned from the getreapplan command.
+// It contains a dry-run summary of the REAP transaction for the next block.
+type GetReapPlanResult struct {
+	// Height is the next block height the plan is computed for.
+	Height int32 `json:"height"`
+
+	// Enabled is true when an expiry index is available and OBTC params are set.
+	Enabled bool `json:"enabled"`
+
+	// Active is true when REAP enforcement is active at the next block height.
+	Active bool `json:"active"`
+
+	// Reason is a human-readable explanation when Enabled or Active is false.
+	Reason string `json:"reason,omitempty"`
+
+	// Picked is the number of expiring UTXOs selected as REAP inputs.
+	Picked int `json:"picked"`
+
+	// TaxTotal is the total miner reward (tax) in satoshis.
+	TaxTotal int64 `json:"tax_total"`
+
+	// RefundTotal is the total refund to output addresses in satoshis.
+	RefundTotal int64 `json:"refund_total"`
+
+	// EstWeight is the estimated transaction weight units of the REAP tx.
+	EstWeight int64 `json:"est_weight"`
+
+	// MarkerHash is the hex-encoded SHA-256 commitment digest over the ordered
+	// REAP inputs; empty when Picked == 0.
+	MarkerHash string `json:"marker_hash,omitempty"`
+}
+
+// GetExpiryCommitmentResult models the data returned from the
+// getexpirycommitment command.
+type GetExpiryCommitmentResult struct {
+	// Enabled is true when an expiry index is available.
+	Enabled bool `json:"enabled"`
+
+	// Root is the hex-encoded MuHash accumulator digest at the indexed tip.
+	// Empty when the index is disabled.
+	Root string `json:"root,omitempty"`
+
+	// TipHeight is the block height the accumulator root corresponds to.
+	TipHeight int32 `json:"tip_height"`
+
+	// TipHash is the hex-encoded block hash the accumulator root corresponds to.
+	TipHash string `json:"tip_hash,omitempty"`
+
+	// EnableAtHeight is the block height at which expiry commitments become
+	// mandatory in block coinbase transactions.
+	EnableAtHeight int32 `json:"enable_at_height"`
+
+	// Active is true when expiry commitments are required at TipHeight.
+	Active bool `json:"active"`
+
+	// ActiveAtNextHeight is true when expiry commitments will be required at
+	// TipHeight+1 (the next block to be mined).
+	ActiveAtNextHeight bool `json:"active_at_next_height"`
 }
