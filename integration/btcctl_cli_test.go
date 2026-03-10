@@ -43,7 +43,11 @@ func TestBTCCTLSmoke(t *testing.T) {
 	certFile := filepath.Join(t.TempDir(), "rpc.cert")
 	require.NoError(t, os.WriteFile(certFile, rpcCfg.Certificates, 0o600))
 
+	btcctlConfigFile := filepath.Join(t.TempDir(), "btcctl.conf")
+	require.NoError(t, os.WriteFile(btcctlConfigFile, []byte(""), 0o600))
+
 	baseArgs := []string{
+		"--configfile=" + btcctlConfigFile,
 		"--regtest",
 		"--rpcserver=" + rpcCfg.Host,
 		"--rpcuser=" + rpcCfg.User,

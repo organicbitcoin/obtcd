@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 
 env:
-  GO_VERSION: 1.22.11
+  GO_VERSION: 1.23.2
 
 jobs:
   build:
@@ -230,7 +230,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        go-version: [1.22.11]
+        go-version: [1.23.2]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Set up Go
