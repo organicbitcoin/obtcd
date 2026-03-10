@@ -1054,42 +1054,7 @@ func (idx *ExpiryIndex) incrementalCatchUp(fromHeight, toHeight int32) error {
 
 // clearIndexBuckets clears all expiry index data
 func (idx *ExpiryIndex) clearIndexBuckets(dbTx database.Tx) error {
-	// Clear outpoint-to-expiry bucket
-	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
-	if outpointBucket != nil {
-		cursor := outpointBucket.Cursor()
-		found := cursor.First()
-		for found {
-			if err := cursor.Delete(); err != nil {
-				return err
-			}
-			found = cursor.Next()
-		}
-	}
-
-	// Clear expiry-to-outpoints bucket
-	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
-	if expiryBucket != nil {
-		cursor := expiryBucket.Cursor()
-		found := cursor.First()
-		for found {
-			if err := cursor.Delete(); err != nil {
-				return err
-			}
-			found = cursor.Next()
-		}
-	}
-
-	// Reset accumulator to identity state.
-	if err := dbPutAccumulatorState(dbTx, NewMuHash()); err != nil {
-		return fmt.Errorf("failed to reset accumulator: %v", err)
-	}
-	var zero chainhash.Hash
-	if err := dbPutAccumulatorTipHash(dbTx, &zero); err != nil {
-		return fmt.Errorf("failed to reset accumulator tip hash: %v", err)
-	}
-
-	return nil
+	return clearExpiryIndexBuckets(dbTx)
 }
 
 // requireChain returns an error if the chain accessor has not been set.

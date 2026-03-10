@@ -66,6 +66,9 @@ Application Options:
 	                            then exits.
 	    --droptxindex           Deletes the hash-based transaction index from the
 	                            database on start up and then exits.
+	    --reindex-expiry        Resets the persisted ExpiryIndex state on OBTC
+	                            networks, then continues startup and rebuilds it
+	                            from chain state.
 	    --externalip=           Add an ip to the list of local addresses we claim
 	                            to listen on to peers
 	    --generate              Generate (mine) bitcoins using the CPU

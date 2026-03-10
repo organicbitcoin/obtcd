@@ -16,6 +16,7 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 
+	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/blockchain/indexers"
 	"github.com/btcsuite/btcd/database"
 	"github.com/btcsuite/btcd/limits"
@@ -168,6 +169,14 @@ func btcdMain(serverChan chan<- *server) error {
 		}
 
 		return nil
+	}
+
+	if cfg.ReindexExpiry {
+		btcdLog.Warnf("Resetting ExpiryIndex state due to --reindex-expiry")
+		if err := expiryindex.ReindexExpiryIndex(db); err != nil {
+			btcdLog.Errorf("%v", err)
+			return err
+		}
 	}
 
 	// Check if the database had previously been pruned.  If it had been, it's

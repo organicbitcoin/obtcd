@@ -44,12 +44,9 @@ type ExpiryParams struct {
 // These constants define the block heights at which OBTC diverges from Bitcoin.
 // Before these heights: Follow Bitcoin consensus rules exactly
 // After these heights: Apply OBTC-specific consensus modifications
-//
-// TODO Week 3: Finalize exact fork heights based on Bitcoin mainnet conditions
 const (
 	// ObtcMainNetForkHeight defines when OBTC mainnet forks from Bitcoin mainnet
-	// Target: Q2 2026 (estimated around block 950000)
-	// This will be set to a specific Bitcoin block hash in Week 3
+	// The current candidate value targets the Q2 2026 launch window.
 	ObtcMainNetForkHeight int32 = 950000
 
 	// ObtcTestNetForkHeight defines when OBTC testnet forks from Bitcoin testnet
@@ -70,24 +67,18 @@ const (
 // Fork Height: Block 950000 (target: Q2 2026)
 // Before fork: Identical to Bitcoin mainnet
 // After fork: OBTC-specific consensus rules apply
-//
-// Note: This is currently a skeleton implementation for Week 1 of the OBTC
-// development plan. The fork height and final parameters will be determined
-// in Week 3 during the "freeze constants" phase.
 var ObtcMainNetParams = Params{
 	Name:        "obtcmainnet",
 	Net:         wire.ObtcMainNet,
 	DefaultPort: "9527", // Stephen Chow's iconic number from "Flirting Scholar"
 
-	// DNS seeds - TODO: Replace with actual OBTC seed nodes in Week 6
+	// DNS seeds are still placeholders until production seed nodes are ready.
 	DNSSeeds: []DNSSeed{
-		// Placeholder seeds - will be replaced with actual OBTC seed nodes
 		{"seed.obtc.example.com", true},
 	},
 
 	// CRITICAL: As a hard fork, OBTC uses Bitcoin's original genesis block
 	// and shares the same blockchain history up to the fork height.
-	// TODO Week 3: Determine exact fork height based on technical requirements
 	GenesisBlock: &genesisBlock, // Bitcoin's genesis block (shared history)
 	GenesisHash:  &genesisHash,  // Bitcoin's genesis hash (shared history)
 
@@ -98,7 +89,6 @@ var ObtcMainNetParams = Params{
 	EnforceBIP94:     true, // Enable timewarp protection
 
 	// OBTC Fork Point and Consensus Rules:
-	// TODO Week 3: Set exact fork height (estimated: block 870000+)
 	// All BIP activation heights are set relative to the fork point.
 	// Before fork: Follow Bitcoin consensus rules exactly
 	// After fork: Apply OBTC-specific consensus modifications
@@ -114,7 +104,7 @@ var ObtcMainNetParams = Params{
 	MinDiffReductionTime:     0,
 	GenerateSupported:        true, // Allow CPU mining for testing
 
-	// Checkpoints - TODO: Add OBTC-specific checkpoints as network grows
+	// Checkpoints will be added once the network has stable historical anchors.
 	Checkpoints: []Checkpoint{},
 
 	// Consensus rule change parameters

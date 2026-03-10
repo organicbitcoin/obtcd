@@ -102,6 +102,7 @@ type config struct {
 	AddPeers            []string      `short:"a" long:"addpeer" description:"Add a peer to connect with at startup"`
 	AddrIndex           bool          `long:"addrindex" description:"Maintain a full address-based transaction index which makes the searchrawtransactions RPC available"`
 	ExpiryIndex         bool          `long:"expiryindex" description:"Enable ExpiryIndex scan/RPC features on OBTC networks. Expiry commitment consensus state is maintained regardless."`
+	ReindexExpiry       bool          `long:"reindex-expiry" description:"Reset the persisted ExpiryIndex state on OBTC networks, then continue startup and rebuild it from chain state."`
 	AgentBlacklist      []string      `long:"agentblacklist" description:"A comma separated list of user-agent substrings which will cause btcd to reject any peers whose user-agent contains any of the blacklisted substrings."`
 	AgentWhitelist      []string      `long:"agentwhitelist" description:"A comma separated list of user-agent substrings which will cause btcd to require all peers' user-agents to contain one of the whitelisted substrings. The blacklist is applied before the whitelist, and an empty whitelist will allow all agents that do not fail the blacklist."`
 	BanDuration         time.Duration `long:"banduration" description:"How long to ban misbehaving peers.  Valid time units are {s, m, h}.  Minimum 1 second"`
@@ -955,6 +956,24 @@ func loadConfig() (*config, []string, error) {
 	if cfg.ExpiryIndex && !chaincfg.IsOBTC(activeNetParams.Params) {
 		err := fmt.Errorf("%s: the --expiryindex option is only "+
 			"supported on OBTC networks (obtcmainnet, obtctestnet, obtcregtest)",
+			funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+	if cfg.ReindexExpiry && !chaincfg.IsOBTC(activeNetParams.Params) {
+		err := fmt.Errorf("%s: the --reindex-expiry option is only "+
+			"supported on OBTC networks (obtcmainnet, obtctestnet, obtcregtest)",
+			funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+	if cfg.ReindexExpiry && (cfg.DropAddrIndex || cfg.DropCfIndex ||
+		cfg.DropTxIndex) {
+
+		err := fmt.Errorf("%s: the --reindex-expiry option may not be "+
+			"used with --dropaddrindex, --dropcfindex, or --droptxindex",
 			funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)

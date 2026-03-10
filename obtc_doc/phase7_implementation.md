@@ -36,9 +36,9 @@
 
 但当前**没有**：
 
-- `--reindex-expiry` 显式命令行开关
+- 自动化 seed 替换与发布冻结流程
 
-所以这部分文档必须写成“已有自动恢复基线，显式 reindex 入口仍待实现”。
+当前已经具备“已有自动恢复基线 + 显式 `--reindex-expiry` 入口”的 operator 恢复能力。
 
 ### 1.3 发布脚本基线
 
@@ -58,7 +58,6 @@
 - `build/release.sh`
 - `Dockerfile.release`
 - `minisign` 集成
-- `obtc-status` 构建产物
 
 ## 2. 当前仍待补齐的硬化项
 
@@ -83,7 +82,6 @@
 
 ### 2.2 仍未落地的运维/恢复能力
 
-- 显式 `--reindex-expiry`
 - chaos / fault injection 脚本
 - 发布说明文档
 - 可复现构建验证文档
@@ -107,8 +105,6 @@ Phase 7 应改成四件事：
   - 基于 `release/release.sh` 的实际发布流程
 - `scripts/validation/chaos/`
   - reorg、kill -9、I/O 干扰、无效 REAP 注入
-- 可选新增：
-  - `--reindex-expiry`（如果决定补显式恢复入口）
 
 这里建议把原文档里不存在的 `tools/chaos/` 改为贴近当前仓库结构的 `scripts/validation/chaos/`。
 
@@ -132,7 +128,7 @@ Phase 7 应改成四件事：
 
 #### 未实现
 
-- `--reindex-expiry`
+- 完整的 chaos / failure 注入脚本集
 
 ### 5.2 索引恢复与版本迁移
 
@@ -142,10 +138,9 @@ Phase 7 应改成四件事：
 - mismatch 会报错退出
 - 启动后依赖 `smartRebuild()` 自动追平
 
-如果希望更强的 operator 体验，Phase 7 应新增：
+如果希望更强的 operator 体验，Phase 7 应继续补：
 
-- 显式 reindex 操作入口
-- 运维文档：什么情况下依赖自动 rebuild，什么情况下要人工清理并重建
+- 运维文档：什么情况下依赖自动 rebuild，什么情况下执行 `--reindex-expiry`
 
 ### 5.3 故障注入
 
@@ -202,7 +197,7 @@ go test ./mining/... -count=1
 - [ ] `docs/phase7-validation.md` 明确列出已实现与未实现硬化项
 - [ ] 至少完成一轮 reorg / kill -9 / 无效 REAP 对抗验证
 - [ ] 发布流程文档与当前 `release/release.sh` 对齐
-- [ ] 文档不再引用不存在的 `build/release.sh`、`Dockerfile.release`、`btcwallet`、`obtc-status`
+- [ ] 文档不再引用不存在的 `build/release.sh`、`Dockerfile.release`、`btcwallet`
 
 ## 8. 风险与约束
 

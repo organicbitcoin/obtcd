@@ -5,7 +5,7 @@ OBTCD (Organic Bitcoin)
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
 
-> ⚠️ **Active Development Status**: OBTCD includes OBTC network parameters, expiry indexing, REAP baseline logic, replay protection, and expiry commitment support. Rollout, hardening, and release tooling are still in progress.
+> ⚠️ **Active Development Status**: OBTCD includes OBTC network parameters, expiry indexing, REAP baseline logic, replay protection, expiry commitment support, an explicit `--reindex-expiry` recovery path, and a minimal `obtc-status` read-only status page. Rollout, seed replacement, and release hardening are still in progress.
 
 OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements the **Resource Expiration and Allocation Protocol (REAP)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
 
@@ -29,6 +29,17 @@ OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, fork
 git clone https://github.com/organicbitcoin/obtcd.git
 cd obtcd
 go build
+```
+
+### Operations Helpers
+
+```bash
+# Explicitly reset and rebuild the persisted ExpiryIndex state.
+./btcd --obtctestnet --reindex-expiry --rpcuser=u --rpcpass=p
+
+# Start the read-only status page against an existing node.
+go build ./cmd/obtc-status
+./cmd/obtc-status/obtc-status --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:18556 --notls
 ```
 
 ### Start Development Network (2-node simnet)
@@ -142,6 +153,7 @@ go test -race ./...
 - [Phase 6 Implementation](obtc_doc/phase6_implementation.md) - Testnet rollout notes
 - [Phase 7 Implementation](obtc_doc/phase7_implementation.md) - Hardening status and gaps
 - [Phase 8 Implementation](obtc_doc/phase8_implementation.md) - Mainnet rollout notes
+- [OBTC Status Tool](docs/obtc-status.md) - Read-only status page for operators
 - [Original btcd Documentation](docs/) - Inherited btcd documentation
 
 ## ⚠️ Important Notes
@@ -159,7 +171,6 @@ This project follows an 8-phase development timeline with specific milestones. P
 ## 📜 License
 
 OBTCD is licensed under the [copyfree](http://copyfree.org) ISC License.
-is used for this project.
 
 ## Documentation
 

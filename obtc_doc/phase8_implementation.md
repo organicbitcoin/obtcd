@@ -47,7 +47,6 @@
 
 - 没有 `cmd/gengenesis/`
 - 没有 `cmd/checkgenesis/`
-- 没有 `cmd/obtc-status/`
 - 没有 `docs/mainnet-join.md`
 - 没有 `docs/mainnet-params.md`
 - 没有 `docs/phase8-validation.md`
@@ -56,6 +55,7 @@
 
 当前可直接复用的是：
 
+- `cmd/obtc-status`
 - [`release/release.sh`](../release/release.sh)
 - [`release/README.md`](../release/README.md)
 - 根目录 [`Dockerfile`](../Dockerfile)

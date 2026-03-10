@@ -33,14 +33,14 @@ Phase 6 现在不能再按“新链创世生成”去理解。当前代码明确
 
 - 没有 `cmd/gengenesis/`
 - 没有 `cmd/checkgenesis/`
-- 没有 `cmd/obtc-status/`
-- 没有 `docs/testnet-join.md`
+- `cmd/obtc-status/` 现已存在，可作为最小只读状态页
 - 没有专用 `tools/reap-audit.go`
 
 当前可直接复用的只有：
 
 - 节点二进制 `btcd`
 - 命令行 `btcctl`
+- 只读状态页 `cmd/obtc-status`
 - 根目录 [`Dockerfile`](../Dockerfile)
 - RPC：`getblockchaininfo`、`getpeerinfo`、`getmempoolinfo`、`getchaintips`、`listexpiring`、`getexpiryindexstats`
 
@@ -71,7 +71,7 @@ Phase 6 现在不能再按“新链创世生成”去理解。当前代码明确
   - `systemd` 示例
   - 防火墙/端口说明
 
-如果后续要做状态页，再单独作为新增项，不在本阶段默认前提里写死 `obtc-status`。
+当前已经有一个最小 `obtc-status` 只读状态页，因此 Phase 6 不必再把它写成“缺失能力”。
 
 ## 5. 任务拆解
 
