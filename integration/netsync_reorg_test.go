@@ -81,6 +81,93 @@ func TestNetsyncReconnectCatchesUpDelayedPeer(t *testing.T) {
 	assertBestBlock(t, follower, advancedTip, 5)
 }
 
+func TestNetsyncThreeNodeCompetingForkConvergence(t *testing.T) {
+	first := newNetsyncHarness(t)
+	second := newNetsyncHarness(t)
+	third := newNetsyncHarness(t)
+
+	firstBlocks, err := first.Client.Generate(2)
+	require.NoError(t, err)
+	firstTip := firstBlocks[len(firstBlocks)-1]
+
+	secondBlocks, err := second.Client.Generate(3)
+	require.NoError(t, err)
+	secondTip := secondBlocks[len(secondBlocks)-1]
+
+	thirdBlocks, err := third.Client.Generate(5)
+	require.NoError(t, err)
+	thirdTip := thirdBlocks[len(thirdBlocks)-1]
+
+	require.NoError(t, rpctest.ConnectNode(first, second))
+	joinBlocks(t, first, second)
+
+	assertBestBlock(t, first, secondTip, 3)
+	assertBestBlock(t, second, secondTip, 3)
+	assertBestBlock(t, third, thirdTip, 5)
+
+	assertChainTipEventually(t, first, btcjson.GetChainTipsResult{
+		Height:    3,
+		Hash:      secondTip.String(),
+		BranchLen: 0,
+		Status:    "active",
+	})
+	assertChainTipEventually(t, first, btcjson.GetChainTipsResult{
+		Height:    2,
+		Hash:      firstTip.String(),
+		BranchLen: 2,
+		Status:    "valid-fork",
+	})
+
+	disconnectPeer(t, first)
+	assertBestBlock(t, second, secondTip, 3)
+
+	require.NoError(t, rpctest.ConnectNode(first, third))
+	joinBlocks(t, first, third)
+
+	assertBestBlock(t, first, thirdTip, 5)
+	assertBestBlock(t, second, secondTip, 3)
+	assertBestBlock(t, third, thirdTip, 5)
+
+	assertChainTipEventually(t, first, btcjson.GetChainTipsResult{
+		Height:    5,
+		Hash:      thirdTip.String(),
+		BranchLen: 0,
+		Status:    "active",
+	})
+	assertChainTipEventually(t, first, btcjson.GetChainTipsResult{
+		Height:    3,
+		Hash:      secondTip.String(),
+		BranchLen: 3,
+		Status:    "valid-fork",
+	})
+	assertChainTipEventually(t, first, btcjson.GetChainTipsResult{
+		Height:    2,
+		Hash:      firstTip.String(),
+		BranchLen: 2,
+		Status:    "valid-fork",
+	})
+
+	require.NoError(t, rpctest.ConnectNode(second, first))
+	joinBlocks(t, first, second, third)
+
+	assertBestBlock(t, first, thirdTip, 5)
+	assertBestBlock(t, second, thirdTip, 5)
+	assertBestBlock(t, third, thirdTip, 5)
+
+	assertChainTipEventually(t, second, btcjson.GetChainTipsResult{
+		Height:    5,
+		Hash:      thirdTip.String(),
+		BranchLen: 0,
+		Status:    "active",
+	})
+	assertChainTipEventually(t, second, btcjson.GetChainTipsResult{
+		Height:    3,
+		Hash:      secondTip.String(),
+		BranchLen: 3,
+		Status:    "valid-fork",
+	})
+}
+
 func newNetsyncHarness(t *testing.T) *rpctest.Harness {
 	t.Helper()
 
