@@ -1,6 +1,10 @@
 name: Build and Test
 on:
   workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - master
 
 env:
   GO_VERSION: 1.23.2
@@ -10,13 +14,13 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Build
         run: make build
@@ -25,13 +29,13 @@ jobs:
     name: Unit coverage
     runs-on: ubuntu-latest
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Test
         run: make unit-cover
@@ -82,13 +86,13 @@ jobs:
     name: Unit race
     runs-on: ubuntu-latest
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Test
         run: make unit-race
@@ -97,13 +101,13 @@ jobs:
     name: OBTC Integration Tests
     runs-on: ubuntu-latest
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Run OBTC Network Tests
         run: |
@@ -188,13 +192,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Build btcd (for harness)
         run: go build -o btcd .
@@ -206,13 +210,13 @@ jobs:
     name: Code Quality
     runs-on: ubuntu-latest
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Go Vet
         run: go vet ./...
@@ -233,13 +237,13 @@ jobs:
         go-version: [1.23.2]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Check out source
-        uses: actions/checkout@v4
 
       - name: Build OBTCD
         run: go build
