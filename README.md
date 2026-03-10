@@ -38,6 +38,8 @@ go build
 ./btcd --obtctestnet --reindex-expiry --rpcuser=u --rpcpass=p
 
 # Start the read-only status page against an existing node.
+# Use the node's actual RPC port: obtctestnet defaults to 18556 unless you
+# override it explicitly (for example to 19528 in operator docs).
 go build ./cmd/obtc-status
 ./cmd/obtc-status/obtc-status --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:18556 --notls
 ```
@@ -76,18 +78,6 @@ cd cmd/btcctl && go build
 # Send transaction
 ./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 sendtoaddress <address> 1.0
 ```
-
-```bash
-$ go version
-$ go env GOROOT GOPATH
-```
-
-NOTE: The `GOROOT` and `GOPATH` above must not be the same path.  It is
-recommended that `GOPATH` is set to a directory in your home directory such as
-`~/goprojects` to avoid write permission issues.  It is also recommended to add
-`$GOPATH/bin` to your `PATH` at this point.
-
-- Run the following commands to obtain btcd, all dependencies, and install it:
 
 ## 📊 OBTC Network Parameters
 
@@ -153,6 +143,7 @@ go test -race ./...
 - [Phase 6 Implementation](obtc_doc/phase6_implementation.md) - Testnet rollout notes
 - [Phase 7 Implementation](obtc_doc/phase7_implementation.md) - Hardening status and gaps
 - [Phase 8 Implementation](obtc_doc/phase8_implementation.md) - Mainnet rollout notes
+- [OBTC Testnet Join Guide](docs/testnet-join.md) - Current testnet bootstrap and observability steps
 - [OBTC Status Tool](docs/obtc-status.md) - Read-only status page for operators
 - [Original btcd Documentation](docs/) - Inherited btcd documentation
 
@@ -171,18 +162,3 @@ This project follows an 8-phase development timeline with specific milestones. P
 ## 📜 License
 
 OBTCD is licensed under the [copyfree](http://copyfree.org) ISC License.
-
-## Documentation
-
-The documentation is a work-in-progress.  It is located in the [docs](https://github.com/btcsuite/btcd/tree/master/docs) folder.
-
-## Release Verification
-
-Please see our [documentation on the current build/verification
-process](https://github.com/btcsuite/btcd/tree/master/release) for all our
-releases for information on how to verify the integrity of published releases
-using our reproducible build system.
-
-## License
-
-btcd is licensed under the [copyfree](http://copyfree.org) ISC License.

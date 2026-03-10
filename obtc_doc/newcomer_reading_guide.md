@@ -704,7 +704,6 @@ mining/reap/
 ├── selector_test.go         # Selector 测试
 ├── staircase_pressure_test.go  # 阶梯压力测试
 ├── stress_regression_test.go   # 压力回归测试
-└── week3_extra_test.go      # 历史遗留测试（已重命名）
 ```
 
 ### 6.2 文件：`types.go` ★ 先读

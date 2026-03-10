@@ -18,13 +18,13 @@ import (
 // This is the same as Bitcoin's testnet limit to allow easier testing.
 var obtcPowLimit = new(big.Int).Sub(new(big.Int).Lsh(bigOne, 224), bigOne)
 
-// ExpiryParams defines parameters for UTXO expiry calculation
-// OBTC uses height-based expiry for deterministic and consensus-friendly behavior
+// ExpiryParams defines parameters for UTXO expiry calculation.
+// OBTC uses height-based expiry for deterministic and consensus-friendly behavior.
 type ExpiryParams struct {
 	WindowBlocks             uint64 // Expiry window in blocks
 	ListBatchLimit           int    // Max items returned in one RPC scan
 	StartScanHeight          int32  // Height to start building index (genesis for OBTC)
-	EnableAtHeight           int32  // Height to enable expiry enforcement (Week 3+)
+	EnableAtHeight           int32  // Height to enable expiry enforcement
 	ReapConsensusAtHeight    int32  // Height to enforce canonical REAP ordering / limits
 	ReplayProtectionAtHeight int32  // Height to enforce OBTC replay-protected sighash domain
 	ReapMaxInputs            int    // Consensus max REAP inputs per transaction (0 = disabled)
@@ -260,8 +260,6 @@ var ObtcTestNetParams = Params{
 			DeploymentEnder:    NewMedianTimeDeploymentEnder(time.Unix(0, 0)),
 		},
 	},
-
-	// TODO: Complete remaining testnet-specific fields in Week 3
 }
 
 // ObtcRegTestParams defines the network parameters for OBTC regression testing.
@@ -351,8 +349,6 @@ var ObtcRegTestParams = Params{
 	HDPrivateKeyID:          [4]byte{0x0B, 0x49, 0xB0, 0x1E},
 	HDPublicKeyID:           [4]byte{0x0B, 0x49, 0xB5, 0xD4},
 	HDCoinType:              20262,
-
-	// TODO: Complete remaining fields in Week 3
 }
 
 // IsOBTC returns true if the network parameters represent an OBTC network.

@@ -21,6 +21,9 @@ go build ./cmd/obtc-status
   --notls
 ```
 
+`18556` 是当前 `obtctestnet` 的默认 RPC 端口；如果节点启动时显式改成了其他端口
+（例如 [testnet-join.md](testnet-join.md) 里的 `19528`），这里也要改成对应值。
+
 默认会在 `127.0.0.1:9680` 提供以下端点：
 
 - `/`：HTML 状态页

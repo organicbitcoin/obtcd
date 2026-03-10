@@ -34,11 +34,8 @@
 - `fastRebuildFromUTXO()`
 - `incrementalCatchUp()`
 
-但当前**没有**：
-
-- 自动化 seed 替换与发布冻结流程
-
 当前已经具备“已有自动恢复基线 + 显式 `--reindex-expiry` 入口”的 operator 恢复能力。
+但这不等于发布、观测和故障演练层已经收口。
 
 ### 1.3 发布脚本基线
 
@@ -203,5 +200,5 @@ go test ./mining/... -count=1
 
 - **把已实现能力继续当待办**：会掩盖真正缺口
 - **把不存在的发布链路写成默认流程**：到发布阶段会直接卡住
-- **没有显式 reindex 入口**：operator 体验仍偏弱
-- **没有显式 reindex 入口**：operator 恢复体验仍偏弱
+- **自动 rebuild 与 `--reindex-expiry` 的使用场景写不清**：operator 容易误操作
+- **没有 chaos 注入记录**：发布前对恢复能力的把握仍然偏弱
