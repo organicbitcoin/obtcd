@@ -165,30 +165,11 @@ func TestClientConnectedToWSServerRunner(t *testing.T) {
 				client, _, cleanup := makeClient(t)
 				defer cleanup()
 
-				// a bit of a hack here: since there are multiple places where we read
-				// from the shutdown channel, and it is not buffered, ensure that a shutdown
-				// message is sent every time it is read from, this will ensure that
-				// when client.GetChainTxStatsAsync() gets called, it hits the non-blocking
-				// read from the shutdown channel
-				go func() {
-					type shutdownMessage struct{}
-					for {
-						client.shutdown <- shutdownMessage{}
-					}
-				}()
+				client.Shutdown()
 
-				var response *Response = nil
-
-				for response == nil {
-					respChan := client.GetChainTxStatsAsync()
-					select {
-					case response = <-respChan:
-					default:
-					}
-				}
-
-				if response.err == nil || response.err.Error() != "the client has been shutdown" {
-					t.Fatalf("unexpected error: %s", response.err.Error())
+				response := <-client.GetChainTxStatsAsync()
+				if response.err == nil || response.err.Error() != ErrClientShutdown.Error() {
+					t.Fatalf("unexpected error: %v", response.err)
 				}
 			},
 		},
@@ -260,10 +241,11 @@ func makeClient(t *testing.T) (*Client, chan string, func()) {
 	url := strings.TrimPrefix(s.URL, "http://")
 
 	config := ConnConfig{
-		DisableTLS: true,
-		User:       "username",
-		Pass:       "password",
-		Host:       url,
+		DisableTLS:           true,
+		User:                 "username",
+		Pass:                 "password",
+		Host:                 url,
+		DisableAutoReconnect: true,
 	}
 
 	client, err := New(&config, nil)
@@ -271,6 +253,8 @@ func makeClient(t *testing.T) (*Client, chan string, func()) {
 		t.Fatalf("error when creating new client %s", err.Error())
 	}
 	return client, serverReceivedChannel, func() {
+		client.Shutdown()
+		client.WaitForShutdown()
 		s.Close()
 	}
 }
