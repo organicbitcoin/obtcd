@@ -3,19 +3,70 @@ package expiryindex
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"math/big"
 	"testing"
 )
 
 func TestMuHashIdentityDigest(t *testing.T) {
 	mh := NewMuHash()
-	d := mh.Digest()
-	// Identity = 1, serialized as LE 384 bytes (0x01 followed by zeros).
-	var one [muhashByteLen]byte
-	one[0] = 1
-	expected := sha256.Sum256(one[:])
-	if d != expected {
-		t.Fatalf("identity digest mismatch: got %x, want %x", d, expected)
+	digest := mh.Digest()
+	const want = "c85525462fdcf30a2c18d6f4b92923000974355c2477f59594d2c205a1d25add"
+	if got := hex.EncodeToString(digest[:]); got != want {
+		t.Fatalf("identity digest mismatch: got %s, want %s", got, want)
+	}
+}
+
+func TestMuHashDigestKnownVectors(t *testing.T) {
+	tests := []struct {
+		name string
+		ops  func(*MuHash)
+		want string
+	}{
+		{
+			name: "single add",
+			ops: func(mh *MuHash) {
+				mh.Add([]byte("alpha"))
+			},
+			want: "1857e5c94b2ba1e32bf8a228245dc85301abf20371f8d88a8cf991b5c1ddc01d",
+		},
+		{
+			name: "single remove",
+			ops: func(mh *MuHash) {
+				mh.Remove([]byte("alpha"))
+			},
+			want: "d1875f9f3cda43266bd535d8ef2ad2473cc3c7e391b89ae3c840ddbaa31f0305",
+		},
+		{
+			name: "multiple adds",
+			ops: func(mh *MuHash) {
+				mh.Add([]byte("alpha"))
+				mh.Add([]byte("bravo"))
+				mh.Add([]byte("charlie"))
+			},
+			want: "0a6ea6bcd0677897fc2e9e6401c8fe7def5e96324a45a9283793b241d0707fa6",
+		},
+		{
+			name: "add add remove",
+			ops: func(mh *MuHash) {
+				mh.Add([]byte("foo"))
+				mh.Add([]byte("bar"))
+				mh.Remove([]byte("baz"))
+			},
+			want: "1b0beda79a84cdd151b5f3be13ead7f56e6713d718a797c251b33a8396da5433",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mh := NewMuHash()
+			test.ops(mh)
+
+			digest := mh.Digest()
+			if got := hex.EncodeToString(digest[:]); got != test.want {
+				t.Fatalf("digest mismatch: got %s, want %s", got, test.want)
+			}
+		})
 	}
 }
 
