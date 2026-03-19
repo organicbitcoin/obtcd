@@ -969,7 +969,7 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 		return 0, nil
 	}
 
-	if err := checkReapMarker(tx.MsgTx(), txHeight); err != nil {
+	if err := checkReapMarker(tx.MsgTx(), txHeight, chainParams); err != nil {
 		return 0, err
 	}
 	if err := checkExpirySpendRules(tx.MsgTx(), txHeight, utxoView, chainParams); err != nil {

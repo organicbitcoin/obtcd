@@ -51,6 +51,8 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 	if p.ScanBatch <= 0 {
 		p.ScanBatch = 10_000
 	}
+	p.debugLogf("REAP select start tip=%d maxInputs=%d weightBudget=%d scanBatch=%d sort=%d",
+		tip, p.MaxInputs, p.WeightBudget, p.ScanBatch, p.Sort)
 
 	var all []candidate
 	var fromKey uint64
@@ -68,13 +70,17 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 		if err != nil {
 			return REAPPlan{}, err
 		}
+		liveRows := 0
 		for _, row := range rows {
 			entry := view.LookupEntry(row.OutPoint)
 			if entry == nil || entry.IsSpent() {
 				continue
 			}
 			all = append(all, candidate{op: row.OutPoint, expiry: row.ExpiryKey, amount: entry.Amount()})
+			liveRows++
 		}
+		p.debugLogf("REAP select scan page from=%d to=%d rows=%d liveRows=%d accumulated=%d hasMore=%t",
+			fromKey, toKey, len(rows), liveRows, len(all), hasMore)
 		if !hasMore || len(rows) == 0 {
 			break
 		}
@@ -95,11 +101,15 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 		}
 		if len(plan.Inputs) >= p.MaxInputs {
 			plan.Stats.Skipped += len(all) - len(plan.Inputs)
+			p.debugLogf("REAP select stop reason=max-inputs picked=%d skipped=%d",
+				len(plan.Inputs), plan.Stats.Skipped)
 			break
 		}
 		nextWeight := EstimateBlueprintWeight(len(plan.Inputs) + 1)
 		if p.WeightBudget > 0 && nextWeight > p.WeightBudget {
 			plan.Stats.Skipped += len(all) - len(plan.Inputs)
+			p.debugLogf("REAP select stop reason=weight-budget picked=%d nextWeight=%d budget=%d skipped=%d",
+				len(plan.Inputs), nextWeight, p.WeightBudget, plan.Stats.Skipped)
 			break
 		}
 		plan.Inputs = append(plan.Inputs, c.op)
@@ -112,6 +122,9 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 
 	plan.Stats.Picked = len(plan.Inputs)
 	plan.Stats.EstWeight = EstimateBlueprintWeight(len(plan.Inputs))
+	p.debugLogf("REAP select done tip=%d candidates=%d picked=%d skipped=%d refund=%d tax=%d estWeight=%d",
+		tip, plan.Stats.Candidates, plan.Stats.Picked, plan.Stats.Skipped,
+		plan.RefundTotal, plan.TaxTotal, plan.Stats.EstWeight)
 	return plan, nil
 }
 

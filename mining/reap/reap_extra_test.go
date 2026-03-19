@@ -24,10 +24,16 @@ func TestDefaultREAPParamsForNetNilAndTestnet(t *testing.T) {
 	if pNil.MaxInputs != 1000 || pNil.ScanBatch != 10_000 {
 		t.Fatalf("unexpected defaults for nil net: %+v", pNil)
 	}
+	if pNil.DebugEnabled {
+		t.Fatalf("nil net should not enable debug logs")
+	}
 
 	pTestnet := DefaultREAPParamsForNet(&chaincfg.ObtcTestNetParams, SortModeStrict)
 	if pTestnet.MaxInputs != 500 || pTestnet.ScanBatch != 5_000 {
 		t.Fatalf("unexpected defaults for obtc testnet: %+v", pTestnet)
+	}
+	if pTestnet.DebugEnabled {
+		t.Fatalf("obtc testnet debug logs should stay disabled")
 	}
 }
 

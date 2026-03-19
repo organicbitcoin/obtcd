@@ -23,6 +23,8 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 	if view == nil {
 		return nil, ErrNilView
 	}
+	p.debugLogf("REAP blueprint build start height=%d inputs=%d expectedRefund=%d expectedTax=%d",
+		plan.Height, len(plan.Inputs), plan.RefundTotal, plan.TaxTotal)
 
 	tx := wire.NewMsgTx(reapTxVersion)
 	// Keep the tx final for inclusion at plan.Height while preserving a
@@ -93,6 +95,10 @@ func BuildBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPParams)
 	if inTotal != refundTotal+taxTotal {
 		return nil, fmt.Errorf("input/output invariant broken")
 	}
+
+	p.debugLogf("REAP blueprint build done height=%d txid=%s inputs=%d refundOutputs=%d refund=%d tax=%d marker=%s",
+		plan.Height, tx.TxHash(), len(tx.TxIn), len(refundOutputs), refundTotal, taxTotal,
+		MarkerDigest(plan.Inputs))
 
 	return tx, nil
 }

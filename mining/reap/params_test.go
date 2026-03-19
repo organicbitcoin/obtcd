@@ -11,15 +11,24 @@ func TestDefaultREAPParamsForNet(t *testing.T) {
 	if btcMain.MaxInputs != 1000 || btcMain.ScanBatch != 10_000 || btcMain.WeightBudget != 400_000 {
 		t.Fatalf("unexpected bitcoin mainnet defaults: %+v", btcMain)
 	}
+	if btcMain.DebugEnabled {
+		t.Fatalf("bitcoin mainnet debug logs should stay disabled")
+	}
 
 	obtcMain := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
 	if obtcMain.MaxInputs != 256 || obtcMain.ScanBatch != 10_000 || obtcMain.WeightBudget != 200_000 {
 		t.Fatalf("unexpected obtc mainnet defaults: %+v", obtcMain)
 	}
+	if obtcMain.DebugEnabled {
+		t.Fatalf("obtc mainnet debug logs should stay disabled")
+	}
 
 	reg := DefaultREAPParamsForNet(&chaincfg.ObtcRegTestParams, SortModeStrict)
 	if reg.MaxInputs != 200 || reg.ScanBatch != 2_000 {
 		t.Fatalf("unexpected regtest defaults: %+v", reg)
+	}
+	if !reg.DebugEnabled {
+		t.Fatalf("regtest debug logs should be enabled")
 	}
 }
 

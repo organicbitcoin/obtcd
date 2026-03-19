@@ -75,27 +75,49 @@ func reapInputDigest(tx *wire.MsgTx) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func checkReapMarker(tx *wire.MsgTx, txHeight int32) error {
+func checkReapMarker(tx *wire.MsgTx, txHeight int32,
+	chainParams *chaincfg.Params) error {
+
 	if !isLikelyReapTx(tx) {
 		return nil
 	}
+	txHash := tx.TxHash()
+	logOBTCDevf(chainParams,
+		"REAP marker check start tx=%s blockHeight=%d inputs=%d outputs=%d",
+		txHash, txHeight, len(tx.TxIn), len(tx.TxOut))
 	payload, ok := extractMarkerPayload(tx.TxOut[len(tx.TxOut)-1].PkScript)
 	if !ok {
+		logOBTCDevf(chainParams,
+			"REAP marker check failed tx=%s reason=unparseable-marker", txHash)
 		return ruleError(ErrBadTxInput, "reap transaction has unparseable marker output")
 	}
 	h, count, digest, err := parseReapMarkerPayload(payload)
 	if err != nil {
+		logOBTCDevf(chainParams,
+			"REAP marker check failed tx=%s reason=parse-error err=%v", txHash, err)
 		return ruleError(ErrBadTxInput, err.Error())
 	}
 	if h != txHeight {
+		logOBTCDevf(chainParams,
+			"REAP marker check failed tx=%s reason=height-mismatch markerHeight=%d blockHeight=%d",
+			txHash, h, txHeight)
 		return ruleError(ErrBadTxInput, "reap marker height mismatch")
 	}
 	if count != len(tx.TxIn) {
+		logOBTCDevf(chainParams,
+			"REAP marker check failed tx=%s reason=count-mismatch markerCount=%d inputCount=%d",
+			txHash, count, len(tx.TxIn))
 		return ruleError(ErrBadTxInput, "reap marker count mismatch")
 	}
 	if digest != reapInputDigest(tx) {
+		logOBTCDevf(chainParams,
+			"REAP marker check failed tx=%s reason=digest-mismatch markerDigest=%s computedDigest=%s",
+			txHash, digest, reapInputDigest(tx))
 		return ruleError(ErrBadTxInput, "reap marker digest mismatch")
 	}
+	logOBTCDevf(chainParams,
+		"REAP marker check ok tx=%s markerHeight=%d inputCount=%d digest=%s",
+		txHash, h, count, digest)
 	return nil
 }
 
@@ -110,6 +132,9 @@ func checkReapBlockHardening(block *btcutil.Block, blockHeight int32,
 	if expiryParams == nil || blockHeight < expiryParams.ReapConsensusAtHeight {
 		return nil
 	}
+	logOBTCDevf(chainParams,
+		"REAP block hardening check start height=%d txCount=%d activationHeight=%d",
+		blockHeight, len(block.Transactions()), expiryParams.ReapConsensusAtHeight)
 
 	reapCount := 0
 	for i, tx := range block.Transactions()[1:] {
@@ -119,12 +144,18 @@ func checkReapBlockHardening(block *btcutil.Block, blockHeight int32,
 
 		reapCount++
 		if reapCount > 1 {
+			logOBTCDevf(chainParams,
+				"REAP block hardening failed height=%d secondReapIndex=%d",
+				blockHeight, i+1)
 			return ruleError(ErrMultipleReapTx, fmt.Sprintf(
 				"block contains multiple REAP transactions (second at index %d)",
 				i+1,
 			))
 		}
 	}
+
+	logOBTCDevf(chainParams,
+		"REAP block hardening ok height=%d reapTxCount=%d", blockHeight, reapCount)
 
 	return nil
 }
@@ -191,8 +222,15 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 	if expiryParams == nil || txHeight < expiryParams.ReapConsensusAtHeight {
 		return nil
 	}
+	txHash := tx.TxHash()
+	logOBTCDevf(chainParams,
+		"REAP consensus hardening start tx=%s blockHeight=%d inputCount=%d maxInputs=%d",
+		txHash, txHeight, len(tx.TxIn), expiryParams.ReapMaxInputs)
 
 	if expiryParams.ReapMaxInputs > 0 && len(tx.TxIn) > expiryParams.ReapMaxInputs {
+		logOBTCDevf(chainParams,
+			"REAP consensus hardening failed tx=%s reason=max-inputs inputCount=%d maxInputs=%d",
+			txHash, len(tx.TxIn), expiryParams.ReapMaxInputs)
 		return ruleError(ErrBadTxInput, fmt.Sprintf(
 			"reap transaction input count %d exceeds consensus limit %d",
 			len(tx.TxIn), expiryParams.ReapMaxInputs,
@@ -214,10 +252,17 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 			return ruleError(ErrMissingTxOut, err.Error())
 		}
 		if compareReapInputOrderKey(prevKey, curKey) > 0 {
+			logOBTCDevf(chainParams,
+				"REAP consensus hardening failed tx=%s reason=canonical-order prev=%s cur=%s",
+				txHash, tx.TxIn[i-1].PreviousOutPoint, tx.TxIn[i].PreviousOutPoint)
 			return ruleError(ErrBadTxInput, "reap transaction inputs out of canonical order")
 		}
 		prevKey = curKey
 	}
+
+	logOBTCDevf(chainParams,
+		"REAP consensus hardening ok tx=%s blockHeight=%d inputCount=%d",
+		txHash, txHeight, len(tx.TxIn))
 
 	return nil
 }
@@ -253,6 +298,7 @@ func checkReapTaxRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoint,
 	if expiryParams == nil || txHeight < expiryParams.EnableAtHeight {
 		return nil
 	}
+	txHash := tx.TxHash()
 
 	expectedRefundByScript := make(map[string]int64)
 	var expectedRefundTotal int64
@@ -290,21 +336,34 @@ func checkReapTaxRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoint,
 	}
 
 	if actualRefundTotal != expectedRefundTotal {
+		logOBTCDevf(chainParams,
+			"REAP tax check failed tx=%s reason=refund-total got=%d want=%d",
+			txHash, actualRefundTotal, expectedRefundTotal)
 		return ruleError(ErrBadTxOutValue, fmt.Sprintf(
 			"reap refund total mismatch: got %d want %d",
 			actualRefundTotal, expectedRefundTotal))
 	}
 	if len(actualRefundByScript) != len(expectedRefundByScript) {
+		logOBTCDevf(chainParams,
+			"REAP tax check failed tx=%s reason=refund-set-size got=%d want=%d",
+			txHash, len(actualRefundByScript), len(expectedRefundByScript))
 		return ruleError(ErrBadTxOutValue,
 			"reap refund output set does not match expected distribution")
 	}
 
 	for script, expected := range expectedRefundByScript {
 		if got, ok := actualRefundByScript[script]; !ok || got != expected {
+			logOBTCDevf(chainParams,
+				"REAP tax check failed tx=%s reason=refund-distribution scriptLen=%d got=%d want=%d",
+				txHash, len(script), got, expected)
 			return ruleError(ErrBadTxOutValue,
 				"reap refund output set does not match expected distribution")
 		}
 	}
+
+	logOBTCDevf(chainParams,
+		"REAP tax check ok tx=%s refundTotal=%d outputGroups=%d",
+		txHash, actualRefundTotal, len(actualRefundByScript))
 
 	return nil
 }
@@ -321,15 +380,23 @@ func checkExpirySpendRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoi
 	}
 
 	isReap := isLikelyReapTx(tx)
+	txHash := tx.TxHash()
+	expiredInputs := 0
 	for _, txIn := range tx.TxIn {
 		utxo := utxoView.LookupEntry(txIn.PreviousOutPoint)
 		if utxo == nil || utxo.IsSpent() {
+			logOBTCDevf(chainParams,
+				"expiry spend check failed tx=%s reason=missing-utxo outpoint=%s",
+				txHash, txIn.PreviousOutPoint)
 			return ruleError(ErrMissingTxOut, fmt.Sprintf(
 				"utxo %v missing from view during expiry check",
 				txIn.PreviousOutPoint))
 		}
 		if utxo.BlockHeight() == unminedInputHeight {
 			if isReap {
+				logOBTCDevf(chainParams,
+					"expiry spend check failed tx=%s reason=reap-spends-unconfirmed outpoint=%s",
+					txHash, txIn.PreviousOutPoint)
 				return ruleError(ErrBadTxInput,
 					"reap transaction spends unconfirmed utxo")
 			}
@@ -338,15 +405,27 @@ func checkExpirySpendRules(tx *wire.MsgTx, txHeight int32, utxoView *UtxoViewpoi
 
 		expiryHeight := int32(expiryParams.CalculateExpiryKey(utxo.BlockHeight()))
 		expired := txHeight >= expiryHeight
+		if expired {
+			expiredInputs++
+		}
 
 		if isReap && !expired {
+			logOBTCDevf(chainParams,
+				"expiry spend check failed tx=%s reason=reap-spends-live outpoint=%s createHeight=%d expiryHeight=%d blockHeight=%d",
+				txHash, txIn.PreviousOutPoint, utxo.BlockHeight(), expiryHeight, txHeight)
 			return ruleError(ErrBadTxInput,
 				"reap transaction spends non-expired utxo")
 		}
 		if !isReap && expired {
+			logOBTCDevf(chainParams,
+				"expiry spend check failed tx=%s reason=nonreap-spends-expired outpoint=%s createHeight=%d expiryHeight=%d blockHeight=%d",
+				txHash, txIn.PreviousOutPoint, utxo.BlockHeight(), expiryHeight, txHeight)
 			return ruleError(ErrBadTxInput,
 				"non-reap transaction spends expired utxo")
 		}
 	}
+	logOBTCDevf(chainParams,
+		"expiry spend check ok tx=%s blockHeight=%d isReap=%t inputs=%d expiredInputs=%d",
+		txHash, txHeight, isReap, len(tx.TxIn), expiredInputs)
 	return nil
 }

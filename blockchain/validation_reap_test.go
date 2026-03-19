@@ -175,10 +175,10 @@ func TestCheckReapMarkerDirect(t *testing.T) {
 	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Index: 2}})
 	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: markerForTx(t, tx, 222)})
 
-	if err := checkReapMarker(tx, 222); err != nil {
+	if err := checkReapMarker(tx, 222, &chaincfg.ObtcRegTestParams); err != nil {
 		t.Fatalf("expected valid marker check, got %v", err)
 	}
-	if err := checkReapMarker(tx, 223); err == nil {
+	if err := checkReapMarker(tx, 223, &chaincfg.ObtcRegTestParams); err == nil {
 		t.Fatalf("expected mismatch error")
 	}
 }
@@ -203,7 +203,7 @@ func TestCheckReapMarkerCountMismatch(t *testing.T) {
 	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Index: 1}})
 	bad, _ := txscript.NewScriptBuilder().AddOp(txscript.OP_RETURN).AddData([]byte("REAP:100:2:deadbeef")).Script()
 	tx.AddTxOut(&wire.TxOut{Value: 0, PkScript: bad})
-	if err := checkReapMarker(tx, 100); err == nil {
+	if err := checkReapMarker(tx, 100, &chaincfg.ObtcRegTestParams); err == nil {
 		t.Fatalf("expected marker count mismatch error")
 	}
 }

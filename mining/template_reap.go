@@ -12,21 +12,43 @@ import (
 
 func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx, int64, error) {
 	if g.reapIndex == nil || !chaincfg.IsOBTC(g.chainParams) {
+		logOBTCDevf(g.chainParams,
+			"REAP build skipped nextHeight=%d reason=index-or-network reapIndex=%t isOBTC=%t",
+			nextBlockHeight, g.reapIndex != nil, chaincfg.IsOBTC(g.chainParams))
 		return nil, 0, nil
 	}
 	expiryParams := chaincfg.GetExpiryParams(g.chainParams)
 	if expiryParams == nil || nextBlockHeight < expiryParams.EnableAtHeight {
+		activationHeight := int32(-1)
+		if expiryParams != nil {
+			activationHeight = expiryParams.EnableAtHeight
+		}
+		logOBTCDevf(g.chainParams,
+			"REAP build skipped nextHeight=%d reason=before-activation activationHeight=%d",
+			nextBlockHeight, activationHeight)
 		return nil, 0, nil
 	}
 
 	p := reap.DefaultREAPParamsForNet(g.chainParams, reap.SortModeStrict)
 	if err := p.Validate(); err != nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build failed nextHeight=%d reason=invalid-params err=%v", nextBlockHeight, err)
 		return nil, 0, err
 	}
+	logOBTCDevf(g.chainParams,
+		"REAP build start nextHeight=%d maxInputs=%d weightBudget=%d scanBatch=%d",
+		nextBlockHeight, p.MaxInputs, p.WeightBudget, p.ScanBatch)
 
 	opSet, err := g.collectExpiredOutpoints(nextBlockHeight, p)
-	if err != nil || len(opSet) == 0 {
+	if err != nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build failed nextHeight=%d reason=collect-expired err=%v", nextBlockHeight, err)
 		return nil, 0, err
+	}
+	if len(opSet) == 0 {
+		logOBTCDevf(g.chainParams,
+			"REAP build skipped nextHeight=%d reason=no-expired-outpoints", nextBlockHeight)
+		return nil, 0, nil
 	}
 
 	dummy := wire.NewMsgTx(1)
@@ -35,19 +57,43 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 	}
 	view, err := g.chain.FetchUtxoView(btcutil.NewTx(dummy))
 	if err != nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build failed nextHeight=%d reason=fetch-view err=%v candidateOutpoints=%d",
+			nextBlockHeight, err, len(opSet))
 		return nil, 0, err
 	}
+	logOBTCDevf(g.chainParams,
+		"REAP build fetched utxo view nextHeight=%d candidateOutpoints=%d",
+		nextBlockHeight, len(opSet))
 
 	plan, err := reap.SelectCandidates(context.Background(), nextBlockHeight, g.reapIndex, view, p)
-	if err != nil || len(plan.Inputs) == 0 {
+	if err != nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build failed nextHeight=%d reason=select err=%v", nextBlockHeight, err)
 		return nil, 0, err
 	}
+	if len(plan.Inputs) == 0 {
+		logOBTCDevf(g.chainParams,
+			"REAP build skipped nextHeight=%d reason=empty-plan candidates=%d",
+			nextBlockHeight, plan.Stats.Candidates)
+		return nil, 0, nil
+	}
+	logOBTCDevf(g.chainParams,
+		"REAP build plan nextHeight=%d candidates=%d picked=%d skipped=%d refund=%d tax=%d estWeight=%d",
+		nextBlockHeight, plan.Stats.Candidates, plan.Stats.Picked, plan.Stats.Skipped,
+		plan.RefundTotal, plan.TaxTotal, plan.Stats.EstWeight)
 
 	tx, err := reap.BuildBlueprint(plan, view, p)
 	if err != nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build failed nextHeight=%d reason=blueprint err=%v", nextBlockHeight, err)
 		return nil, 0, err
 	}
-	return btcutil.NewTx(tx), plan.TaxTotal, nil
+	builtTx := btcutil.NewTx(tx)
+	logOBTCDevf(g.chainParams,
+		"REAP build done nextHeight=%d tx=%s inputs=%d outputs=%d fee=%d",
+		nextBlockHeight, builtTx.Hash(), len(tx.TxIn), len(tx.TxOut), plan.TaxTotal)
+	return builtTx, plan.TaxTotal, nil
 }
 
 // normalTxWeightLimit returns the weight cap used while selecting regular
@@ -105,12 +151,18 @@ func (g *BlkTmplGenerator) collectExpiredOutpoints(nextBlockHeight int32, p reap
 	}
 
 	out := make([]wire.OutPoint, 0, maxCandidates)
+	logOBTCDevf(g.chainParams,
+		"REAP collect start nextHeight=%d maxCandidates=%d scanBatch=%d",
+		nextBlockHeight, maxCandidates, p.ScanBatch)
 	for len(out) < maxCandidates {
 		rows, hasMore, err := g.reapIndex.ScanExpiringUTXOs(fromKey, toKey, p.ScanBatch, startAfter)
 		if err != nil {
 			return nil, err
 		}
 		if len(rows) == 0 {
+			logOBTCDevf(g.chainParams,
+				"REAP collect page nextHeight=%d rows=0 total=%d hasMore=%t",
+				nextBlockHeight, len(out), hasMore)
 			break
 		}
 		for _, r := range rows {
@@ -119,6 +171,9 @@ func (g *BlkTmplGenerator) collectExpiredOutpoints(nextBlockHeight int32, p reap
 				break
 			}
 		}
+		logOBTCDevf(g.chainParams,
+			"REAP collect page nextHeight=%d rows=%d total=%d hasMore=%t lastExpiry=%d",
+			nextBlockHeight, len(rows), len(out), hasMore, rows[len(rows)-1].ExpiryKey)
 		if !hasMore {
 			break
 		}
@@ -127,6 +182,9 @@ func (g *BlkTmplGenerator) collectExpiredOutpoints(nextBlockHeight int32, p reap
 		op := last.OutPoint
 		startAfter = &op
 	}
+	logOBTCDevf(g.chainParams,
+		"REAP collect done nextHeight=%d collected=%d",
+		nextBlockHeight, len(out))
 	return out, nil
 }
 

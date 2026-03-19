@@ -248,6 +248,8 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 		}
 		return dbPutAccumulatorTipHash(dbTx, block.Hash())
 	}
+	idx.devLogf("ExpiryIndex ConnectBlock start height=%d txs=%d stxos=%d",
+		blockHeight, len(block.Transactions()), len(stxos))
 
 	// Load current accumulator state (represents Root_{n-1}).
 	mh, err := dbGetAccumulatorState(dbTx)
@@ -263,6 +265,9 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 	// Process all transactions in the block.
 	blockHash := block.Hash()
 	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
+	spentCount := 0
+	addedCount := 0
+	unspendableCount := 0
 	for txIdx, tx := range block.Transactions() {
 		msgTx := tx.MsgTx()
 
@@ -283,12 +288,14 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 					return fmt.Errorf("failed to disconnect txout %v: %v",
 						txIn.PreviousOutPoint, err)
 				}
+				spentCount++
 			}
 		}
 
 		// Process new UTXOs (add to index), skip provably unspendable outputs.
 		for voutIdx, txOut := range msgTx.TxOut {
 			if txscript.IsUnspendable(txOut.PkScript) {
+				unspendableCount++
 				continue
 			}
 
@@ -303,6 +310,7 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 			if err := idx.connectTxOut(dbTx, outpoint, blockHeight); err != nil {
 				return fmt.Errorf("failed to connect txout %v: %v", outpoint, err)
 			}
+			addedCount++
 		}
 
 		// Log progress for large blocks
@@ -327,6 +335,8 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 	// Update our internal state
 	idx.curTipHeight = blockHeight
+	idx.devLogf("ExpiryIndex ConnectBlock done height=%d spent=%d added=%d skippedUnspendable=%d root=%x",
+		blockHeight, spentCount, addedCount, unspendableCount, mh.Digest())
 
 	return nil
 }
@@ -643,6 +653,10 @@ func (idx *ExpiryIndex) GetAccumulatorSnapshot() (AccumulatorSnapshot, error) {
 		}
 		return nil
 	})
+	if err == nil {
+		idx.devLogf("ExpiryIndex snapshot tipHeight=%d tipHash=%s root=%x",
+			snapshot.TipHeight, snapshot.TipHash, snapshot.Root)
+	}
 	return snapshot, err
 }
 
@@ -761,6 +775,10 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 		return nil
 	})
 
+	if err == nil {
+		idx.devLogf("ExpiryIndex scan from=%d to=%d max=%d startAfter=%v results=%d hasMore=%t",
+			fromKey, toKey, maxResults, startAfter, len(results), hasMore)
+	}
 	return results, hasMore, err
 }
 

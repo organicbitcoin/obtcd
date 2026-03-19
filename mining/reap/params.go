@@ -14,6 +14,7 @@ type REAPParams struct {
 	TaxNum           int64
 	TaxDen           int64
 	DustThresholdSat int64
+	DebugEnabled     bool
 }
 
 func DefaultREAPParams(mode SortMode) REAPParams {
@@ -59,6 +60,7 @@ func DefaultREAPParamsForNet(net *chaincfg.Params, mode SortMode) REAPParams {
 		p.WeightBudget = 200_000
 	case chaincfg.ObtcRegTestParams.Net:
 		p.ScanBatch = 2_000
+		p.DebugEnabled = true
 	case chaincfg.ObtcTestNetParams.Net:
 		p.ScanBatch = 5_000
 	}

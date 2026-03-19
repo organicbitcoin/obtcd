@@ -392,11 +392,14 @@ func NewBlkTmplGenerator(policy *Policy, params *chaincfg.Params,
 // SetREAPIndex wires the expiry index for REAP system transaction construction.
 func (g *BlkTmplGenerator) SetREAPIndex(idx *expiryindex.ExpiryIndex) {
 	g.reapIndex = idx
+	logOBTCDevf(g.chainParams, "BlkTmplGenerator set REAP index enabled=%t", idx != nil)
 }
 
 // SetExpiryCommitmentSource wires the always-on expiry commitment state reader.
 func (g *BlkTmplGenerator) SetExpiryCommitmentSource(src expiryCommitmentSource) {
 	g.expiryState = src
+	logOBTCDevf(g.chainParams,
+		"BlkTmplGenerator set expiry commitment source enabled=%t", src != nil)
 }
 
 // NewBlockTemplate returns a new block template that is ready to be solved
@@ -634,6 +637,7 @@ mempoolLoop:
 
 	var plannedREAPTx *btcutil.Tx
 	var plannedREAPFee int64
+	reapIncluded := false
 	if reapTx, reapFee, err := g.maybeBuildREAPTx(nextBlockHeight); err != nil {
 		log.Warnf("Skipping REAP tx due to build error: %v", err)
 	} else {
@@ -643,6 +647,10 @@ mempoolLoop:
 
 	// Choose which transactions make it into the block.
 	normalTxWeightLimit := g.normalTxWeightLimit(nextBlockHeight, plannedREAPTx != nil)
+	logOBTCDevf(g.chainParams,
+		"template planning height=%d plannedReap=%t plannedReapFee=%d normalTxWeightLimit=%d blockMaxWeight=%d",
+		nextBlockHeight, plannedREAPTx != nil, plannedREAPFee,
+		normalTxWeightLimit, g.policy.BlockMaxWeight)
 	for priorityQueue.Len() > 0 {
 		// Grab the highest priority (or highest fee per kilobyte
 		// depending on the sort order) transaction.
@@ -826,6 +834,9 @@ mempoolLoop:
 		blockPlusTxWeight := blockWeight + txWeight
 		if blockPlusTxWeight < blockWeight || blockPlusTxWeight >= g.policy.BlockMaxWeight {
 			log.Tracef("Skipping REAP tx because it would exceed max block weight")
+			logOBTCDevf(g.chainParams,
+				"template skipped REAP tx=%s reason=max-block-weight blockWeight=%d reapWeight=%d maxWeight=%d",
+				plannedREAPTx.Hash(), blockWeight, txWeight, g.policy.BlockMaxWeight)
 		} else {
 			reapSigOpCostFn := g.reapSigOpCostFn
 			if reapSigOpCostFn == nil {
@@ -836,9 +847,15 @@ mempoolLoop:
 			sigOpCost, err := reapSigOpCostFn(plannedREAPTx, blockUtxos, segwitActive)
 			if err != nil {
 				log.Warnf("Skipping REAP tx due to sigop calc error: %v", err)
+				logOBTCDevf(g.chainParams,
+					"template skipped REAP tx=%s reason=sigop-calc err=%v",
+					plannedREAPTx.Hash(), err)
 			} else if blockSigOpCost+int64(sigOpCost) < blockSigOpCost ||
 				blockSigOpCost+int64(sigOpCost) > blockchain.MaxBlockSigOpsCost {
 				log.Tracef("Skipping REAP tx because it would exceed max block sigops")
+				logOBTCDevf(g.chainParams,
+					"template skipped REAP tx=%s reason=max-sigops blockSigOps=%d reapSigOps=%d maxSigOps=%d",
+					plannedREAPTx.Hash(), blockSigOpCost, sigOpCost, blockchain.MaxBlockSigOpsCost)
 			} else {
 				// Reuse canonical input checks against the current in-block utxo view.
 				// blockUtxos only contains entries fetched during template assembly,
@@ -850,10 +867,16 @@ mempoolLoop:
 				reapInputView, err := reapFetchInputViewFn(plannedREAPTx)
 				if err != nil {
 					log.Warnf("Skipping REAP tx due to input fetch error: %v", err)
+					logOBTCDevf(g.chainParams,
+						"template skipped REAP tx=%s reason=fetch-input-view err=%v",
+						plannedREAPTx.Hash(), err)
 				} else {
 					mergeUtxoEntriesIfMissing(blockUtxos, reapInputView)
 					if _, err := blockchain.CheckTransactionInputs(plannedREAPTx, nextBlockHeight, blockUtxos, g.chainParams); err != nil {
 						log.Warnf("Skipping REAP tx due to input checks: %v", err)
+						logOBTCDevf(g.chainParams,
+							"template skipped REAP tx=%s reason=input-check err=%v",
+							plannedREAPTx.Hash(), err)
 					} else {
 						spendTransaction(blockUtxos, plannedREAPTx, nextBlockHeight)
 						blockTxns = append(blockTxns, plannedREAPTx)
@@ -862,7 +885,11 @@ mempoolLoop:
 						totalFees += plannedREAPFee
 						txFees = append(txFees, plannedREAPFee)
 						txSigOpCosts = append(txSigOpCosts, int64(sigOpCost))
+						reapIncluded = true
 						log.Tracef("Added REAP tx %s (fee=%d)", plannedREAPTx.Hash(), plannedREAPFee)
+						logOBTCDevf(g.chainParams,
+							"template appended REAP tx=%s fee=%d sigOps=%d weight=%d blockWeight=%d",
+							plannedREAPTx.Hash(), plannedREAPFee, sigOpCost, txWeight, blockWeight)
 					}
 				}
 			}
@@ -903,6 +930,9 @@ mempoolLoop:
 				snapshot.TipHeight, snapshot.TipHash, best.Height, best.Hash)
 		}
 
+		logOBTCDevf(g.chainParams,
+			"template expiry snapshot height=%d tip=%s root=%x",
+			snapshot.TipHeight, snapshot.TipHash, snapshot.Root)
 		AddExpiryCommitment(coinbaseTx, snapshot.Root)
 	}
 
@@ -950,6 +980,15 @@ mempoolLoop:
 		"fees, %d signature operations cost, %d weight, target difficulty "+
 		"%064x)", len(msgBlock.Transactions), totalFees, blockSigOpCost,
 		blockWeight, blockchain.CompactToBig(msgBlock.Header.Bits))
+	logOBTCDevf(g.chainParams,
+		"template ready height=%d txs=%d totalFees=%d weight=%d sigOps=%d plannedReap=%t witness=%t",
+		nextBlockHeight, len(msgBlock.Transactions), totalFees, blockWeight,
+		blockSigOpCost, plannedREAPTx != nil, witnessIncluded)
+	if reapIncluded {
+		logOBTCDevf(g.chainParams,
+			"template REAP tx structure height=%d %s",
+			nextBlockHeight, formatREAPTxForLog(plannedREAPTx))
+	}
 
 	return &BlockTemplate{
 		Block:             &msgBlock,
