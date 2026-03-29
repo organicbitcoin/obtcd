@@ -50,8 +50,22 @@ go build ./cmd/obtc-status
 # Start DevNet (simnet with 2 nodes)
 ./scripts/devnet-up.sh start
 
-# Run demo transaction
+# Run dynamic mixed traffic demo
 ./scripts/devnet-up.sh demo
+
+# Prepare two deterministic wallets and inject traffic from both nodes
+./scripts/devnet-up.sh prepare 512 300000
+./scripts/devnet-up.sh prepare-peer 256 240000
+./scripts/devnet-up.sh spam --count 200 --mode feemarket --value 150000
+./scripts/devnet-up.sh spam-peer --count 80 --mode mixed --value 110000
+
+# Run fee-market / conflict / multisource scenarios
+./scripts/devnet-up.sh scenario feemarket
+./scripts/devnet-up.sh scenario conflict
+./scripts/devnet-up.sh scenario multisource
+
+# Resume the same devnet data after a stop
+./scripts/devnet-up.sh restart
 
 # Check network status
 ./scripts/devnet-up.sh status
@@ -67,16 +81,15 @@ go build ./cmd/obtc-status
 cd cmd/btcctl && go build
 
 # Get network info
-./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getinfo
+./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getinfo
+
+# Validate OBTC expiry / REAP state
+./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getexpiryindexstats
+./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getexpirycommitment
+./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getreapplan
 
 # Generate blocks (node 1)
-./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 generate 101
-
-# Get new address (node 2)  
-./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18557 getnewaddress
-
-# Send transaction
-./btcctl --simnet --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 sendtoaddress <address> 1.0
+./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 generate 1
 ```
 
 ## 📊 OBTC Network Parameters
@@ -144,6 +157,7 @@ go test -race ./...
 - [Phase 7 Implementation](obtc_doc/phase7_implementation.md) - Hardening status and gaps
 - [Phase 8 Implementation](obtc_doc/phase8_implementation.md) - Mainnet rollout notes
 - [OBTC Testnet Join Guide](docs/testnet-join.md) - Current testnet bootstrap and observability steps
+- [DevNet Traffic Simulator Guide](docs/devnet_traffic_simulator.md) - Traffic modes, scenarios, and smoke validation
 - [OBTC Status Tool](docs/obtc-status.md) - Read-only status page for operators
 - [Original btcd Documentation](docs/) - Inherited btcd documentation
 
