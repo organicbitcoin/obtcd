@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
@@ -124,6 +125,57 @@ func TestCreatePaymentTxPaysExternalAddress(t *testing.T) {
 	}
 }
 
+func TestSelectUTXOsRandomConfirmedDeterministic(t *testing.T) {
+	w1 := newTestWallet(t)
+	for i := 1; i <= 5; i++ {
+		addConfirmedUTXO(t, w1, uint32(i), int64(90_000+i*1_000), byte(i))
+	}
+	w1.setRandSeed(77)
+
+	selected1, err := w1.selectUTXOs(selectRandomConfirmed, false, 3)
+	if err != nil {
+		t.Fatalf("selectUTXOs(random, first): %v", err)
+	}
+
+	w2 := newTestWallet(t)
+	for i := 1; i <= 5; i++ {
+		addConfirmedUTXO(t, w2, uint32(i), int64(90_000+i*1_000), byte(i))
+	}
+	w2.setRandSeed(77)
+
+	selected2, err := w2.selectUTXOs(selectRandomConfirmed, false, 3)
+	if err != nil {
+		t.Fatalf("selectUTXOs(random, second): %v", err)
+	}
+
+	got1 := outPointsOf(selected1)
+	got2 := outPointsOf(selected2)
+	if !reflect.DeepEqual(got1, got2) {
+		t.Fatalf("expected deterministic random selection, got %v and %v", got1, got2)
+	}
+}
+
+func TestCandidatesRandomPendingFirstPrefersPending(t *testing.T) {
+	w := newTestWallet(t)
+	addConfirmedUTXO(t, w, 1, 100_000, 1)
+	w.pending[wire.OutPoint{Hash: chainhash.Hash{2}, Index: 0}] = &walletUTXO{
+		OutPoint:  wire.OutPoint{Hash: chainhash.Hash{2}, Index: 0},
+		PkScript:  []byte{0x51},
+		Value:     90_000,
+		KeyIndex:  1,
+		Confirmed: false,
+	}
+	w.setRandSeed(9)
+
+	candidates := w.candidates(selectRandomPendingFirst, true)
+	if len(candidates) < 2 {
+		t.Fatalf("expected pending and confirmed candidates, got %d", len(candidates))
+	}
+	if !candidates[0].isPending {
+		t.Fatalf("expected pending candidate first, got %+v", candidates[0])
+	}
+}
+
 func TestSignatureHashTypeSwitchesForOBTCReplayProtection(t *testing.T) {
 	simnetWallet := newTestWallet(t)
 	if got := simnetWallet.signatureHashType(); got != txscript.SigHashAll {
@@ -178,4 +230,12 @@ func addConfirmedUTXO(t *testing.T, w *wallet, keyIndex uint32, value int64, has
 		MaturityHeight: 0,
 		Confirmed:      true,
 	}
+}
+
+func outPointsOf(utxos []*walletUTXO) []wire.OutPoint {
+	points := make([]wire.OutPoint, 0, len(utxos))
+	for _, utxo := range utxos {
+		points = append(points, utxo.OutPoint)
+	}
+	return points
 }

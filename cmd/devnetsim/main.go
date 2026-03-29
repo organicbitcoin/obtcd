@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,15 @@ type spamStats struct {
 	Rejected         int
 	Mode             string
 	LastRejectReason string
+}
+
+type spamRandomizer struct {
+	valueMin        btcutil.Amount
+	valueMax        btcutil.Amount
+	randomizeValue  bool
+	randomizeInputs bool
+	seed            int64
+	rng             *rand.Rand
 }
 
 func main() {
@@ -422,8 +432,117 @@ func feeRateForAttempt(baseFee btcutil.Amount, attempt int) btcutil.Amount {
 	return adjusted
 }
 
-func (s *simulator) buildConflictPair(feeRate btcutil.Amount) (*wire.MsgTx, *wire.MsgTx, error) {
-	selected, err := s.wallet.selectUTXOs(selectSmallestConfirmed, false, 1)
+func newSpamRandomizer(baseValue btcutil.Amount, valueMinSat, valueMaxSat int64,
+	randomizeInputs bool, randSeed int64) (*spamRandomizer, error) {
+
+	effectiveMin := baseValue
+	effectiveMax := baseValue
+	if valueMinSat > 0 {
+		effectiveMin = btcutil.Amount(valueMinSat)
+	}
+	if valueMaxSat > 0 {
+		effectiveMax = btcutil.Amount(valueMaxSat)
+	}
+	if valueMinSat > 0 && valueMaxSat == 0 {
+		effectiveMax = baseValue
+	}
+	if valueMaxSat > 0 && valueMinSat == 0 {
+		effectiveMin = baseValue
+	}
+	if effectiveMin <= 0 || effectiveMax <= 0 {
+		return nil, fmt.Errorf("transaction values must be positive")
+	}
+	if effectiveMin > effectiveMax {
+		return nil, fmt.Errorf("value-min must be less than or equal to value-max")
+	}
+
+	randomizeValue := valueMinSat > 0 || valueMaxSat > 0
+	if !randomizeValue && !randomizeInputs {
+		return nil, nil
+	}
+
+	if randSeed == 0 {
+		randSeed = time.Now().UnixNano()
+	}
+
+	return &spamRandomizer{
+		valueMin:        effectiveMin,
+		valueMax:        effectiveMax,
+		randomizeValue:  randomizeValue,
+		randomizeInputs: randomizeInputs,
+		seed:            randSeed,
+		rng:             rand.New(rand.NewSource(randSeed)),
+	}, nil
+}
+
+func (r *spamRandomizer) txValue(defaultValue btcutil.Amount) btcutil.Amount {
+	if r == nil {
+		return defaultValue
+	}
+	if !r.randomizeValue || r.rng == nil || r.valueMin == r.valueMax {
+		if r.randomizeValue {
+			return r.valueMin
+		}
+		return defaultValue
+	}
+
+	return r.valueMin + btcutil.Amount(r.rng.Int63n(int64(r.valueMax-r.valueMin+1)))
+}
+
+func (r *spamRandomizer) selectionMode(base selectionMode) selectionMode {
+	if r == nil || !r.randomizeInputs {
+		return base
+	}
+
+	switch base {
+	case selectPendingFirst:
+		return selectRandomPendingFirst
+	case selectSmallestConfirmed, selectLargestConfirmed:
+		return selectRandomConfirmed
+	default:
+		return base
+	}
+}
+
+func (r *spamRandomizer) splitValue(total btcutil.Amount, outputs int) []btcutil.Amount {
+	if r == nil || !r.randomizeValue || r.rng == nil {
+		return splitValue(total, outputs)
+	}
+	return splitValueRandom(total, outputs, r.rng)
+}
+
+func splitValueRandom(total btcutil.Amount, outputs int, rng *rand.Rand) []btcutil.Amount {
+	if outputs <= 1 || rng == nil {
+		return []btcutil.Amount{total}
+	}
+
+	minPart := defaultDustThreshold + 1
+	required := minPart * btcutil.Amount(outputs)
+	if total < required {
+		return splitValue(total, outputs)
+	}
+
+	parts := make([]btcutil.Amount, outputs)
+	remaining := total
+	for i := 0; i < outputs-1; i++ {
+		remainingOutputs := outputs - i - 1
+		maxPart := remaining - minPart*btcutil.Amount(remainingOutputs)
+		if maxPart <= minPart {
+			parts[i] = minPart
+		} else {
+			parts[i] = minPart + btcutil.Amount(rng.Int63n(int64(maxPart-minPart+1)))
+		}
+		remaining -= parts[i]
+	}
+	parts[outputs-1] = remaining
+	rng.Shuffle(len(parts), func(i, j int) {
+		parts[i], parts[j] = parts[j], parts[i]
+	})
+	return parts
+}
+
+func (s *simulator) buildConflictPair(feeRate btcutil.Amount, mode selectionMode) (*wire.MsgTx, *wire.MsgTx, error) {
+	selected, err := s.wallet.selectUTXOs(mode, false, 1)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -446,7 +565,7 @@ func (s *simulator) buildConflictPair(feeRate btcutil.Amount) (*wire.MsgTx, *wir
 }
 
 func (s *simulator) spam(count int, value, feeRate btcutil.Amount, mode string,
-	pace time.Duration) (spamStats, error) {
+	pace time.Duration, randomizer *spamRandomizer) (spamStats, error) {
 	if err := s.syncChain(); err != nil {
 		return spamStats{}, err
 	}
@@ -458,6 +577,10 @@ func (s *simulator) spam(count int, value, feeRate btcutil.Amount, mode string,
 
 	for i := 0; i < count; i++ {
 		stats.Attempted++
+		currentValue := value
+		if randomizer != nil {
+			currentValue = randomizer.txValue(value)
+		}
 
 		var (
 			tx  *wire.MsgTx
@@ -467,34 +590,42 @@ func (s *simulator) spam(count int, value, feeRate btcutil.Amount, mode string,
 		switch stats.Mode {
 		case "simple":
 			tx, err = s.wallet.createOutputsTx(
-				[]btcutil.Amount{value}, feeRate, selectSmallestConfirmed, false,
+				[]btcutil.Amount{currentValue}, feeRate,
+				randomizer.selectionMode(selectSmallestConfirmed), false,
 			)
 
 		case "mixed":
 			switch {
 			case i > 0 && i%17 == 0:
-				tx, err = s.wallet.createSelfTransferTx(feeRate, true)
+				tx, err = s.wallet.createSelfTransferTx(
+					feeRate, randomizer.selectionMode(selectPendingFirst), true,
+				)
 			case i > 0 && i%9 == 0:
 				tx, err = s.wallet.createOutputsTx(
-					splitValue(value, 3), feeRate, selectSmallestConfirmed, false,
+					randomizer.splitValue(currentValue, 3), feeRate,
+					randomizer.selectionMode(selectSmallestConfirmed), false,
 				)
 			case i > 0 && i%4 == 0:
 				tx, err = s.wallet.createOutputsTx(
-					splitValue(value, 2), feeRate, selectSmallestConfirmed, false,
+					randomizer.splitValue(currentValue, 2), feeRate,
+					randomizer.selectionMode(selectSmallestConfirmed), false,
 				)
 			default:
 				tx, err = s.wallet.createOutputsTx(
-					[]btcutil.Amount{value}, feeRate, selectSmallestConfirmed, false,
+					[]btcutil.Amount{currentValue}, feeRate,
+					randomizer.selectionMode(selectSmallestConfirmed), false,
 				)
 			}
 
 		case "chain":
-			tx, err = s.wallet.createSelfTransferTx(feeRate, true)
+			tx, err = s.wallet.createSelfTransferTx(
+				feeRate, randomizer.selectionMode(selectPendingFirst), true,
+			)
 
 		case "consolidate":
 			tx, err = s.wallet.createSweepTx(
 				defaultConsolidateInputs, feeRate,
-				selectSmallestConfirmed, false,
+				randomizer.selectionMode(selectSmallestConfirmed), false,
 			)
 
 		case "feemarket":
@@ -502,22 +633,24 @@ func (s *simulator) spam(count int, value, feeRate btcutil.Amount, mode string,
 			switch {
 			case i > 0 && i%11 == 0:
 				tx, err = s.wallet.createSweepTx(
-					3, currentFee, selectSmallestConfirmed, false,
+					3, currentFee, randomizer.selectionMode(selectSmallestConfirmed), false,
 				)
 			case i > 0 && i%6 == 0:
 				tx, err = s.wallet.createOutputsTx(
-					splitValue(value, 2), currentFee,
-					selectSmallestConfirmed, false,
+					randomizer.splitValue(currentValue, 2), currentFee,
+					randomizer.selectionMode(selectSmallestConfirmed), false,
 				)
 			default:
 				tx, err = s.wallet.createOutputsTx(
-					[]btcutil.Amount{value}, currentFee,
-					selectSmallestConfirmed, false,
+					[]btcutil.Amount{currentValue}, currentFee,
+					randomizer.selectionMode(selectSmallestConfirmed), false,
 				)
 			}
 
 		case "conflict":
-			primary, conflict, err := s.buildConflictPair(feeRate)
+			primary, conflict, err := s.buildConflictPair(
+				feeRate, randomizer.selectionMode(selectSmallestConfirmed),
+			)
 			if err != nil {
 				return stats, err
 			}
@@ -737,6 +870,10 @@ func runSpam(args []string) error {
 		prepareValue int64
 		fanoutSize   int
 		paceMs       int
+		valueMinSat  int64
+		valueMaxSat  int64
+		randomInputs bool
+		randSeed     int64
 	)
 
 	fs := flag.NewFlagSet("spam", flag.ContinueOnError)
@@ -749,6 +886,10 @@ func runSpam(args []string) error {
 	fs.Int64Var(&prepareValue, "prepare-value", defaultPrepareValue, "prepared UTXO value in sat")
 	fs.IntVar(&fanoutSize, "fanout-size", defaultFanoutSize, "outputs per fanout transaction")
 	fs.IntVar(&paceMs, "pace-ms", 0, "sleep between broadcasts in milliseconds")
+	fs.Int64Var(&valueMinSat, "value-min", 0, "minimum recipient value per transaction in sat (uses --value as the other bound if omitted)")
+	fs.Int64Var(&valueMaxSat, "value-max", 0, "maximum recipient value per transaction in sat (uses --value as the other bound if omitted)")
+	fs.BoolVar(&randomInputs, "randomize-inputs", false, "randomize spendable input selection while keeping runs reproducible with --rand-seed")
+	fs.Int64Var(&randSeed, "rand-seed", 0, "seed for randomized traffic; defaults to current time when randomization is enabled")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -759,6 +900,16 @@ func runSpam(args []string) error {
 	}
 	defer sim.close()
 	defer saveStateQuietly(sim)
+
+	randomizer, err := newSpamRandomizer(
+		btcutil.Amount(valueSat), valueMinSat, valueMaxSat, randomInputs, randSeed,
+	)
+	if err != nil {
+		return err
+	}
+	if randomizer != nil && randomizer.randomizeInputs {
+		sim.wallet.setRandSeed(randomizer.seed)
+	}
 
 	if prepareUTXOs > 0 {
 		if err := sim.prepareUTXOs(
@@ -771,7 +922,7 @@ func runSpam(args []string) error {
 
 	stats, err := sim.spam(
 		count, btcutil.Amount(valueSat), btcutil.Amount(feeRateSat),
-		mode, time.Duration(paceMs)*time.Millisecond,
+		mode, time.Duration(paceMs)*time.Millisecond, randomizer,
 	)
 	if err != nil {
 		return fmt.Errorf("accepted=%d rejected=%d: %w",
@@ -787,6 +938,15 @@ func runSpam(args []string) error {
 	fmt.Printf("accepted=%d\n", stats.Accepted)
 	fmt.Printf("rejected=%d\n", stats.Rejected)
 	fmt.Printf("mode=%s\n", strings.ToLower(mode))
+	if randomizer != nil {
+		fmt.Printf("random_seed=%d\n", randomizer.seed)
+		if randomizer.randomizeValue {
+			fmt.Printf("value_range_sat=%d-%d\n", int64(randomizer.valueMin), int64(randomizer.valueMax))
+		}
+		if randomizer.randomizeInputs {
+			fmt.Printf("randomize_inputs=true\n")
+		}
+	}
 	if stats.LastRejectReason != "" {
 		reason := strings.ReplaceAll(stats.LastRejectReason, "\n", " ")
 		fmt.Printf("last_reject_reason=%s\n", reason)

@@ -19,19 +19,25 @@ var (
 )
 
 type config struct {
-	Listen        string        `long:"listen" description:"HTTP listen address for the read-only status page" default:"127.0.0.1:9680"`
-	Refresh       time.Duration `long:"refresh" description:"Auto-refresh interval for the HTML page" default:"15s"`
-	RPCTimeout    time.Duration `long:"rpctimeout" description:"Timeout for upstream btcd RPC calls" default:"5s"`
-	NoTLS         bool          `long:"notls" description:"Disable TLS for upstream btcd RPC calls"`
-	ObtcMainNet   bool          `long:"obtcmainnet" description:"Connect to the OBTC main network"`
-	ObtcTestNet   bool          `long:"obtctestnet" description:"Connect to the OBTC test network"`
-	ObtcRegTest   bool          `long:"obtcregtest" description:"Connect to the OBTC regression test network"`
-	RPCCert       string        `short:"c" long:"rpccert" description:"RPC server certificate chain for validation"`
-	RPCPassword   string        `short:"P" long:"rpcpass" default-mask:"-" description:"RPC password"`
-	RPCServer     string        `short:"s" long:"rpcserver" description:"RPC server to connect to" default:"127.0.0.1"`
-	RPCUser       string        `short:"u" long:"rpcuser" description:"RPC username"`
-	ShowVersion   bool          `short:"V" long:"version" description:"Display version information and exit"`
-	TLSSkipVerify bool          `long:"skipverify" description:"Do not verify TLS certificates (not recommended)"`
+	Listen              string        `long:"listen" description:"HTTP listen address for the read-only status page" default:"127.0.0.1:9680"`
+	Refresh             time.Duration `long:"refresh" description:"Auto-refresh interval for the HTML page" default:"15s"`
+	RPCTimeout          time.Duration `long:"rpctimeout" description:"Timeout for upstream btcd RPC calls" default:"5s"`
+	Devnet              bool          `long:"devnet" description:"Serve the local Devnet dashboard instead of a single-node status page"`
+	DevnetManifest      string        `long:"devnet-manifest" description:"Path to the generated Devnet manifest file" default:"./devnet-data/manifest.json"`
+	DevnetScript        string        `long:"devnet-script" description:"Path to the Devnet control script" default:"./scripts/devnet-up.sh"`
+	DevnetNodes         int           `long:"devnet-nodes" description:"Expected Devnet node count when the manifest is missing" default:"3"`
+	DevnetActionTimeout time.Duration `long:"devnet-action-timeout" description:"Timeout for local Devnet control actions" default:"2m"`
+	NoTLS               bool          `long:"notls" description:"Disable TLS for upstream btcd RPC calls"`
+	ObtcMainNet         bool          `long:"obtcmainnet" description:"Connect to the OBTC main network"`
+	ObtcTestNet         bool          `long:"obtctestnet" description:"Connect to the OBTC test network"`
+	ObtcRegTest         bool          `long:"obtcregtest" description:"Connect to the OBTC regression test network"`
+	RPCCert             string        `short:"c" long:"rpccert" description:"RPC server certificate chain for validation"`
+	RPCPassword         string        `short:"P" long:"rpcpass" default-mask:"-" description:"RPC password"`
+	RPCServer           string        `short:"s" long:"rpcserver" description:"RPC server to connect to" default:"127.0.0.1"`
+	RPCUser             string        `short:"u" long:"rpcuser" description:"RPC username"`
+	ShowVersion         bool          `short:"V" long:"version" description:"Display version information and exit"`
+	TLSSkipVerify       bool          `long:"skipverify" description:"Do not verify TLS certificates (not recommended)"`
+	NetworkName         string
 }
 
 func normalizeAddress(addr, defaultPort string) (string, error) {
@@ -91,6 +97,17 @@ func defaultRPCPort(params *chaincfg.Params) string {
 	}
 }
 
+func networkName(params *chaincfg.Params) string {
+	switch params {
+	case &chaincfg.ObtcTestNetParams:
+		return "obtctestnet"
+	case &chaincfg.ObtcRegTestParams:
+		return "obtcregtest"
+	default:
+		return "obtcmainnet"
+	}
+}
+
 func loadConfig() (*config, error) {
 	cfg := &config{
 		RPCCert: defaultRPCCertFile,
@@ -112,11 +129,31 @@ func loadConfig() (*config, error) {
 	if cfg.RPCTimeout <= 0 {
 		return nil, fmt.Errorf("--rpctimeout must be positive")
 	}
+	if cfg.DevnetActionTimeout <= 0 {
+		return nil, fmt.Errorf("--devnet-action-timeout must be positive")
+	}
+	if cfg.DevnetNodes < 2 || cfg.DevnetNodes > 5 {
+		return nil, fmt.Errorf("--devnet-nodes must be between 2 and 5")
+	}
+
+	if cfg.Devnet && !cfg.ObtcMainNet && !cfg.ObtcTestNet && !cfg.ObtcRegTest {
+		cfg.ObtcRegTest = true
+	}
+	if cfg.Devnet {
+		cfg.NoTLS = true
+		if cfg.RPCUser == "" {
+			cfg.RPCUser = "obtc"
+		}
+		if cfg.RPCPassword == "" {
+			cfg.RPCPassword = "obtcpass"
+		}
+	}
 
 	params, err := networkParams(cfg)
 	if err != nil {
 		return nil, err
 	}
+	cfg.NetworkName = networkName(params)
 
 	cfg.RPCServer, err = normalizeAddress(cfg.RPCServer, defaultRPCPort(params))
 	if err != nil {
@@ -131,5 +168,7 @@ func loadConfig() (*config, error) {
 	}
 
 	cfg.RPCCert = cleanAndExpandPath(cfg.RPCCert)
+	cfg.DevnetManifest = cleanAndExpandPath(cfg.DevnetManifest)
+	cfg.DevnetScript = cleanAndExpandPath(cfg.DevnetScript)
 	return cfg, nil
 }

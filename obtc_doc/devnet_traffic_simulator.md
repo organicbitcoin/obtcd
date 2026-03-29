@@ -127,7 +127,7 @@ go build -o btcd
 - expiry index 已启用
 - expiry commitment 已 active
 - reap plan 已 active
-- 当前最新区块里存在 REAP marker transaction
+- 如果挖块前的 REAP 计划确实选中了输入，则当前最新区块里存在 REAP marker transaction
 
 ### UTXO 准备
 
@@ -157,6 +157,7 @@ go build -o btcd
 ```bash
 ./scripts/devnet-up.sh spam --count 500 --mode mixed --value 150000
 ./scripts/devnet-up.sh spam --count 800 --mode feemarket --value 150000 --pace-ms 10
+./scripts/devnet-up.sh spam --count 600 --mode mixed --value-min 80000 --value-max 180000 --randomize-inputs --rand-seed 42
 ./scripts/devnet-up.sh spam --count 60 --mode conflict
 ./scripts/devnet-up.sh spam --count 40 --mode consolidate
 ```
@@ -167,6 +168,12 @@ go build -o btcd
 ./scripts/devnet-up.sh spam-peer --count 120 --mode mixed --value 110000
 ./scripts/devnet-up.sh spam-peer --count 60 --mode chain --value 90000
 ```
+
+新增随机化参数：
+
+- `--value-min` / `--value-max`：按区间随机每笔交易的收款金额
+- `--randomize-inputs`：随机挑选可花 UTXO，而不是总按同一套顺序花
+- `--rand-seed`：让随机流量可复现
 
 ---
 

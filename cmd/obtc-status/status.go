@@ -31,6 +31,10 @@ type jsonRPCCaller struct {
 }
 
 func newJSONRPCCaller(cfg *config) (*jsonRPCCaller, error) {
+	return newJSONRPCCallerForEndpoint(cfg, cfg.RPCServer)
+}
+
+func newJSONRPCCallerForEndpoint(cfg *config, endpoint string) (*jsonRPCCaller, error) {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{Timeout: cfg.RPCTimeout}).DialContext,
 	}
@@ -55,7 +59,7 @@ func newJSONRPCCaller(cfg *config) (*jsonRPCCaller, error) {
 	}
 
 	return &jsonRPCCaller{
-		endpoint: cfg.RPCServer,
+		endpoint: endpoint,
 		user:     cfg.RPCUser,
 		pass:     cfg.RPCPassword,
 		useTLS:   !cfg.NoTLS,

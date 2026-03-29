@@ -110,10 +110,17 @@ go build -o btcd
 ```bash
 ./scripts/devnet-up.sh spam --count 500 --mode mixed --value 150000
 ./scripts/devnet-up.sh spam --count 800 --mode feemarket --value 150000 --pace-ms 10
+./scripts/devnet-up.sh spam --count 600 --mode mixed --value-min 80000 --value-max 180000 --randomize-inputs --rand-seed 42
 ./scripts/devnet-up.sh spam --count 60 --mode conflict
 ./scripts/devnet-up.sh spam --count 40 --mode consolidate
 ./scripts/devnet-up.sh spam-peer --count 120 --mode mixed --value 110000
 ```
+
+Randomization flags:
+
+- `--value-min` / `--value-max`: randomize per-transaction recipient value within a range
+- `--randomize-inputs`: shuffle spendable input selection instead of always taking the same wallet UTXOs
+- `--rand-seed`: make randomized traffic reproducible
 
 ## Traffic Modes
 
@@ -168,7 +175,7 @@ The validation layer checks:
 - `getexpiryindexstats`
 - `getexpirycommitment`
 - `getreapplan`
-- the latest mined block contains a REAP marker transaction
+- when the pre-mine REAP plan picked inputs, the latest mined block contains a REAP marker transaction
 
 ## Smoke / Integration Validation
 

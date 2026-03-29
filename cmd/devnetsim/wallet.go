@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,6 +79,8 @@ const (
 	selectLargestConfirmed selectionMode = iota
 	selectSmallestConfirmed
 	selectPendingFirst
+	selectRandomConfirmed
+	selectRandomPendingFirst
 )
 
 type keyManager struct {
@@ -224,6 +227,7 @@ type wallet struct {
 	confirmed     map[wire.OutPoint]*walletUTXO
 	pending       map[wire.OutPoint]*walletUTXO
 	pendingSpends map[wire.OutPoint]struct{}
+	rng           *rand.Rand
 }
 
 func newWallet(km *keyManager) *wallet {
@@ -232,7 +236,12 @@ func newWallet(km *keyManager) *wallet {
 		confirmed:     make(map[wire.OutPoint]*walletUTXO),
 		pending:       make(map[wire.OutPoint]*walletUTXO),
 		pendingSpends: make(map[wire.OutPoint]struct{}),
+		rng:           rand.New(rand.NewSource(1)),
 	}
+}
+
+func (w *wallet) setRandSeed(seed int64) {
+	w.rng = rand.New(rand.NewSource(seed))
 }
 
 func (w *wallet) resetConfirmed(height int32) {
@@ -346,6 +355,12 @@ func (w *wallet) candidates(mode selectionMode, allowPending bool) []candidateUT
 		right := candidates[j]
 
 		switch mode {
+		case selectRandomPendingFirst:
+			if left.isPending != right.isPending {
+				return left.isPending
+			}
+		case selectRandomConfirmed:
+			// Leave the slice in insertion order before shuffling below.
 		case selectPendingFirst:
 			if left.isPending != right.isPending {
 				return left.isPending
@@ -370,7 +385,31 @@ func (w *wallet) candidates(mode selectionMode, allowPending bool) []candidateUT
 		return left.utxo.OutPoint.Index < right.utxo.OutPoint.Index
 	})
 
+	switch mode {
+	case selectRandomConfirmed:
+		w.shuffleCandidates(candidates)
+	case selectRandomPendingFirst:
+		pendingCount := 0
+		for _, candidate := range candidates {
+			if !candidate.isPending {
+				break
+			}
+			pendingCount++
+		}
+		w.shuffleCandidates(candidates[:pendingCount])
+		w.shuffleCandidates(candidates[pendingCount:])
+	}
+
 	return candidates
+}
+
+func (w *wallet) shuffleCandidates(candidates []candidateUTXO) {
+	if len(candidates) < 2 || w.rng == nil {
+		return
+	}
+	w.rng.Shuffle(len(candidates), func(i, j int) {
+		candidates[i], candidates[j] = candidates[j], candidates[i]
+	})
 }
 
 func (w *wallet) selectUTXOs(mode selectionMode, allowPending bool, maxInputs int) ([]*walletUTXO, error) {
@@ -450,9 +489,9 @@ func (w *wallet) createPaymentTx(outputs []paymentOutput, feeRate btcutil.Amount
 }
 
 func (w *wallet) createSelfTransferTx(feeRate btcutil.Amount,
-	allowPending bool) (*wire.MsgTx, error) {
+	mode selectionMode, allowPending bool) (*wire.MsgTx, error) {
 
-	candidates := w.candidates(selectPendingFirst, allowPending)
+	candidates := w.candidates(mode, allowPending)
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no spendable utxo available for self-transfer")
 	}
