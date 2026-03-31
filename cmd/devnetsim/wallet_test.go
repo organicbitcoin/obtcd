@@ -190,6 +190,39 @@ func TestSignatureHashTypeSwitchesForOBTCReplayProtection(t *testing.T) {
 	}
 }
 
+func TestSpendableCountSkipsExpiredUTXOsOnOBTC(t *testing.T) {
+	w := newTestWalletWithNet(t, &chaincfg.ObtcRegTestParams)
+	w.currentHeight = 241
+	addConfirmedUTXOAtHeight(t, w, 1, 110_000, 1, 98)
+	addConfirmedUTXOAtHeight(t, w, 2, 120_000, 2, 99)
+
+	if got := w.spendableCount(); got != 1 {
+		t.Fatalf("expected 1 spendable utxo before expiry boundary, got %d", got)
+	}
+	if got := w.spendableBalance(); got != 120_000 {
+		t.Fatalf("expected spendable balance 120000, got %d", got)
+	}
+
+	candidates := w.candidates(selectLargestConfirmed, false)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 candidate after expiry filtering, got %d", len(candidates))
+	}
+	if candidates[0].utxo.BlockHeight != 99 {
+		t.Fatalf("expected live candidate from height 99, got %d", candidates[0].utxo.BlockHeight)
+	}
+}
+
+func TestSpendableCountIgnoresExpiryOnNonOBTC(t *testing.T) {
+	w := newTestWallet(t)
+	w.currentHeight = 241
+	addConfirmedUTXOAtHeight(t, w, 1, 110_000, 1, 98)
+	addConfirmedUTXOAtHeight(t, w, 2, 120_000, 2, 99)
+
+	if got := w.spendableCount(); got != 2 {
+		t.Fatalf("expected simnet wallet to keep both utxos spendable, got %d", got)
+	}
+}
+
 func newTestWallet(t *testing.T) *wallet {
 	return newTestWalletWithNet(t, &chaincfg.SimNetParams)
 }
@@ -208,6 +241,12 @@ func newTestWalletWithNet(t *testing.T, net *chaincfg.Params) *wallet {
 }
 
 func addConfirmedUTXO(t *testing.T, w *wallet, keyIndex uint32, value int64, hashByte byte) {
+	addConfirmedUTXOAtHeight(t, w, keyIndex, value, hashByte, 0)
+}
+
+func addConfirmedUTXOAtHeight(t *testing.T, w *wallet, keyIndex uint32, value int64,
+	hashByte byte, blockHeight int32) {
+
 	t.Helper()
 
 	addr, err := w.km.ensureAddress(keyIndex)
@@ -227,6 +266,7 @@ func addConfirmedUTXO(t *testing.T, w *wallet, keyIndex uint32, value int64, has
 		PkScript:       pkScript,
 		Value:          btcutil.Amount(value),
 		KeyIndex:       keyIndex,
+		BlockHeight:    blockHeight,
 		MaturityHeight: 0,
 		Confirmed:      true,
 	}

@@ -16,6 +16,8 @@ These tools validate that the Week2 ExpiryIndex implementation works correctly b
 ## 📁 Files
 
 - **`utxo_expiry_validator.go`** - Comprehensive validation tool with full test suite
+- **`replay_block_audit/`** - Deterministic block replay auditor for block-by-block consensus checks
+- **`devnet_replay_audit.sh`** - DevNet wrapper that runs the replay auditor against node1 with strong REAP checks enabled
 - **`quick_validate.sh`** - Bash script for easy validation across networks
 - **`config_examples.conf`** - Sample configurations for different networks
 - **`README.md`** - This documentation
@@ -83,6 +85,62 @@ scripts/validation/testnet_smoke.sh \
 
 Use `--strict-expiryindex` if your role requires `getexpiryindexstats` to be available.
 
+## ⚡ DevNet replay audit
+
+For a stronger DevNet-specific audit that replays every block, rebuilds a local
+UTXO view, validates expiry commitments, checks REAP marker/tax rules, and can
+optionally enforce the current deterministic REAP selection policy, run:
+
+```bash
+scripts/validation/devnet_replay_audit.sh
+```
+
+The wrapper targets the default local OBTC DevNet on `127.0.0.1:18556` and
+enables `-check-reap-selection` by default. To save a JSON report:
+
+```bash
+scripts/validation/devnet_replay_audit.sh \
+  -json \
+  -output /tmp/devnet_replay_audit.json
+```
+
+If you already have the local DevNet running, you can also invoke the same
+audit through the convenience wrapper in `scripts/devnet-up.sh`:
+
+```bash
+./scripts/devnet-up.sh audit-replay
+```
+
+The replay auditor is intended to answer a stricter question than the web
+dashboard: not just "does the current node look healthy?", but "does every
+block on this chain satisfy the OBTC-specific consensus rules we expect?".
+
+In practice it checks:
+
+- block linkage and coinbase placement
+- coinbase maturity
+- expiry commitment consistency
+- REAP marker `height/count/digest`
+- REAP tax/refund output accounting
+- non-REAP spends of expired UTXOs
+- REAP spends of live UTXOs
+- deterministic REAP selection order when `-check-reap-selection` is enabled
+
+Two implementation notes from recent debugging are worth keeping in mind:
+
+1. A clean replay audit result means the chain satisfied consensus checks. It
+   does **not** automatically mean every local tool is constructing transactions
+   correctly.
+2. Local wallets also need OBTC-specific adaptations. In this repository, both
+   `cmd/devnetsim` and `integration/rpctest/memwallet` needed fixes so they
+   exclude expired UTXOs from spendable balance / coin selection and use
+   replay-protected sighash after activation.
+
+The replay model also includes the current genesis special-casing used by OBTC:
+
+- the genesis coinbase is included in the expiry-commitment accumulator model
+- the genesis coinbase is not treated as a live spend candidate or REAP input
+
 ## 🔧 Advanced Usage
 
 ### Direct Tool Usage
@@ -111,6 +169,13 @@ go run utxo_expiry_validator.go \
   -stress -stress-iterations=100 \
   -bench -verbose \
   -output=comprehensive_results.json
+
+# Block replay audit with generic RPC settings
+go run ./replay_block_audit \
+  -rpcuser=test -rpcpass=test \
+  -network=obtcregtest \
+  -check-reap-selection \
+  -json -output=replay_audit.json
 ```
 
 ### Command Line Options

@@ -41,6 +41,7 @@ type utxo struct {
 	pkScript       []byte
 	value          btcutil.Amount
 	keyIndex       uint32
+	blockHeight    int32
 	maturityHeight int32
 	isLocked       bool
 }
@@ -49,6 +50,32 @@ type utxo struct {
 // passed block height. Otherwise, false is returned.
 func (u *utxo) isMature(height int32) bool {
 	return height >= u.maturityHeight
+}
+
+func (u *utxo) isExpired(height int32, net *chaincfg.Params) bool {
+	if net == nil {
+		return false
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(net)
+	if expiryParams == nil {
+		return false
+	}
+
+	spendHeight := height + 1
+	if spendHeight < expiryParams.EnableAtHeight {
+		return false
+	}
+
+	return spendHeight >= int32(expiryParams.CalculateExpiryKey(u.blockHeight))
+}
+
+func (u *utxo) isSpendable(height int32, net *chaincfg.Params) bool {
+	if !u.isMature(height) || u.isLocked {
+		return false
+	}
+
+	return !u.isExpired(height, net)
 }
 
 // chainUpdate encapsulates an update to the current main chain. This struct is
@@ -275,6 +302,7 @@ func (m *memWallet) evalOutputs(outputs []*wire.TxOut, txHash *chainhash.Hash,
 			m.utxos[op] = &utxo{
 				value:          btcutil.Amount(output.Value),
 				keyIndex:       keyIndex,
+				blockHeight:    m.currentHeight,
 				maturityHeight: maturityHeight,
 				pkScript:       pkScript,
 			}
@@ -395,9 +423,9 @@ func (m *memWallet) fundTx(tx *wire.MsgTx, amt btcutil.Amount,
 	)
 
 	for outPoint, utxo := range m.utxos {
-		// Skip any outputs that are still currently immature or are
-		// currently locked.
-		if !utxo.isMature(m.currentHeight) || utxo.isLocked {
+		// Skip any outputs that are immature, locked, or expired under
+		// the active OBTC rules for the next block.
+		if !utxo.isSpendable(m.currentHeight, m.net) {
 			continue
 		}
 
@@ -522,7 +550,7 @@ func (m *memWallet) CreateTransaction(outputs []*wire.TxOut,
 		privKey, _ := btcec.PrivKeyFromBytes(privKeyOld.Serialize())
 
 		sigScript, err := txscript.SignatureScript(tx, i, utxo.pkScript,
-			txscript.SigHashAll, privKey, true)
+			m.signatureHashType(), privKey, true)
 		if err != nil {
 			return nil, err
 		}
@@ -570,9 +598,9 @@ func (m *memWallet) ConfirmedBalance() btcutil.Amount {
 
 	var balance btcutil.Amount
 	for _, utxo := range m.utxos {
-		// Prevent any immature or locked outputs from contributing to
-		// the wallet's total confirmed balance.
-		if !utxo.isMature(m.currentHeight) || utxo.isLocked {
+		// Prevent immature, locked, or expired outputs from contributing
+		// to the wallet's total confirmed balance.
+		if !utxo.isSpendable(m.currentHeight, m.net) {
 			continue
 		}
 
@@ -580,6 +608,14 @@ func (m *memWallet) ConfirmedBalance() btcutil.Amount {
 	}
 
 	return balance
+}
+
+func (m *memWallet) signatureHashType() txscript.SigHashType {
+	hashType := txscript.SigHashAll
+	if chaincfg.IsOBTCReplayProtectionActive(m.net, m.currentHeight+1) {
+		hashType |= txscript.SigHashOBTCReplayProtection
+	}
+	return hashType
 }
 
 // keyToAddr maps the passed private to corresponding p2pkh address.

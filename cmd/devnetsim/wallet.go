@@ -57,6 +57,7 @@ type walletUTXO struct {
 	PkScript       []byte
 	Value          btcutil.Amount
 	KeyIndex       uint32
+	BlockHeight    int32
 	MaturityHeight int32
 	Confirmed      bool
 }
@@ -66,11 +67,32 @@ type paymentOutput struct {
 	Amount  btcutil.Amount
 }
 
-func (u *walletUTXO) isSpendable(currentHeight int32) bool {
+func (u *walletUTXO) isExpired(currentHeight int32, net *chaincfg.Params) bool {
+	if !u.Confirmed || net == nil {
+		return false
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(net)
+	if expiryParams == nil {
+		return false
+	}
+
+	spendHeight := currentHeight + 1
+	if spendHeight < expiryParams.EnableAtHeight {
+		return false
+	}
+
+	return spendHeight >= int32(expiryParams.CalculateExpiryKey(u.BlockHeight))
+}
+
+func (u *walletUTXO) isSpendable(currentHeight int32, net *chaincfg.Params) bool {
 	if !u.Confirmed {
 		return true
 	}
-	return currentHeight >= u.MaturityHeight
+	if currentHeight < u.MaturityHeight {
+		return false
+	}
+	return !u.isExpired(currentHeight, net)
 }
 
 type selectionMode int
@@ -275,6 +297,7 @@ func (w *wallet) addConfirmedFromBlock(tx *wire.MsgTx, blockHeight int32) error 
 			PkScript:       txOut.PkScript,
 			Value:          btcutil.Amount(txOut.Value),
 			KeyIndex:       keyIndex,
+			BlockHeight:    blockHeight,
 			MaturityHeight: maturityHeight,
 			Confirmed:      true,
 		}
@@ -292,7 +315,7 @@ func (w *wallet) addConfirmedFromBlock(tx *wire.MsgTx, blockHeight int32) error 
 func (w *wallet) spendableBalance() btcutil.Amount {
 	var total btcutil.Amount
 	for _, utxo := range w.confirmed {
-		if utxo.isSpendable(w.currentHeight) {
+		if utxo.isSpendable(w.currentHeight, w.km.net) {
 			total += utxo.Value
 		}
 	}
@@ -302,7 +325,7 @@ func (w *wallet) spendableBalance() btcutil.Amount {
 func (w *wallet) spendableCount() int {
 	count := 0
 	for _, utxo := range w.confirmed {
-		if utxo.isSpendable(w.currentHeight) {
+		if utxo.isSpendable(w.currentHeight, w.km.net) {
 			count++
 		}
 	}
@@ -332,7 +355,7 @@ func (w *wallet) candidates(mode selectionMode, allowPending bool) []candidateUT
 	candidates := make([]candidateUTXO, 0, len(w.confirmed)+len(w.pending))
 
 	for _, utxo := range w.confirmed {
-		if !utxo.isSpendable(w.currentHeight) {
+		if !utxo.isSpendable(w.currentHeight, w.km.net) {
 			continue
 		}
 		candidates = append(candidates, candidateUTXO{
@@ -732,6 +755,7 @@ func (w *wallet) applyBroadcast(tx *wire.MsgTx) {
 			PkScript:       txOut.PkScript,
 			Value:          btcutil.Amount(txOut.Value),
 			KeyIndex:       keyIndex,
+			BlockHeight:    w.currentHeight + 1,
 			MaturityHeight: 0,
 			Confirmed:      false,
 		}

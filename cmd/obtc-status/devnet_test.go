@@ -92,6 +92,45 @@ func (f *fakeDevnetBlockFetcher) FetchRecentBlocks(ctx context.Context, node dev
 	return f.listResult, nil
 }
 
+type fakeDevnetDiagnosticsSource struct {
+	lastReapNode   devnetNode
+	lastReapCount  int
+	lastExpiryNode devnetNode
+	lastStart      int32
+	lastEnd        int32
+	lastLimit      int
+	reap           *devnetReapHistoryData
+	expiry         *devnetExpiryIndexData
+	reapErr        error
+	expiryErr      error
+}
+
+func (f *fakeDevnetDiagnosticsSource) LoadReapHistory(ctx context.Context, node devnetNode, count int) (*devnetReapHistoryData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	f.lastReapNode = node
+	f.lastReapCount = count
+	if f.reapErr != nil {
+		return nil, f.reapErr
+	}
+	return f.reap, nil
+}
+
+func (f *fakeDevnetDiagnosticsSource) LoadExpiryOrdering(ctx context.Context, node devnetNode, startHeight, endHeight int32, limit int) (*devnetExpiryIndexData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	f.lastExpiryNode = node
+	f.lastStart = startHeight
+	f.lastEnd = endHeight
+	f.lastLimit = limit
+	if f.expiryErr != nil {
+		return nil, f.expiryErr
+	}
+	return f.expiry, nil
+}
+
 func TestDevnetServerHandlers(t *testing.T) {
 	cfg := &config{
 		Devnet:         true,
@@ -416,6 +455,171 @@ func TestDevnetServerBlocksPage(t *testing.T) {
 		!strings.Contains(rec.Body.String(), "hash-145") ||
 		!strings.Contains(rec.Body.String(), "Height 145") {
 		t.Fatalf("unexpected blocks page body: %s", rec.Body.String())
+	}
+}
+
+func TestDevnetServerReapPage(t *testing.T) {
+	cfg := &config{
+		Devnet:         true,
+		DevnetNodes:    3,
+		DevnetManifest: filepath.Join(t.TempDir(), "manifest.json"),
+		NetworkName:    "obtcregtest",
+	}
+	diagnostics := &fakeDevnetDiagnosticsSource{
+		reap: &devnetReapHistoryData{
+			Node:             devnetNode{Name: "node2", Role: "peer"},
+			BestHeight:       145,
+			BlocksRequested:  3,
+			BlocksInspected:  3,
+			BlocksWithREAP:   1,
+			TotalExpiredUTXO: 2,
+			Blocks: []devnetReapBlockData{
+				{
+					Height:           145,
+					Hash:             "hash-145",
+					BlockLink:        "/block?node=node2&hash=hash-145&view=raw",
+					HasREAP:          true,
+					REAPTxID:         "reap-tx",
+					MarkerPayload:    "REAP:145:2:abcd",
+					InputCount:       2,
+					ComputedTaxTotal: 300,
+					ComputedRefund:   700,
+					OnChainRefund:    700,
+					TotalsMatch:      true,
+					Rows: []devnetReapInputRow{
+						{
+							Order:         1,
+							OutPoint:      "tx1:0",
+							SourceAddress: "oabc123",
+							ScriptClass:   "pubkeyhash",
+							AmountSat:     1000,
+							TaxSat:        300,
+							RefundSat:     700,
+							CreateHeight:  1,
+							ExpiryHeight:  145,
+						},
+					},
+				},
+			},
+		},
+	}
+	server := &devnetServer{
+		cfg:           cfg,
+		manifestPath:  cfg.DevnetManifest,
+		refresh:       5 * time.Second,
+		timeout:       2 * time.Second,
+		actionTimeout: time.Minute,
+		source:        &fakeNodeSnapshotSource{},
+		runner:        &fakeDevnetActionRunner{},
+		diagnostics:   diagnostics,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/reap?node=node2&count=3", nil)
+	req.RemoteAddr = "127.0.0.1:55555"
+
+	rec := httptest.NewRecorder()
+	server.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected reap page 200, got %d", rec.Code)
+	}
+	if diagnostics.lastReapNode.Name != "node2" {
+		t.Fatalf("expected node2 reap query, got %+v", diagnostics.lastReapNode)
+	}
+	if diagnostics.lastReapCount != 3 {
+		t.Fatalf("expected count 3, got %d", diagnostics.lastReapCount)
+	}
+	if !strings.Contains(rec.Body.String(), "REAP 区块观察页") ||
+		!strings.Contains(rec.Body.String(), "reap-tx") ||
+		!strings.Contains(rec.Body.String(), "oabc123") {
+		t.Fatalf("unexpected reap page body: %s", rec.Body.String())
+	}
+}
+
+func TestDevnetServerExpiryIndexPage(t *testing.T) {
+	cfg := &config{
+		Devnet:         true,
+		DevnetNodes:    3,
+		DevnetManifest: filepath.Join(t.TempDir(), "manifest.json"),
+		NetworkName:    "obtcregtest",
+	}
+	rowA := &devnetExpiryIndexRow{
+		ScanRank:        1,
+		StrictRank:      2,
+		Picked:          false,
+		OutPoint:        "txA:0",
+		TxID:            "txA",
+		Vout:            0,
+		Address:         "oaddrA",
+		ScriptClass:     "pubkeyhash",
+		AmountSat:       5000,
+		ExpiryHeight:    140,
+		CreateHeight:    10,
+		BlocksToExpiry:  -5,
+		SelectorHashHex: "aaaa",
+	}
+	rowB := &devnetExpiryIndexRow{
+		ScanRank:        2,
+		StrictRank:      1,
+		Picked:          true,
+		OutPoint:        "txB:1",
+		TxID:            "txB",
+		Vout:            1,
+		Address:         "oaddrB",
+		ScriptClass:     "witness_v0_keyhash",
+		AmountSat:       3000,
+		ExpiryHeight:    140,
+		CreateHeight:    10,
+		BlocksToExpiry:  -5,
+		SelectorHashHex: "bbbb",
+	}
+	diagnostics := &fakeDevnetDiagnosticsSource{
+		expiry: &devnetExpiryIndexData{
+			Node:                   devnetNode{Name: "node1", Role: "miner"},
+			TipHeight:              145,
+			StartHeight:            0,
+			EndHeight:              145,
+			Limit:                  10,
+			Returned:               2,
+			PreviewPicked:          1,
+			MaxInputs:              200,
+			WeightBudget:           400000,
+			ScanOrderDescription:   "expiry_height -> canonical txid string -> vout",
+			StrictOrderDescription: "expiry_height -> amount_sat -> raw hash bytes -> vout",
+			ScanRows:               []*devnetExpiryIndexRow{rowA, rowB},
+			StrictRows:             []*devnetExpiryIndexRow{rowB, rowA},
+		},
+	}
+	server := &devnetServer{
+		cfg:           cfg,
+		manifestPath:  cfg.DevnetManifest,
+		refresh:       5 * time.Second,
+		timeout:       2 * time.Second,
+		actionTimeout: time.Minute,
+		source:        &fakeNodeSnapshotSource{},
+		runner:        &fakeDevnetActionRunner{},
+		diagnostics:   diagnostics,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/expiryindex?node=node1&start=0&end=145&limit=10", nil)
+	req.RemoteAddr = "127.0.0.1:55555"
+
+	rec := httptest.NewRecorder()
+	server.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected expiry page 200, got %d", rec.Code)
+	}
+	if diagnostics.lastExpiryNode.Name != "node1" {
+		t.Fatalf("expected node1 expiry query, got %+v", diagnostics.lastExpiryNode)
+	}
+	if diagnostics.lastStart != 0 || diagnostics.lastEnd != 145 || diagnostics.lastLimit != 10 {
+		t.Fatalf("unexpected expiry args: start=%d end=%d limit=%d", diagnostics.lastStart, diagnostics.lastEnd, diagnostics.lastLimit)
+	}
+	if !strings.Contains(rec.Body.String(), "ExpiryIndex 排序验证页") ||
+		!strings.Contains(rec.Body.String(), "oaddrB") ||
+		!strings.Contains(rec.Body.String(), "picked") {
+		t.Fatalf("unexpected expiry page body: %s", rec.Body.String())
 	}
 }
 

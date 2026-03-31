@@ -605,6 +605,7 @@ type devnetServer struct {
 	source        nodeSnapshotSource
 	runner        devnetActionRunner
 	blockFetcher  devnetBlockFetcher
+	diagnostics   devnetDiagnosticsSource
 
 	mu         sync.RWMutex
 	lastAction *devnetActionResult
@@ -630,6 +631,7 @@ func newDevnetServer(cfg *config) (*devnetServer, error) {
 		actionTimeout: cfg.DevnetActionTimeout,
 		source:        &rpcNodeSnapshotSource{cfg: cfg},
 		blockFetcher:  &rpcDevnetBlockFetcher{cfg: cfg},
+		diagnostics:   newRPCDevnetDiagnosticsSource(cfg),
 		runner: &scriptActionRunner{
 			cfg:        cfg,
 			scriptPath: scriptPath,
@@ -643,6 +645,8 @@ func (s *devnetServer) routes() http.Handler {
 	mux.HandleFunc("/", s.handleHTML)
 	mux.HandleFunc("/block", s.handleBlockHTML)
 	mux.HandleFunc("/blocks", s.handleBlocksHTML)
+	mux.HandleFunc("/reap", s.handleReapHTML)
+	mux.HandleFunc("/expiryindex", s.handleExpiryIndexHTML)
 	mux.HandleFunc("/status", s.handleJSON)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/action", s.handleAction)
@@ -1694,10 +1698,12 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
         {{if .Snapshot.Summary.Synced}}Synced{{else}}Attention{{end}}
       </div>
     </div>
-    <div>
-      <a class="toolbar-link" href="/blocks?view=raw">打开区块列表页</a>
-      <a class="toolbar-link" href="/block?view=raw">打开单块查看器</a>
-    </div>
+	    <div>
+	      <a class="toolbar-link" href="/blocks?view=raw">打开区块列表页</a>
+	      <a class="toolbar-link" href="/block?view=raw">打开单块查看器</a>
+	      <a class="toolbar-link" href="/reap">打开 REAP 观察页</a>
+	      <a class="toolbar-link" href="/expiryindex">打开 ExpiryIndex 排序页</a>
+	    </div>
     <div class="kpis">
       <div class="kpi">
         <div class="label">Network</div>
@@ -1885,11 +1891,13 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
         <div><span>Status</span><strong>{{.Error}}</strong></div>
         {{end}}
       </div>
-      <div class="node-actions">
-        <a class="node-link" href="/blocks?node={{.Node.Name}}&view=raw">浏览区块列表</a>
-        <a class="node-link" href="/block?node={{.Node.Name}}&view=raw">查看最新区块 JSON</a>
-        {{if .Healthy}}<a class="node-link" href="/block?node={{.Node.Name}}&hash={{.Snapshot.Chain.BestBlockHash}}&view=raw">查看当前 best block</a>{{end}}
-      </div>
+	      <div class="node-actions">
+	        <a class="node-link" href="/blocks?node={{.Node.Name}}&view=raw">浏览区块列表</a>
+	        <a class="node-link" href="/block?node={{.Node.Name}}&view=raw">查看最新区块 JSON</a>
+	        <a class="node-link" href="/reap?node={{.Node.Name}}">查看 REAP 明细</a>
+	        <a class="node-link" href="/expiryindex?node={{.Node.Name}}">查看 ExpiryIndex 排序</a>
+	        {{if .Healthy}}<a class="node-link" href="/block?node={{.Node.Name}}&hash={{.Snapshot.Chain.BestBlockHash}}&view=raw">查看当前 best block</a>{{end}}
+	      </div>
     </article>
     {{end}}
   </section>

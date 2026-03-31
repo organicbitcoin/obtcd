@@ -792,6 +792,11 @@ validate_obtc_command() {
     validate_obtc_state "manual"
 }
 
+replay_audit_command() {
+    require_devnet_running
+    ./scripts/validation/devnet_replay_audit.sh "$@"
+}
+
 mine_blocks() {
     require_devnet_running
 
@@ -1077,6 +1082,7 @@ show_help() {
     echo "  mine [n]                  Mine n blocks on node1"
     echo "  miner <on|off>            Toggle continuous CPU mining on node1"
     echo "  mempool                   Show mempool info on every node"
+    echo "  audit-replay [flags]      Replay-audit blocks on node1 via scripts/validation/devnet_replay_audit.sh"
     echo "  prepare [utxos] [value]   Pre-build primary spendable UTXOs"
     echo "  prepare-peer [u] [value]  Fund a second deterministic peer wallet"
     echo "  spam [devnetsim flags]    Inject transactions from the primary wallet"
@@ -1156,6 +1162,10 @@ main() {
 
         validate-obtc)
             validate_obtc_command
+            ;;
+
+        audit-replay)
+            replay_audit_command "$@"
             ;;
 
         prepare)

@@ -180,6 +180,7 @@ if [ "$(has_multi_input_tx)" != "true" ]; then
 fi
 
 echo "[smoke] mine one block and verify it is non-empty + contains REAP"
+pre_mine_reap_picked="$(btcctl_node1 getreapplan | json_field picked)"
 "$DEVNET_SCRIPT" mine 1 >/tmp/devnet-mine.out
 cat /tmp/devnet-mine.out
 best_hash="$(btcctl_node1 getbestblockhash)"
@@ -188,7 +189,7 @@ if [ "$block_txs" -le 1 ]; then
     echo "expected mined block to contain non-coinbase transactions, got $block_txs txs" >&2
     exit 1
 fi
-if [ "$(block_has_reap_marker "$best_hash")" != "true" ]; then
+if [ "$pre_mine_reap_picked" -gt 0 ] && [ "$(block_has_reap_marker "$best_hash")" != "true" ]; then
     echo "expected mined block to contain a REAP marker transaction" >&2
     exit 1
 fi
@@ -206,5 +207,9 @@ if ! grep -q '^accepted=3$' /tmp/devnet-peer-after-restart.out; then
     echo "expected peer wallet to continue spending after restart" >&2
     exit 1
 fi
+
+echo "[smoke] replay-audit mined blocks"
+./scripts/validation/devnet_replay_audit.sh >/tmp/devnet-replay-audit.out
+cat /tmp/devnet-replay-audit.out
 
 echo "[smoke] PASS mempool_size=${mempool_size} node2_mempool_size=${node2_mempool_size} mined_block_txs=${block_txs} reap_picked=${reap_picked}"
