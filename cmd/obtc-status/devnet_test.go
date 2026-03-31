@@ -175,9 +175,9 @@ func TestDevnetServerHandlers(t *testing.T) {
 	}
 	if !strings.Contains(htmlRec.Body.String(), "OBTC Devnet Dashboard") ||
 		!strings.Contains(htmlRec.Body.String(), "node3") ||
-		!strings.Contains(htmlRec.Body.String(), "区块数量") ||
-		!strings.Contains(htmlRec.Body.String(), "模式说明") ||
-		!strings.Contains(htmlRec.Body.String(), "模拟拥堵下的费率竞争") {
+		!strings.Contains(htmlRec.Body.String(), "Block Count") ||
+		!strings.Contains(htmlRec.Body.String(), "Mode Guide") ||
+		!strings.Contains(htmlRec.Body.String(), "congestion pricing and miner selection") {
 		t.Fatalf("unexpected html body: %s", htmlRec.Body.String())
 	}
 
@@ -396,7 +396,7 @@ func TestDevnetServerBlockPage(t *testing.T) {
 		t.Fatalf("expected raw mode, got %q", blockFetcher.lastMode)
 	}
 	if !strings.Contains(rec.Body.String(), "best-hash") ||
-		!strings.Contains(rec.Body.String(), "区块查看器") {
+		!strings.Contains(rec.Body.String(), "Block Viewer") {
 		t.Fatalf("unexpected block page body: %s", rec.Body.String())
 	}
 }
@@ -451,7 +451,7 @@ func TestDevnetServerBlocksPage(t *testing.T) {
 	if blockFetcher.lastListMode != devnetBlockViewModeRaw {
 		t.Fatalf("expected raw list mode, got %q", blockFetcher.lastListMode)
 	}
-	if !strings.Contains(rec.Body.String(), "区块列表页") ||
+	if !strings.Contains(rec.Body.String(), "Block List") ||
 		!strings.Contains(rec.Body.String(), "hash-145") ||
 		!strings.Contains(rec.Body.String(), "Height 145") {
 		t.Fatalf("unexpected blocks page body: %s", rec.Body.String())
@@ -529,7 +529,7 @@ func TestDevnetServerReapPage(t *testing.T) {
 	if diagnostics.lastReapCount != 3 {
 		t.Fatalf("expected count 3, got %d", diagnostics.lastReapCount)
 	}
-	if !strings.Contains(rec.Body.String(), "REAP 区块观察页") ||
+	if !strings.Contains(rec.Body.String(), "REAP Block Monitor") ||
 		!strings.Contains(rec.Body.String(), "reap-tx") ||
 		!strings.Contains(rec.Body.String(), "oabc123") {
 		t.Fatalf("unexpected reap page body: %s", rec.Body.String())
@@ -616,7 +616,7 @@ func TestDevnetServerExpiryIndexPage(t *testing.T) {
 	if diagnostics.lastStart != 0 || diagnostics.lastEnd != 145 || diagnostics.lastLimit != 10 {
 		t.Fatalf("unexpected expiry args: start=%d end=%d limit=%d", diagnostics.lastStart, diagnostics.lastEnd, diagnostics.lastLimit)
 	}
-	if !strings.Contains(rec.Body.String(), "ExpiryIndex 排序验证页") ||
+	if !strings.Contains(rec.Body.String(), "ExpiryIndex Ordering Validator") ||
 		!strings.Contains(rec.Body.String(), "oaddrB") ||
 		!strings.Contains(rec.Body.String(), "picked") {
 		t.Fatalf("unexpected expiry page body: %s", rec.Body.String())

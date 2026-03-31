@@ -10,26 +10,18 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 )
 
-// ExpiryParams defines parameters for UTXO expiry calculation and indexing
-//
-// OBTC uses height-based expiry for deterministic and consensus-friendly behavior.
-// All UTXOs expire after a fixed number of blocks from their creation height.
+// ExpiryParams defines parameters for expiry calculation and indexing.
 type ExpiryParams struct {
-	// WindowBlocks is the expiry window in blocks
-	// For mainnet: ~1 year worth of blocks (144 * 365 = 52,560)
-	// For testnet: shorter periods for faster testing
+	// WindowBlocks is the expiry window in blocks.
 	WindowBlocks uint64
 
-	// ListBatchLimit is the maximum number of items returned in one RPC scan
-	// This prevents excessive memory usage and long-running queries
+	// ListBatchLimit is the maximum number of items returned in one RPC scan.
 	ListBatchLimit int
 
 	// StartScanHeight is the block height at which to start building the index.
-	// OBTC now indexes from genesis so pre-fork UTXOs also participate in expiry.
 	StartScanHeight int32
 
-	// EnableAtHeight is the block height at which expiry enforcement begins
-	// This allows the index to be built before enforcement starts (Week 3+)
+	// EnableAtHeight is the block height at which expiry enforcement begins.
 	EnableAtHeight int32
 
 	// ExpiryCommitmentEnableAtHeight is the height at which the expiry
@@ -37,16 +29,13 @@ type ExpiryParams struct {
 	ExpiryCommitmentEnableAtHeight int32
 }
 
-// GetExpiryParams returns expiry parameters for the given network.
-// Returns nil if the network is not an OBTC network.
+// GetExpiryParams returns expiry parameters for an OBTC network, or nil.
 func GetExpiryParams(params *chaincfg.Params) *ExpiryParams {
-	// Get the expiry params from chaincfg (which handles the network detection)
 	cfg := chaincfg.GetExpiryParams(params)
 	if cfg == nil {
 		return nil
 	}
 
-	// Convert chaincfg.ExpiryParams to expiryindex.ExpiryParams
 	return &ExpiryParams{
 		WindowBlocks:                   cfg.WindowBlocks,
 		ListBatchLimit:                 cfg.ListBatchLimit,
@@ -56,28 +45,22 @@ func GetExpiryParams(params *chaincfg.Params) *ExpiryParams {
 	}
 }
 
-// CalculateExpiryKey calculates the expiry key for a UTXO created at the given height.
-//
-// The expiry key is the block height at which the UTXO will expire:
-// expiryKey = createHeight + WindowBlocks
-//
-// This produces monotonically increasing keys that sort naturally by expiry order,
-// enabling efficient database range scans.
+// CalculateExpiryKey returns the expiry key for a UTXO created at createHeight.
 func (p *ExpiryParams) CalculateExpiryKey(createHeight int32) uint64 {
 	return uint64(createHeight) + p.WindowBlocks
 }
 
-// IsExpiryEnabled returns true if expiry enforcement is enabled at the given height
+// IsExpiryEnabled reports whether expiry enforcement is enabled at height.
 func (p *ExpiryParams) IsExpiryEnabled(height int32) bool {
 	return height >= p.EnableAtHeight
 }
 
-// IsIndexingEnabled returns true if expiry indexing should be active at the given height
+// IsIndexingEnabled reports whether expiry indexing should be active at height.
 func (p *ExpiryParams) IsIndexingEnabled(height int32) bool {
 	return height >= p.StartScanHeight
 }
 
-// ValidateListParams validates parameters for the listExpiring RPC call
+// ValidateListParams validates parameters for the listexpiring RPC.
 func (p *ExpiryParams) ValidateListParams(limit int) error {
 	if limit <= 0 {
 		return fmt.Errorf("limit must be positive, got %d", limit)
@@ -88,26 +71,19 @@ func (p *ExpiryParams) ValidateListParams(limit int) error {
 	return nil
 }
 
-// CalculateExpiryRange calculates the range [fromKey, toKey] for scanning
-// UTXOs that expire within the given horizon from the starting point.
-//
-// This is used by the RPC layer to convert user-friendly parameters
-// (like "show me UTXOs expiring in the next 1000 blocks") into the
-// low-level database scan range.
+// CalculateExpiryRange returns the [fromKey, toKey] scan range for a horizon.
 func (p *ExpiryParams) CalculateExpiryRange(fromHeight uint64, horizonBlocks uint64) (fromKey, toKey uint64) {
 	fromKey = fromHeight
 	toKey = fromHeight + horizonBlocks
 
-	// Ensure toKey doesn't overflow
 	if toKey < fromHeight {
-		toKey = ^uint64(0) // Max uint64
+		toKey = ^uint64(0)
 	}
 
 	return fromKey, toKey
 }
 
-// GetDefaultHorizon returns a sensible default horizon for RPC queries
-// based on the network configuration (~1 day worth of blocks)
+// GetDefaultHorizon returns the default RPC scan horizon.
 func (p *ExpiryParams) GetDefaultHorizon() uint64 {
-	return 144 // ~1 day worth of blocks at 10min intervals
+	return 144
 }

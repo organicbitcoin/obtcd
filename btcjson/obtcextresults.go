@@ -2,8 +2,6 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-// OBTC-only: JSON-RPC result types for OBTC extensions.
-
 package btcjson
 
 // ExpiringUTXOResult represents a UTXO that is scheduled to expire.

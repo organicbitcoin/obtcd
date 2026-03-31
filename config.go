@@ -98,63 +98,62 @@ func minUint32(a, b uint32) uint32 {
 //
 // See loadConfig for details on the configuration load process.
 type config struct {
-	AddCheckpoints      []string      `long:"addcheckpoint" description:"Add a custom checkpoint.  Format: '<height>:<hash>'"`
-	AddPeers            []string      `short:"a" long:"addpeer" description:"Add a peer to connect with at startup"`
-	AddrIndex           bool          `long:"addrindex" description:"Maintain a full address-based transaction index which makes the searchrawtransactions RPC available"`
-	ExpiryIndex         bool          `long:"expiryindex" description:"Enable ExpiryIndex scan/RPC features on OBTC networks. Expiry commitment consensus state is maintained regardless."`
-	ReindexExpiry       bool          `long:"reindex-expiry" description:"Reset the persisted ExpiryIndex state on OBTC networks, then continue startup and rebuild it from chain state."`
-	AgentBlacklist      []string      `long:"agentblacklist" description:"A comma separated list of user-agent substrings which will cause btcd to reject any peers whose user-agent contains any of the blacklisted substrings."`
-	AgentWhitelist      []string      `long:"agentwhitelist" description:"A comma separated list of user-agent substrings which will cause btcd to require all peers' user-agents to contain one of the whitelisted substrings. The blacklist is applied before the whitelist, and an empty whitelist will allow all agents that do not fail the blacklist."`
-	BanDuration         time.Duration `long:"banduration" description:"How long to ban misbehaving peers.  Valid time units are {s, m, h}.  Minimum 1 second"`
-	BanThreshold        uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
-	BlockMaxSize        uint32        `long:"blockmaxsize" description:"Maximum block size in bytes to be used when creating a block"`
-	BlockMinSize        uint32        `long:"blockminsize" description:"Minimum block size in bytes to be used when creating a block"`
-	BlockMaxWeight      uint32        `long:"blockmaxweight" description:"Maximum block weight to be used when creating a block"`
-	BlockMinWeight      uint32        `long:"blockminweight" description:"Minimum block weight to be used when creating a block"`
-	BlockPrioritySize   uint32        `long:"blockprioritysize" description:"Size in bytes for high-priority/low-fee transactions when creating a block"`
-	BlocksOnly          bool          `long:"blocksonly" description:"Do not accept transactions from remote peers."`
-	ConfigFile          string        `short:"C" long:"configfile" description:"Path to configuration file"`
-	ConnectPeers        []string      `long:"connect" description:"Connect only to the specified peers at startup"`
-	CPUProfile          string        `long:"cpuprofile" description:"Write CPU profile to the specified file"`
-	MemoryProfile       string        `long:"memprofile" description:"Write memory profile to the specified file"`
-	TraceProfile        string        `long:"traceprofile" description:"Write execution trace to the specified file"`
-	DataDir             string        `short:"b" long:"datadir" description:"Directory to store data"`
-	DbType              string        `long:"dbtype" description:"Database backend to use for the Block Chain"`
-	DebugLevel          string        `short:"d" long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	DropAddrIndex       bool          `long:"dropaddrindex" description:"Deletes the address-based transaction index from the database on start up and then exits."`
-	DropCfIndex         bool          `long:"dropcfindex" description:"Deletes the index used for committed filtering (CF) support from the database on start up and then exits."`
-	DropTxIndex         bool          `long:"droptxindex" description:"Deletes the hash-based transaction index from the database on start up and then exits."`
-	ExternalIPs         []string      `long:"externalip" description:"Add an ip to the list of local addresses we claim to listen on to peers"`
-	Generate            bool          `long:"generate" description:"Generate (mine) bitcoins using the CPU"`
-	FreeTxRelayLimit    float64       `long:"limitfreerelay" description:"Limit relay of transactions with no transaction fee to the given amount in thousands of bytes per minute"`
-	Listeners           []string      `long:"listen" description:"Add an interface/port to listen for connections (default all interfaces port: 8333, testnet: 18333)"`
-	LogDir              string        `long:"logdir" description:"Directory to log output."`
-	MaxOrphanTxs        int           `long:"maxorphantx" description:"Max number of orphan transactions to keep in memory"`
-	MaxPeers            int           `long:"maxpeers" description:"Max number of inbound and outbound peers"`
-	MiningAddrs         []string      `long:"miningaddr" description:"Add the specified payment address to the list of addresses to use for generated blocks -- At least one address is required if the generate option is set"`
-	MinRelayTxFee       float64       `long:"minrelaytxfee" description:"The minimum transaction fee in BTC/kB to be considered a non-zero fee."`
-	DisableBanning      bool          `long:"nobanning" description:"Disable banning of misbehaving peers"`
-	NoCFilters          bool          `long:"nocfilters" description:"Disable committed filtering (CF) support"`
-	DisableCheckpoints  bool          `long:"nocheckpoints" description:"Disable built-in checkpoints.  Don't do this unless you know what you're doing."`
-	DisableDNSSeed      bool          `long:"nodnsseed" description:"Disable DNS seeding for peers"`
-	DisableListen       bool          `long:"nolisten" description:"Disable listening for incoming connections -- NOTE: Listening is automatically disabled if the --connect or --proxy options are used without also specifying listen interfaces via --listen"`
-	NoOnion             bool          `long:"noonion" description:"Disable connecting to tor hidden services"`
-	NoPeerBloomFilters  bool          `long:"nopeerbloomfilters" description:"Disable bloom filtering support"`
-	NoRelayPriority     bool          `long:"norelaypriority" description:"Do not require free or low-fee transactions to have high priority for relaying"`
-	NoWinService        bool          `long:"nowinservice" description:"Do not start as a background service on Windows -- NOTE: This flag only works on the command line, not in the config file"`
-	DisableRPC          bool          `long:"norpc" description:"Disable built-in RPC server -- NOTE: The RPC server is disabled by default if no rpcuser/rpcpass or rpclimituser/rpclimitpass is specified"`
-	DisableStallHandler bool          `long:"nostalldetect" description:"Disables the stall handler system for each peer, useful in simnet/regtest integration tests frameworks"`
-	DisableTLS          bool          `long:"notls" description:"Disable TLS for the RPC server -- NOTE: This is only allowed if the RPC server is bound to localhost"`
-	OnionProxy          string        `long:"onion" description:"Connect to tor hidden services via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
-	OnionProxyPass      string        `long:"onionpass" default-mask:"-" description:"Password for onion proxy server"`
-	OnionProxyUser      string        `long:"onionuser" description:"Username for onion proxy server"`
-	Profile             string        `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65536"`
-	Proxy               string        `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
-	ProxyPass           string        `long:"proxypass" default-mask:"-" description:"Password for proxy server"`
-	ProxyUser           string        `long:"proxyuser" description:"Username for proxy server"`
-	Prune               uint64        `long:"prune" description:"Prune already validated blocks from the database. Must specify a target size in MiB (minimum value of 1536, default value of 0 will disable pruning)"`
-	RegressionTest      bool          `long:"regtest" description:"Use the regression test network"`
-	// OBTC-only: network selection flags.
+	AddCheckpoints       []string      `long:"addcheckpoint" description:"Add a custom checkpoint.  Format: '<height>:<hash>'"`
+	AddPeers             []string      `short:"a" long:"addpeer" description:"Add a peer to connect with at startup"`
+	AddrIndex            bool          `long:"addrindex" description:"Maintain a full address-based transaction index which makes the searchrawtransactions RPC available"`
+	ExpiryIndex          bool          `long:"expiryindex" description:"Enable ExpiryIndex scan/RPC features on OBTC networks. Expiry commitment consensus state is maintained regardless."`
+	ReindexExpiry        bool          `long:"reindex-expiry" description:"Reset the persisted ExpiryIndex state on OBTC networks, then continue startup and rebuild it from chain state."`
+	AgentBlacklist       []string      `long:"agentblacklist" description:"A comma separated list of user-agent substrings which will cause btcd to reject any peers whose user-agent contains any of the blacklisted substrings."`
+	AgentWhitelist       []string      `long:"agentwhitelist" description:"A comma separated list of user-agent substrings which will cause btcd to require all peers' user-agents to contain one of the whitelisted substrings. The blacklist is applied before the whitelist, and an empty whitelist will allow all agents that do not fail the blacklist."`
+	BanDuration          time.Duration `long:"banduration" description:"How long to ban misbehaving peers.  Valid time units are {s, m, h}.  Minimum 1 second"`
+	BanThreshold         uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
+	BlockMaxSize         uint32        `long:"blockmaxsize" description:"Maximum block size in bytes to be used when creating a block"`
+	BlockMinSize         uint32        `long:"blockminsize" description:"Minimum block size in bytes to be used when creating a block"`
+	BlockMaxWeight       uint32        `long:"blockmaxweight" description:"Maximum block weight to be used when creating a block"`
+	BlockMinWeight       uint32        `long:"blockminweight" description:"Minimum block weight to be used when creating a block"`
+	BlockPrioritySize    uint32        `long:"blockprioritysize" description:"Size in bytes for high-priority/low-fee transactions when creating a block"`
+	BlocksOnly           bool          `long:"blocksonly" description:"Do not accept transactions from remote peers."`
+	ConfigFile           string        `short:"C" long:"configfile" description:"Path to configuration file"`
+	ConnectPeers         []string      `long:"connect" description:"Connect only to the specified peers at startup"`
+	CPUProfile           string        `long:"cpuprofile" description:"Write CPU profile to the specified file"`
+	MemoryProfile        string        `long:"memprofile" description:"Write memory profile to the specified file"`
+	TraceProfile         string        `long:"traceprofile" description:"Write execution trace to the specified file"`
+	DataDir              string        `short:"b" long:"datadir" description:"Directory to store data"`
+	DbType               string        `long:"dbtype" description:"Database backend to use for the Block Chain"`
+	DebugLevel           string        `short:"d" long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	DropAddrIndex        bool          `long:"dropaddrindex" description:"Deletes the address-based transaction index from the database on start up and then exits."`
+	DropCfIndex          bool          `long:"dropcfindex" description:"Deletes the index used for committed filtering (CF) support from the database on start up and then exits."`
+	DropTxIndex          bool          `long:"droptxindex" description:"Deletes the hash-based transaction index from the database on start up and then exits."`
+	ExternalIPs          []string      `long:"externalip" description:"Add an ip to the list of local addresses we claim to listen on to peers"`
+	Generate             bool          `long:"generate" description:"Generate (mine) bitcoins using the CPU"`
+	FreeTxRelayLimit     float64       `long:"limitfreerelay" description:"Limit relay of transactions with no transaction fee to the given amount in thousands of bytes per minute"`
+	Listeners            []string      `long:"listen" description:"Add an interface/port to listen for connections (default all interfaces port: 8333, testnet: 18333)"`
+	LogDir               string        `long:"logdir" description:"Directory to log output."`
+	MaxOrphanTxs         int           `long:"maxorphantx" description:"Max number of orphan transactions to keep in memory"`
+	MaxPeers             int           `long:"maxpeers" description:"Max number of inbound and outbound peers"`
+	MiningAddrs          []string      `long:"miningaddr" description:"Add the specified payment address to the list of addresses to use for generated blocks -- At least one address is required if the generate option is set"`
+	MinRelayTxFee        float64       `long:"minrelaytxfee" description:"The minimum transaction fee in BTC/kB to be considered a non-zero fee."`
+	DisableBanning       bool          `long:"nobanning" description:"Disable banning of misbehaving peers"`
+	NoCFilters           bool          `long:"nocfilters" description:"Disable committed filtering (CF) support"`
+	DisableCheckpoints   bool          `long:"nocheckpoints" description:"Disable built-in checkpoints.  Don't do this unless you know what you're doing."`
+	DisableDNSSeed       bool          `long:"nodnsseed" description:"Disable DNS seeding for peers"`
+	DisableListen        bool          `long:"nolisten" description:"Disable listening for incoming connections -- NOTE: Listening is automatically disabled if the --connect or --proxy options are used without also specifying listen interfaces via --listen"`
+	NoOnion              bool          `long:"noonion" description:"Disable connecting to tor hidden services"`
+	NoPeerBloomFilters   bool          `long:"nopeerbloomfilters" description:"Disable bloom filtering support"`
+	NoRelayPriority      bool          `long:"norelaypriority" description:"Do not require free or low-fee transactions to have high priority for relaying"`
+	NoWinService         bool          `long:"nowinservice" description:"Do not start as a background service on Windows -- NOTE: This flag only works on the command line, not in the config file"`
+	DisableRPC           bool          `long:"norpc" description:"Disable built-in RPC server -- NOTE: The RPC server is disabled by default if no rpcuser/rpcpass or rpclimituser/rpclimitpass is specified"`
+	DisableStallHandler  bool          `long:"nostalldetect" description:"Disables the stall handler system for each peer, useful in simnet/regtest integration tests frameworks"`
+	DisableTLS           bool          `long:"notls" description:"Disable TLS for the RPC server -- NOTE: This is only allowed if the RPC server is bound to localhost"`
+	OnionProxy           string        `long:"onion" description:"Connect to tor hidden services via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
+	OnionProxyPass       string        `long:"onionpass" default-mask:"-" description:"Password for onion proxy server"`
+	OnionProxyUser       string        `long:"onionuser" description:"Username for onion proxy server"`
+	Profile              string        `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65536"`
+	Proxy                string        `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
+	ProxyPass            string        `long:"proxypass" default-mask:"-" description:"Password for proxy server"`
+	ProxyUser            string        `long:"proxyuser" description:"Username for proxy server"`
+	Prune                uint64        `long:"prune" description:"Prune already validated blocks from the database. Must specify a target size in MiB (minimum value of 1536, default value of 0 will disable pruning)"`
+	RegressionTest       bool          `long:"regtest" description:"Use the regression test network"`
 	ObtcMainNet          bool          `long:"obtcmainnet" description:"Use the OBTC main network"`
 	ObtcTestNet          bool          `long:"obtctestnet" description:"Use the OBTC test network"`
 	ObtcRegTest          bool          `long:"obtcregtest" description:"Use the OBTC regression test network"`
@@ -952,7 +951,6 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	// ExpiryIndex is only supported on OBTC networks.
-	// OBTC-only: expiry index requires OBTC network params.
 	if cfg.ExpiryIndex && !chaincfg.IsOBTC(activeNetParams.Params) {
 		err := fmt.Errorf("%s: the --expiryindex option is only "+
 			"supported on OBTC networks (obtcmainnet, obtctestnet, obtcregtest)",

@@ -48,17 +48,17 @@ go test -tags=rpctest ./integration/... -count=1 -v
 
 ## Language Rules
 
-- 所有交互、plan、讨论一律使用中文，无论用户用中文还是英文提问
-- PR title、PR body、commit message、code comment 一律使用英文
+- Match the user's language for interactive discussion.
+- Use English for PR titles, PR bodies, commit messages, and code comments.
 
 ## Git Workflow
 
-- 禁止在 master 分支上直接提交代码
-- 每个新任务必须从最新的 master 创建新分支：`git checkout master && git pull && git checkout -b <branch-name>`
-- 分支命名参考：`feat/xxx`、`fix/xxx`、`docs/xxx`、`refactor/xxx`
+- Do not commit directly to `master`.
+- Start each task from an up-to-date `master`: `git checkout master && git pull && git checkout -b <branch-name>`
+- Branch naming examples: `feat/xxx`, `fix/xxx`, `docs/xxx`, `refactor/xxx`
 
 ## Documentation
 
 - `obtc_doc/` — Phase implementation plans (phases 1–8)
-- `AGENTS.md` — Directory structure & module boundaries (Chinese)
+- `AGENTS.md` — Directory structure and module boundaries
 - `scripts/devnet-up.sh` — DevNet launcher

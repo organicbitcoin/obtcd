@@ -36,8 +36,6 @@ func (r FutureListExpiringResult) Receive() (*btcjson.ListExpiringResult, error)
 // the returned instance.
 //
 // See ListExpiring for the blocking version and more details.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) ListExpiringAsync(startHeight, endHeight *int32, maxResults *int, startAfter *string, minAmountSat ...*int64) FutureListExpiringResult {
 	cmd := btcjson.NewListExpiringCmd(startHeight, endHeight, maxResults, startAfter, minAmountSat...)
 	return c.SendCmd(cmd)
@@ -45,8 +43,6 @@ func (c *Client) ListExpiringAsync(startHeight, endHeight *int32, maxResults *in
 
 // ListExpiring returns UTXOs that will expire within the specified height range.
 // Optional minAmountSat filters out UTXOs below the given value in satoshis.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) ListExpiring(startHeight, endHeight *int32, maxResults *int, startAfter *string, minAmountSat ...*int64) (*btcjson.ListExpiringResult, error) {
 	return c.ListExpiringAsync(startHeight, endHeight, maxResults, startAfter, minAmountSat...).Receive()
 }
@@ -77,16 +73,12 @@ func (r FutureGetExpiryIndexStatsResult) Receive() (*btcjson.ExpiryIndexStatsRes
 // function on the returned instance.
 //
 // See GetExpiryIndexStats for the blocking version and more details.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) GetExpiryIndexStatsAsync() FutureGetExpiryIndexStatsResult {
 	cmd := btcjson.NewGetExpiryIndexStatsCmd()
 	return c.SendCmd(cmd)
 }
 
 // GetExpiryIndexStats returns statistics about the OBTC expiry index.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) GetExpiryIndexStats() (*btcjson.ExpiryIndexStatsResult, error) {
 	return c.GetExpiryIndexStatsAsync().Receive()
 }
@@ -117,17 +109,13 @@ func (r FutureGetReapPlanResult) Receive() (*btcjson.GetReapPlanResult, error) {
 // the returned instance.
 //
 // See GetReapPlan for the blocking version and more details.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) GetReapPlanAsync() FutureGetReapPlanResult {
 	cmd := btcjson.NewGetReapPlanCmd()
 	return c.SendCmd(cmd)
 }
 
-// GetReapPlan returns a dry-run REAP plan for the next block.  The plan is
+// GetReapPlan returns a dry-run REAP plan for the next block. The plan is
 // computed without broadcasting or committing any transaction.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) GetReapPlan() (*btcjson.GetReapPlanResult, error) {
 	return c.GetReapPlanAsync().Receive()
 }
@@ -158,8 +146,6 @@ func (r FutureGetExpiryCommitmentResult) Receive() (*btcjson.GetExpiryCommitment
 // function on the returned instance.
 //
 // See GetExpiryCommitment for the blocking version and more details.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) GetExpiryCommitmentAsync() FutureGetExpiryCommitmentResult {
 	cmd := btcjson.NewGetExpiryCommitmentCmd()
 	return c.SendCmd(cmd)
@@ -167,8 +153,6 @@ func (c *Client) GetExpiryCommitmentAsync() FutureGetExpiryCommitmentResult {
 
 // GetExpiryCommitment returns the current expiry accumulator snapshot and
 // commitment activation metadata from the expiry index.
-//
-// NOTE: This is an OBTC extension.
 func (c *Client) GetExpiryCommitment() (*btcjson.GetExpiryCommitmentResult, error) {
 	return c.GetExpiryCommitmentAsync().Receive()
 }

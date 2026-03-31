@@ -876,7 +876,6 @@ var rpcResultTypes = map[string][]interface{}{
 	"testmempoolaccept":      {(*[]btcjson.TestMempoolAcceptResult)(nil)},
 	"gettxspendingprevout":   {(*[]btcjson.GetTxSpendingPrevOutResult)(nil)},
 
-	// OBTC specific extensions
 	"listexpiring":        {(*btcjson.ListExpiringResult)(nil)},
 	"getexpiryindexstats": {(*btcjson.ExpiryIndexStatsResult)(nil)},
 	"getreapplan":         {(*btcjson.GetReapPlanResult)(nil)},

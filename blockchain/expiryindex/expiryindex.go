@@ -49,13 +49,7 @@ type ChainAccessor interface {
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
 
-// OBTC-only: ExpiryIndex implements UTXO expiry tracking.
-// ExpiryIndex implements a UTXO expiry index that tracks when UTXOs will expire.
-// It maintains bidirectional mappings to support both fast deletion when UTXOs
-// are spent and efficient scanning for expired UTXOs.
-//
-// The index implements the blockchain.Indexer interface and integrates with
-// the blockchain processing pipeline to automatically track UTXO lifecycles.
+// ExpiryIndex tracks UTXOs by expiry height.
 type ExpiryIndex struct {
 	// db is the database instance for the index
 	db database.DB
@@ -94,19 +88,14 @@ func (idx *ExpiryIndex) SetChainAccessor(chain ChainAccessor) {
 	}
 }
 
-// NewExpiryIndex returns a new instance of an expiry index.
-//
-// Returns an error if the network doesn't support OBTC expiry
-// (i.e., it's a Bitcoin network rather than an OBTC network).
+// NewExpiryIndex returns a new expiry index instance.
 func NewExpiryIndex(db database.DB, params *chaincfg.Params) (*ExpiryIndex, error) {
 	if params == nil {
 		return nil, fmt.Errorf("chain params is nil")
 	}
 
-	// Get expiry parameters for this network
 	expiryParams := GetExpiryParams(params)
 
-	// Return error if this is not an OBTC network
 	if expiryParams == nil {
 		return nil, fmt.Errorf("expiry index not supported for network %s", params.Name)
 	}

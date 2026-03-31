@@ -2,16 +2,9 @@
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-// NOTE: This file is intended to house the RPC commands that are specific to
-// OBTC (Organic Bitcoin) extensions.
-
-// OBTC-only: JSON-RPC command definitions.
-
 package btcjson
 
 // ListExpiringCmd defines the listexpiring JSON-RPC command.
-// This command is an OBTC-specific extension for querying UTXOs that are
-// approaching expiration.
 type ListExpiringCmd struct {
 	// StartHeight is the block height to start scanning from.
 	// Optional: defaults to current tip height.
@@ -53,7 +46,6 @@ func NewListExpiringCmd(startHeight *int32, endHeight *int32, maxResults *int, s
 }
 
 // GetExpiryIndexStatsCmd defines the getexpiryindexstats JSON-RPC command.
-// This command returns statistics about the OBTC expiry index.
 type GetExpiryIndexStatsCmd struct{}
 
 // NewGetExpiryIndexStatsCmd returns a new instance which can be used to issue a

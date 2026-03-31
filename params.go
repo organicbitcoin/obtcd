@@ -70,7 +70,6 @@ var sigNetParams = params{
 	rpcPort: "38332",
 }
 
-// OBTC-only: network parameter sets for OBTC.
 // obtcMainNetParams contains parameters specific to the OBTC main network.
 var obtcMainNetParams = params{
 	Params:  &chaincfg.ObtcMainNetParams,

@@ -613,10 +613,10 @@ func parseReapHistoryCount(raw string) (int, error) {
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil {
-		return 0, fmt.Errorf("区块数量必须是 1 到 200 之间的整数")
+		return 0, fmt.Errorf("block count must be an integer between 1 and 200")
 	}
 	if count < 1 || count > 200 {
-		return 0, fmt.Errorf("区块数量必须在 1 到 200 之间")
+		return 0, fmt.Errorf("block count must be between 1 and 200")
 	}
 	return count, nil
 }
@@ -627,10 +627,10 @@ func parseExpiryHeight(raw string, defaultValue int32) (int32, error) {
 	}
 	value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 32)
 	if err != nil {
-		return 0, fmt.Errorf("高度参数必须是整数")
+		return 0, fmt.Errorf("height parameter must be an integer")
 	}
 	if value < 0 {
-		return 0, fmt.Errorf("高度参数不能为负数")
+		return 0, fmt.Errorf("height parameter must not be negative")
 	}
 	return int32(value), nil
 }
@@ -641,10 +641,10 @@ func parseExpiryLimit(raw string) (int, error) {
 	}
 	value, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil {
-		return 0, fmt.Errorf("limit 必须是 1 到 5000 之间的整数")
+		return 0, fmt.Errorf("limit must be an integer between 1 and 5000")
 	}
 	if value < 1 || value > 5000 {
-		return 0, fmt.Errorf("limit 必须在 1 到 5000 之间")
+		return 0, fmt.Errorf("limit must be between 1 and 5000")
 	}
 	return value, nil
 }
@@ -794,11 +794,11 @@ func (s *devnetServer) handleExpiryIndexHTML(w http.ResponseWriter, r *http.Requ
 }
 
 var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="{{.RefreshSeconds}}">
-  <title>OBTC Devnet REAP 观察页</title>
+  <title>OBTC Devnet REAP Monitor</title>
   <style>
     :root {
       color-scheme: light;
@@ -817,7 +817,7 @@ var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doct
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
       background: radial-gradient(circle at top left, #fdf5da, transparent 32%), var(--bg);
       color: var(--ink);
     }
@@ -871,12 +871,12 @@ var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doct
 <body>
   <main class="page">
     <section class="hero">
-      <h1>REAP 区块观察页</h1>
-      <p>这个页面按区块列出 REAP 交易消耗的过期 UTXO，并把每个输入的来源地址、原始金额、征税额度、征税后退款额度，以及该输入在 REAP 交易里的顺序直接展开，方便你核对链上实际结果和本地规则推导是否一致。</p>
+      <h1>REAP Block Monitor</h1>
+      <p>This page lists the expired UTXOs consumed by REAP transactions block by block and expands each input with its source address, original amount, tax amount, post-tax refund amount, and in-transaction order so you can compare on-chain results with locally derived expectations.</p>
       <div class="toolbar">
-        <a href="/">返回 Dashboard</a>
-        <a href="/blocks?view=raw">区块列表</a>
-        <a href="/expiryindex">ExpiryIndex 排序页</a>
+        <a href="/">Back to Dashboard</a>
+        <a href="/blocks?view=raw">Block List</a>
+        <a href="/expiryindex">ExpiryIndex Ordering</a>
       </div>
     </section>
 
@@ -884,19 +884,19 @@ var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doct
       <form method="get" action="/reap">
         <div class="form-row">
           <div>
-            <label for="node">节点</label>
+            <label for="node">Node</label>
             <select id="node" name="node">
               {{range .Nodes}}
-              <option value="{{.Name}}" {{if eq $.SelectedNode .Name}}selected{{end}}>{{.Name}} · {{.Role}}</option>
+              <option value="{{.Name}}" {{if eq $.SelectedNode .Name}}selected{{end}}>{{.Name}} | {{.Role}}</option>
               {{end}}
             </select>
           </div>
           <div>
-            <label for="count">最近区块数量</label>
+            <label for="count">Recent Block Count</label>
             <input id="count" name="count" value="{{.CountValue}}" inputmode="numeric">
           </div>
           <div>
-            <button type="submit">刷新 REAP 视图</button>
+            <button type="submit">Refresh REAP View</button>
           </div>
         </div>
       </form>
@@ -946,11 +946,11 @@ var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doct
     {{range .Result.Blocks}}
     {{if .HasREAP}}
     <section class="panel detail">
-      <h2>Height {{.Height}} · REAP {{.REAPTxID}}</h2>
+      <h2>Height {{.Height}} | REAP {{.REAPTxID}}</h2>
       <div class="meta">
-        <a href="{{.BlockLink}}">查看该区块 JSON</a>
-        <span> · 时间 {{.Timestamp}}</span>
-        {{if .MarkerPayload}}<span> · Marker {{.MarkerPayload}}</span>{{end}}
+        <a href="{{.BlockLink}}">View Block JSON</a>
+        <span> | Time {{.Timestamp}}</span>
+        {{if .MarkerPayload}}<span> | Marker {{.MarkerPayload}}</span>{{end}}
       </div>
       <div class="metrics">
         <div class="metric"><div class="label">Inputs</div><div class="value">{{.InputCount}}</div></div>
@@ -965,9 +965,9 @@ var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doct
           <tr>
             <th>#</th>
             <th>OutPoint</th>
-            <th>来源地址</th>
-            <th>脚本类型</th>
-            <th>金额</th>
+            <th>Source Address</th>
+            <th>Script Type</th>
+            <th>Amount</th>
             <th>Tax</th>
             <th>Refund</th>
             <th>Create</th>
@@ -999,11 +999,11 @@ var devnetReapTemplate = template.Must(template.New("devnet-reap").Parse(`<!doct
 </html>`))
 
 var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex").Parse(`<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="{{.RefreshSeconds}}">
-  <title>OBTC Devnet ExpiryIndex 排序页</title>
+  <title>OBTC Devnet ExpiryIndex Ordering</title>
   <style>
     :root {
       color-scheme: light;
@@ -1024,7 +1024,7 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
       background: radial-gradient(circle at top right, #dbedf9, transparent 28%), var(--bg);
       color: var(--ink);
     }
@@ -1075,12 +1075,12 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
 <body>
   <main class="page">
     <section class="hero">
-      <h1>ExpiryIndex 排序验证页</h1>
-      <p>这里把当前 listexpiring 扫描出来的 UTXO 同时按两种顺序展开：一份是 ExpiryIndex / RPC 真实返回顺序，另一份是 REAP strict 选择器的 deterministic 排序预览。这样你可以直观看到扫描顺序、重排序结果，以及当前页范围内哪些输入会被优先挑中。</p>
+      <h1>ExpiryIndex Ordering Validator</h1>
+      <p>This page expands the current <code>listexpiring</code> results in two orders at once: the actual ExpiryIndex or RPC return order, and a deterministic preview of the REAP strict selector ordering. This makes scan order, reordering, and current-page input priority visible at a glance.</p>
       <div class="toolbar">
-        <a href="/">返回 Dashboard</a>
-        <a href="/reap">REAP 观察页</a>
-        <a href="/blocks?view=raw">区块列表</a>
+        <a href="/">Back to Dashboard</a>
+        <a href="/reap">REAP Monitor</a>
+        <a href="/blocks?view=raw">Block List</a>
       </div>
     </section>
 
@@ -1088,10 +1088,10 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
       <form method="get" action="/expiryindex">
         <div class="form-row">
           <div>
-            <label for="node">节点</label>
+            <label for="node">Node</label>
             <select id="node" name="node">
               {{range .Nodes}}
-              <option value="{{.Name}}" {{if eq $.SelectedNode .Name}}selected{{end}}>{{.Name}} · {{.Role}}</option>
+              <option value="{{.Name}}" {{if eq $.SelectedNode .Name}}selected{{end}}>{{.Name}} | {{.Role}}</option>
               {{end}}
             </select>
           </div>
@@ -1108,7 +1108,7 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
             <input id="limit" name="limit" value="{{.LimitValue}}" inputmode="numeric">
           </div>
           <div>
-            <button type="submit">刷新排序视图</button>
+            <button type="submit">Refresh Ordering View</button>
           </div>
         </div>
       </form>
@@ -1129,23 +1129,23 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
 
     <section class="note-grid">
       <article class="note">
-        <h2>ExpiryIndex / RPC 顺序</h2>
+        <h2>ExpiryIndex / RPC Order</h2>
         <p class="mono">{{.Result.ScanOrderDescription}}</p>
       </article>
       <article class="note">
-        <h2>REAP Strict 顺序</h2>
+        <h2>REAP Strict Order</h2>
         <p class="mono">{{.Result.StrictOrderDescription}}</p>
       </article>
       {{if .Result.Truncated}}
       <article class="note">
-        <h2>分页提醒</h2>
+        <h2>Pagination Notice</h2>
         <p class="mono">{{.Result.NextCursor}}</p>
       </article>
       {{end}}
     </section>
 
     <section class="panel table-panel">
-      <h2>RPC 扫描顺序</h2>
+      <h2>RPC Scan Order</h2>
       <table>
         <thead>
           <tr>
@@ -1156,7 +1156,7 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
             <th>Create</th>
             <th>Blocks Left</th>
             <th>Amount</th>
-            <th>地址</th>
+            <th>Address</th>
             <th>OutPoint</th>
           </tr>
         </thead>
@@ -1179,7 +1179,7 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
     </section>
 
     <section class="panel table-panel">
-      <h2>REAP Strict 排序预览</h2>
+      <h2>REAP Strict Preview</h2>
       <table>
         <thead>
           <tr>
@@ -1189,7 +1189,7 @@ var devnetExpiryIndexTemplate = template.Must(template.New("devnet-expiryindex")
             <th>Expiry</th>
             <th>Amount</th>
             <th>Selector Hash</th>
-            <th>地址</th>
+            <th>Address</th>
             <th>OutPoint</th>
           </tr>
         </thead>

@@ -1,39 +1,39 @@
 # AGENTS.md
 
-本文档用于约定 OBTC 仓库的推荐目录结构与职责边界，方便快速定位模块与后续扩展。
+This document describes the recommended directory structure and module
+boundaries for the OBTC repository.
 
-## 结构总览（建议）
+## Structure Overview
 
 ```
-obtc/ (repo root)
-  btcd/                # upstream 代码（如有单独目录）
+obtcd/ (repo root)
   blockchain/
-    expiryindex/       # Week2: 到期索引（已实现）
-    validation_reap.go # Week4+: REAP 共识验证（规划）
+    expiryindex/       # Week 2: expiry index
+    validation_reap.go # Week 4+: REAP consensus validation
   chaincfg/
-    params_obtc.go     # OBTC 网络参数
+    params_obtc.go     # OBTC network parameters
   mining/
-    reap/              # Week3: 选择器/蓝图构造（规划）
-    template_reap.go   # Week4: 模板注入（规划）
+    reap/              # Week 3: selector and blueprint construction
+    template_reap.go   # Week 4: template injection
   mempool/
-    policy.go          # Week4: REAP 策略限制（规划）
+    policy.go          # Week 4: REAP policy limits
   rpc/
-    rpcserver.go       # RPC 接入点
+    rpcserver.go       # RPC entry point
   cmd/
-    gengenesis/        # Week6/8: 创世生成器（规划）
-    checkgenesis/      # Week6/8: 创世校验器（规划）
-    obtc-status/       # Week6: 最小状态页（规划）
+    gengenesis/        # Week 6/8: genesis generator
+    checkgenesis/      # Week 6/8: genesis validator
+    obtc-status/       # Week 6: minimal status page
   scripts/
-    devnet-up.sh       # Week1: devnet 一键脚本
-    validation/        # Week2: 验证脚本与工具
+    devnet-up.sh       # Week 1: devnet bootstrap script
+    validation/        # Week 2: validation scripts and tools
   docs/
     phase1-validation.md
     phase2-summary.md
-    phase2-validation.md    # Week2: 验证记录（建议补齐）
-    phase3-validation.md    # Week3: 计划/验证（规划）
-    phase4-validation.md    # Week4: 计划/验证（规划）
-    testnet-join.md         # Week6: Testnet 接入指南（规划）
-    mainnet-join.md         # Week8: Mainnet 接入指南（规划）
+    phase2-validation.md
+    phase3-validation.md
+    phase4-validation.md
+    testnet-join.md
+    mainnet-join.md
   obtc_doc/
     AGENTS.md
     obtc_roadmap_plan.md
@@ -46,15 +46,15 @@ obtc/ (repo root)
     phase8_implementation.md
 ```
 
-## 说明
+## Notes
 
-- 上述结构为“建议落位”，已实现与规划项混合在一起，便于对照周计划。
-- 若实际目录不同，以仓库现状为准，可在此文件同步更新。
-- 新增模块尽量按功能归类，避免在顶层堆积零散文件。
+- The layout above is a recommended placement guide and mixes implemented and planned work.
+- If the live repository layout differs, treat the repository state as the source of truth and update this file when needed.
+- Keep new modules grouped by responsibility instead of adding unrelated files at the repository root.
 
-## 交互约束
+## Interaction Constraints
 
-- 对话回复一律中文。
-- 提交记录（commit message）使用英文。
-- 严格禁止使用 `--no-verify` 跳过 `pre-commit` 或 `pre-push`。
-- 如果 hook 失败，必须修复问题或明确说明阻塞原因，不得绕过本地校验。
+- Match the user's language for interactive discussion.
+- Use English for commit messages.
+- Do not use `--no-verify` to bypass `pre-commit` or `pre-push`.
+- If a hook fails, fix the issue or report the blocker instead of bypassing validation.

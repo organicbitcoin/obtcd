@@ -3998,7 +3998,6 @@ func validateFeeRate(feeSats btcutil.Amount, txSize int64,
 	}, true
 }
 
-// OBTC-only: ExpiryIndex RPCs.
 // handleListExpiring implements the listexpiring command.
 func handleListExpiring(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	c := cmd.(*btcjson.ListExpiringCmd)
@@ -4178,7 +4177,6 @@ func parseOutPointCursor(cursor string) (*wire.OutPoint, error) {
 	}, nil
 }
 
-// OBTC-only: ExpiryIndex RPCs.
 // handleGetExpiryIndexStats implements the getexpiryindexstats command.
 func handleGetExpiryIndexStats(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	// Check if the expiry index is available
@@ -4219,7 +4217,6 @@ func handleGetExpiryIndexStats(s *rpcServer, cmd interface{}, closeChan <-chan s
 	return result, nil
 }
 
-// OBTC-only: REAP dry-run observability RPC.
 // handleGetReapPlan implements the getreapplan command.
 // It performs a read-only dry-run of REAP candidate selection for the next
 // block without broadcasting or committing any transaction.
@@ -4241,7 +4238,6 @@ func handleGetReapPlan(s *rpcServer, cmd interface{}, closeChan <-chan struct{})
 		}, nil
 	}
 
-	// OBTC chain params must be set.
 	if s.cfg.ChainParams == nil || !chaincfg.IsOBTC(s.cfg.ChainParams) {
 		return &btcjson.GetReapPlanResult{
 			Height:  nextHeight,
@@ -4379,7 +4375,6 @@ func handleGetReapPlan(s *rpcServer, cmd interface{}, closeChan <-chan struct{})
 	}, nil
 }
 
-// OBTC-only: Expiry commitment observability RPC.
 // handleGetExpiryCommitment implements the getexpirycommitment command.
 func handleGetExpiryCommitment(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	_ = cmd.(*btcjson.GetExpiryCommitmentCmd) // no parameters

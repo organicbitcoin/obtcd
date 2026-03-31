@@ -1005,10 +1005,10 @@ func parseBlockListCount(raw string) (int, error) {
 
 	count, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil {
-		return 0, fmt.Errorf("区块数量必须是 1 到 50 之间的整数")
+		return 0, fmt.Errorf("block count must be an integer between 1 and 50")
 	}
 	if count < 1 || count > 50 {
-		return 0, fmt.Errorf("区块数量必须在 1 到 50 之间")
+		return 0, fmt.Errorf("block count must be between 1 and 50")
 	}
 	return count, nil
 }
@@ -1288,32 +1288,32 @@ func devnetTrafficModeOptions() []devnetSelectOption {
 		{
 			Value:       "simple",
 			Label:       "simple",
-			Description: "最直接的普通转账流量，交易形态简单，适合快速堆数量和做基础冒烟验证。",
+			Description: "Straightforward payment traffic for quick volume buildup and basic smoke testing.",
 		},
 		{
 			Value:       "mixed",
 			Label:       "mixed",
-			Description: "混合几种常见交易形态，既有普通转账也有更复杂的花费路径，更接近日常网络流量。",
+			Description: "A mix of common transaction shapes, combining simple payments with more complex spend paths.",
 		},
 		{
 			Value:       "chain",
 			Label:       "chain",
-			Description: "故意构造父子依赖链，适合观察未确认依赖、打包顺序和祖先关系。",
+			Description: "Creates parent-child dependency chains to observe unconfirmed dependencies, package order, and ancestor relationships.",
 		},
 		{
 			Value:       "consolidate",
 			Label:       "consolidate",
-			Description: "把很多零散 UTXO 归集成较少输出，适合模拟钱包整理零钱和大输入交易。",
+			Description: "Consolidates many small UTXOs into fewer outputs, simulating wallet cleanup and large-input transactions.",
 		},
 		{
 			Value:       "feemarket",
 			Label:       "feemarket",
-			Description: "制造不同手续费层次的交易，适合模拟拥堵下的费率竞争和矿工筛选。",
+			Description: "Generates transactions across multiple fee tiers to simulate congestion pricing and miner selection.",
 		},
 		{
 			Value:       "conflict",
 			Label:       "conflict",
-			Description: "故意注入互相冲突的交易，适合观察节点拒绝、冲突传播和双花类行为。",
+			Description: "Injects conflicting transactions to observe node rejection, conflict relay, and double-spend-like behavior.",
 		},
 	}
 }
@@ -1373,7 +1373,7 @@ func devnetActionButtons() []devnetActionButton {
 }
 
 var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="{{.RefreshSeconds}}">
@@ -1692,17 +1692,17 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
     <div class="hero-top">
       <div>
         <h1>OBTC Devnet Dashboard</h1>
-        <p class="meta">本地 Devnet 驾驶舱，自动聚合每个节点的链状态、mempool 和 OBTC 专有状态。</p>
+        <p class="meta">Local devnet control panel aggregating chain status, mempool state, and OBTC-specific signals for each node.</p>
       </div>
       <div class="status {{if .Snapshot.Summary.Synced}}good{{else}}bad{{end}}">
         {{if .Snapshot.Summary.Synced}}Synced{{else}}Attention{{end}}
       </div>
     </div>
 	    <div>
-	      <a class="toolbar-link" href="/blocks?view=raw">打开区块列表页</a>
-	      <a class="toolbar-link" href="/block?view=raw">打开单块查看器</a>
-	      <a class="toolbar-link" href="/reap">打开 REAP 观察页</a>
-	      <a class="toolbar-link" href="/expiryindex">打开 ExpiryIndex 排序页</a>
+	      <a class="toolbar-link" href="/blocks?view=raw">Open Block List</a>
+	      <a class="toolbar-link" href="/block?view=raw">Open Block Viewer</a>
+	      <a class="toolbar-link" href="/reap">Open REAP Monitor</a>
+	      <a class="toolbar-link" href="/expiryindex">Open ExpiryIndex Ordering</a>
 	    </div>
     <div class="kpis">
       <div class="kpi">
@@ -1728,8 +1728,8 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
     <div class="panel">
       <div class="control-stack">
 	        <div>
-	          <h2>常用动作</h2>
-	          <p class="meta">按钮只对本机回环地址开放，会调用本地 <code>scripts/devnet-up.sh</code>。</p>
+	          <h2>Common Actions</h2>
+	          <p class="meta">Buttons are limited to loopback clients and invoke the local <code>scripts/devnet-up.sh</code> helper.</p>
 	          <div class="actions">
             {{range .Actions}}
             <form class="action-form" method="post" action="/action">
@@ -1743,27 +1743,27 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
 	        <form class="custom-form" method="post" action="/action">
 	          <input type="hidden" name="action" value="mine-custom">
 	          <div>
-	            <h3>挖块</h3>
-	            <p class="meta">默认快捷按钮还是 <code>Mine 1</code>，这里可以一次性挖多个区块。</p>
+	            <h3>Mine Blocks</h3>
+	            <p class="meta">The default quick action remains <code>Mine 1</code>; use this form to mine multiple blocks at once.</p>
 	          </div>
 	          <div class="field-grid">
 	            <label>
-	              区块数量
+	              Block Count
 	              <input type="number" name="blocks" min="1" max="10000" value="{{.MineDefaults.Blocks}}">
 	            </label>
 	          </div>
-	          <button type="submit">开始挖块</button>
+	          <button type="submit">Start Mining</button>
 	        </form>
 
 	        <form class="custom-form" method="post" action="/action">
 	          <input type="hidden" name="action" value="spam-custom">
 	          <div>
-            <h3>流量注入</h3>
-            <p class="meta">直接从 Web 发起 <code>spam</code> / <code>spam-peer</code>。基础参数放在上面，高级随机化和预热参数收在下面。</p>
+            <h3>Traffic Injection</h3>
+            <p class="meta">Start <code>spam</code> or <code>spam-peer</code> directly from the web UI. Keep the basic parameters above and the advanced randomization and preparation controls below.</p>
           </div>
 	          <div class="field-grid">
             <label>
-              目标钱包
+              Target Wallet
               <select name="target">
                 {{range .TrafficTargets}}
                 <option value="{{.Value}}" {{if eq $.SpamDefaults.Target .Value}}selected{{end}}>{{.Label}}</option>
@@ -1771,7 +1771,7 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
               </select>
             </label>
             <label>
-              模式
+              Mode
               <select name="mode">
                 {{range .TrafficModes}}
                 <option value="{{.Value}}" {{if eq $.SpamDefaults.Mode .Value}}selected{{end}}>{{.Label}}</option>
@@ -1779,16 +1779,16 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
               </select>
             </label>
             <label>
-              交易数量
+              Transaction Count
               <input type="number" name="count" min="1" value="{{.SpamDefaults.Count}}">
             </label>
             <label>
-              基础金额
+              Base Value
               <input type="number" name="value" min="1" value="{{.SpamDefaults.Value}}">
 	            </label>
 	          </div>
 	          <div class="mode-help">
-	            <p class="meta">模式说明</p>
+	            <p class="meta">Mode Guide</p>
 	            <ul class="mode-list">
 	              {{range .TrafficModes}}
 	              <li>
@@ -1799,7 +1799,7 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
 	            </ul>
 	          </div>
 	          <details>
-	            <summary>高级选项</summary>
+	            <summary>Advanced Options</summary>
             <div class="advanced-grid">
               <label>
                 Fee Rate
@@ -1819,11 +1819,11 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
               </label>
               <label>
                 Value Min
-                <input type="number" name="value_min" min="1" value="{{if gt .SpamDefaults.ValueMin 0}}{{.SpamDefaults.ValueMin}}{{end}}" placeholder="可选">
+                <input type="number" name="value_min" min="1" value="{{if gt .SpamDefaults.ValueMin 0}}{{.SpamDefaults.ValueMin}}{{end}}" placeholder="optional">
               </label>
               <label>
                 Value Max
-                <input type="number" name="value_max" min="1" value="{{if gt .SpamDefaults.ValueMax 0}}{{.SpamDefaults.ValueMax}}{{end}}" placeholder="可选">
+                <input type="number" name="value_max" min="1" value="{{if gt .SpamDefaults.ValueMax 0}}{{.SpamDefaults.ValueMax}}{{end}}" placeholder="optional">
               </label>
               <label>
                 Rand Seed
@@ -1832,10 +1832,10 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
             </div>
             <label class="checkbox-line">
               <input type="checkbox" name="randomize_inputs" value="true">
-              随机选择可花输入
+              Randomize spendable inputs
             </label>
           </details>
-          <button type="submit">开始注入流量</button>
+          <button type="submit">Start Traffic</button>
         </form>
 
         {{if .Snapshot.Warnings}}
@@ -1847,18 +1847,18 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
     </div>
 
     <div class="panel last-action">
-      <h2>最近一次动作</h2>
+      <h2>Latest Action</h2>
       {{if .Snapshot.LastAction}}
       <p class="meta">
-        {{.Snapshot.LastAction.At}} · {{.Snapshot.LastAction.Action}} ·
-        {{if .Snapshot.LastAction.Success}}成功{{else}}失败{{end}}
+        {{.Snapshot.LastAction.At}} | {{.Snapshot.LastAction.Action}} |
+        {{if .Snapshot.LastAction.Success}}succeeded{{else}}failed{{end}}
       </p>
       {{if .Snapshot.LastAction.Error}}
-      <p class="meta">错误：{{.Snapshot.LastAction.Error}}</p>
+      <p class="meta">Error: {{.Snapshot.LastAction.Error}}</p>
       {{end}}
       <pre>{{.Snapshot.LastAction.Output}}</pre>
       {{else}}
-      <p class="meta">还没有执行过 Dashboard 动作。启动 Devnet 后，这里会保留最近一次命令结果。</p>
+      <p class="meta">No dashboard action has been run yet. After devnet starts, the latest command result appears here.</p>
       {{end}}
     </div>
   </section>
@@ -1892,11 +1892,11 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
         {{end}}
       </div>
 	      <div class="node-actions">
-	        <a class="node-link" href="/blocks?node={{.Node.Name}}&view=raw">浏览区块列表</a>
-	        <a class="node-link" href="/block?node={{.Node.Name}}&view=raw">查看最新区块 JSON</a>
-	        <a class="node-link" href="/reap?node={{.Node.Name}}">查看 REAP 明细</a>
-	        <a class="node-link" href="/expiryindex?node={{.Node.Name}}">查看 ExpiryIndex 排序</a>
-	        {{if .Healthy}}<a class="node-link" href="/block?node={{.Node.Name}}&hash={{.Snapshot.Chain.BestBlockHash}}&view=raw">查看当前 best block</a>{{end}}
+	        <a class="node-link" href="/blocks?node={{.Node.Name}}&view=raw">Browse Block List</a>
+	        <a class="node-link" href="/block?node={{.Node.Name}}&view=raw">View Latest Block JSON</a>
+	        <a class="node-link" href="/reap?node={{.Node.Name}}">View REAP Details</a>
+	        <a class="node-link" href="/expiryindex?node={{.Node.Name}}">View ExpiryIndex Ordering</a>
+	        {{if .Healthy}}<a class="node-link" href="/block?node={{.Node.Name}}&hash={{.Snapshot.Chain.BestBlockHash}}&view=raw">View Current Best Block</a>{{end}}
 	      </div>
     </article>
     {{end}}
@@ -1906,7 +1906,7 @@ var devnetTemplate = template.Must(template.New("devnet").Parse(`<!doctype html>
 </html>`))
 
 var devnetBlocksTemplate = template.Must(template.New("devnet-blocks").Parse(`<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>OBTC Block List</title>
@@ -2089,18 +2089,18 @@ var devnetBlocksTemplate = template.Must(template.New("devnet-blocks").Parse(`<!
   <section class="panel">
     <div class="topbar">
       <div>
-        <h1>区块列表页</h1>
-        <p class="meta">选择一个节点后，页面会列出最近的一段区块。每条记录都会显示高度和 hash，点开即可查看完整 pretty JSON；切到 Raw 时，不会带上 <code>nextblockhash</code> 这类派生字段。</p>
+        <h1>Block List</h1>
+        <p class="meta">Choose a node to list recent blocks. Each entry shows the height and hash and expands to the full pretty JSON. Raw mode omits derived fields such as <code>nextblockhash</code>.</p>
       </div>
       <div class="links">
-        <a class="link" href="/">返回 Dashboard</a>
-        <a class="link" href="/block?view={{.ViewMode}}">打开单块查看器</a>
+        <a class="link" href="/">Back to Dashboard</a>
+        <a class="link" href="/block?view={{.ViewMode}}">Open Block Viewer</a>
       </div>
     </div>
 
     <form method="get" action="/blocks">
       <label>
-        节点
+        Node
         <select name="node">
           {{range .Nodes}}
           <option value="{{.Name}}" {{if eq $.SelectedNode .Name}}selected{{end}}>{{.Name}} ({{.Role}})</option>
@@ -2108,22 +2108,22 @@ var devnetBlocksTemplate = template.Must(template.New("devnet-blocks").Parse(`<!
         </select>
       </label>
       <label>
-        区块数量
-        <input type="text" name="count" value="{{if .CountValue}}{{.CountValue}}{{else}}{{.Count}}{{end}}" placeholder="默认 20，最大 50">
+        Block Count
+        <input type="text" name="count" value="{{if .CountValue}}{{.CountValue}}{{else}}{{.Count}}{{end}}" placeholder="default 20, max 50">
       </label>
       <label>
-        视图
+        View
         <select name="view">
           {{range .ViewModes}}
           <option value="{{.Value}}" {{if eq $.ViewMode .Value}}selected{{end}}>{{.Label}}</option>
           {{end}}
         </select>
       </label>
-      <button type="submit">加载区块列表</button>
+      <button type="submit">Load Block List</button>
     </form>
 
     {{if .CountError}}
-    <p class="error">参数错误：{{.CountError}}</p>
+    <p class="error">Invalid parameter: {{.CountError}}</p>
     {{end}}
 
     {{if .Warnings}}
@@ -2136,10 +2136,10 @@ var devnetBlocksTemplate = template.Must(template.New("devnet-blocks").Parse(`<!
   <section class="panel">
     {{if .Result}}
       {{if .Result.Error}}
-      <p class="error">查询失败：{{.Result.Error}}</p>
+      <p class="error">Query failed: {{.Result.Error}}</p>
       {{else}}
-      <h2>{{.Result.Node.Name}} · 最近 {{.Result.Count}} 个区块</h2>
-      <p class="meta">点击任意一项即可展开该区块的完整 JSON。当前视图：<code>{{.ViewMode}}</code></p>
+      <h2>{{.Result.Node.Name}} | Latest {{.Result.Count}} Blocks</h2>
+      <p class="meta">Open any entry to expand the full block JSON. Current view: <code>{{.ViewMode}}</code></p>
       <div class="block-list">
         {{range $idx, $block := .Result.Blocks}}
         <details {{if eq $idx 0}}open{{end}}>
@@ -2157,7 +2157,7 @@ var devnetBlocksTemplate = template.Must(template.New("devnet-blocks").Parse(`<!
       </div>
       {{end}}
     {{else}}
-    <p class="meta">选择节点并加载后，这里会显示区块列表。</p>
+    <p class="meta">The block list appears here after you select a node and load data.</p>
     {{end}}
   </section>
 </main>
@@ -2165,7 +2165,7 @@ var devnetBlocksTemplate = template.Must(template.New("devnet-blocks").Parse(`<!
 </html>`))
 
 var devnetBlockTemplate = template.Must(template.New("devnet-block").Parse(`<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>OBTC Block Viewer</title>
@@ -2280,15 +2280,15 @@ var devnetBlockTemplate = template.Must(template.New("devnet-block").Parse(`<!do
   <section class="panel">
     <div class="topbar">
       <div>
-        <h1>区块查看器</h1>
-        <p class="meta">按节点查看最新区块，或者输入区块高度 / 区块 hash。切到 Raw 时，会展示更接近底层块字节解码出来的 JSON。</p>
+        <h1>Block Viewer</h1>
+        <p class="meta">View the latest block by node, or enter a block height or block hash. Raw mode shows JSON closer to the low-level block-byte decode.</p>
       </div>
-      <a class="back-link" href="/">返回 Dashboard</a>
+      <a class="back-link" href="/">Back to Dashboard</a>
     </div>
 
     <form method="get" action="/block">
       <label>
-        节点
+        Node
         <select name="node">
           {{range .Nodes}}
           <option value="{{.Name}}" {{if eq $.SelectedNode .Name}}selected{{end}}>{{.Name}} ({{.Role}})</option>
@@ -2296,22 +2296,22 @@ var devnetBlockTemplate = template.Must(template.New("devnet-block").Parse(`<!do
         </select>
       </label>
       <label>
-        区块高度
-        <input type="text" name="height" value="{{.Height}}" placeholder="留空则使用最新区块">
+        Block Height
+        <input type="text" name="height" value="{{.Height}}" placeholder="leave empty to use the latest block">
       </label>
       <label>
-        区块 Hash
-        <input type="text" name="hash" value="{{.Hash}}" placeholder="优先级高于高度">
+        Block Hash
+        <input type="text" name="hash" value="{{.Hash}}" placeholder="takes precedence over height">
       </label>
       <label>
-        视图
+        View
         <select name="view">
           {{range .ViewModes}}
           <option value="{{.Value}}" {{if eq $.ViewMode .Value}}selected{{end}}>{{.Label}}</option>
           {{end}}
         </select>
       </label>
-      <button type="submit">查看区块 JSON</button>
+      <button type="submit">View Block JSON</button>
     </form>
 
     {{if .Warnings}}
@@ -2324,14 +2324,14 @@ var devnetBlockTemplate = template.Must(template.New("devnet-block").Parse(`<!do
   <section class="panel">
     {{if .Result}}
       {{if .Result.Error}}
-      <p class="error">查询失败：{{.Result.Error}}</p>
+      <p class="error">Query failed: {{.Result.Error}}</p>
       {{else}}
-      <h2>{{.Result.Node.Name}} · {{.Result.QueryLabel}}</h2>
+      <h2>{{.Result.Node.Name}} | {{.Result.QueryLabel}}</h2>
       <p class="meta">Block Hash: {{.Result.Result.BlockHash}}</p>
       <pre>{{.Result.Result.PrettyJSON}}</pre>
       {{end}}
     {{else}}
-    <p class="meta">选择一个节点并提交后，这里会显示区块的 pretty JSON。</p>
+    <p class="meta">The block JSON appears here after you select a node and submit the form.</p>
     {{end}}
   </section>
 </main>
