@@ -15,7 +15,7 @@ BTCD_BINARY="./btcd"
 BTCCTL_BINARY="./cmd/btcctl/btcctl"
 DEVNETSIM_BINARY="./cmd/devnetsim/devnetsim"
 
-DATA_DIR="$(pwd)/devnet-data"
+DATA_DIR="${DEVNET_DATA_DIR:-$(pwd)/devnet-data}"
 SIMULATOR_DIR="$DATA_DIR/devnetsim"
 PRIMARY_SIMULATOR_STATE="$SIMULATOR_DIR/state.json"
 PEER_SIMULATOR_STATE="$SIMULATOR_DIR/peer-state.json"

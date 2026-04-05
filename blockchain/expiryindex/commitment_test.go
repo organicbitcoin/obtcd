@@ -3,6 +3,7 @@ package expiryindex
 import (
 	"testing"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -155,5 +156,73 @@ func TestCommitmentScriptFormat(t *testing.T) {
 	// Check root.
 	if script[7] != 0xFF {
 		t.Fatalf("root[0]: got 0x%02x, want 0xFF", script[7])
+	}
+}
+
+func TestValidateExpiryCommitmentRejectsMissingAfterActivation(t *testing.T) {
+	idx := &ExpiryIndex{
+		expiryParams: &ExpiryParams{ExpiryCommitmentEnableAtHeight: 10},
+	}
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 50 * btcutil.SatoshiPerBitcoin})
+
+	block := btcutil.NewBlock(&wire.MsgBlock{
+		Transactions: []*wire.MsgTx{msgTx},
+	})
+	block.SetHeight(10)
+
+	var expectedRoot [AccumulatorDigestSize]byte
+	err := idx.validateExpiryCommitment(block, expectedRoot)
+	if err == nil {
+		t.Fatal("expected missing commitment to be rejected after activation")
+	}
+
+	ruleErr, ok := err.(blockchain.RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T", err)
+	}
+	if ruleErr.ErrorCode != blockchain.ErrBadExpiryCommitmentMissing {
+		t.Fatalf("unexpected error code: got %v want %v",
+			ruleErr.ErrorCode, blockchain.ErrBadExpiryCommitmentMissing)
+	}
+}
+
+func TestValidateExpiryCommitmentRejectsMismatchedRootAfterActivation(t *testing.T) {
+	idx := &ExpiryIndex{
+		expiryParams: &ExpiryParams{ExpiryCommitmentEnableAtHeight: 10},
+	}
+
+	var coinbaseRoot [AccumulatorDigestSize]byte
+	coinbaseRoot[0] = 0xAA
+	var expectedRoot [AccumulatorDigestSize]byte
+	expectedRoot[0] = 0xBB
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 50 * btcutil.SatoshiPerBitcoin})
+	msgTx.AddTxOut(&wire.TxOut{
+		Value:    0,
+		PkScript: BuildExpiryCommitmentScript(coinbaseRoot),
+	})
+
+	block := btcutil.NewBlock(&wire.MsgBlock{
+		Transactions: []*wire.MsgTx{msgTx},
+	})
+	block.SetHeight(10)
+
+	err := idx.validateExpiryCommitment(block, expectedRoot)
+	if err == nil {
+		t.Fatal("expected mismatched commitment root to be rejected")
+	}
+
+	ruleErr, ok := err.(blockchain.RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T", err)
+	}
+	if ruleErr.ErrorCode != blockchain.ErrBadExpiryCommitmentMismatch {
+		t.Fatalf("unexpected error code: got %v want %v",
+			ruleErr.ErrorCode, blockchain.ErrBadExpiryCommitmentMismatch)
 	}
 }

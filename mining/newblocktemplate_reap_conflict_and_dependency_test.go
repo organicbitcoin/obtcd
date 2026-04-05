@@ -3,8 +3,10 @@ package mining
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +21,18 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
+
+type staticExpiryCommitmentSource struct {
+	snapshot expiryindex.AccumulatorSnapshot
+	err      error
+}
+
+func (s staticExpiryCommitmentSource) GetAccumulatorSnapshot() (expiryindex.AccumulatorSnapshot, error) {
+	if s.err != nil {
+		return expiryindex.AccumulatorSnapshot{}, s.err
+	}
+	return s.snapshot, nil
+}
 
 func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []int32) *boundaryHarness {
 	t.Helper()
@@ -852,6 +866,62 @@ func TestNewBlockTemplateWitnessIncludesCommitment(t *testing.T) {
 	}
 	if len(tmpl.WitnessCommitment) == 0 {
 		t.Fatalf("expected witness commitment to be present when witness tx is seen during assembly")
+	}
+}
+
+func TestNewBlockTemplateExpiryCommitmentRequiresSynchronizedSnapshot(t *testing.T) {
+	h := setupBoundaryHarnessAtHeight(t, 220, []int32{100})
+	defer h.cleanup()
+
+	best := h.chain.BestSnapshot()
+	h.generator.reapIndex = nil
+	h.generator.SetExpiryCommitmentSource(staticExpiryCommitmentSource{
+		snapshot: expiryindex.AccumulatorSnapshot{
+			TipHeight: best.Height - 1,
+			TipHash:   best.Hash,
+		},
+	})
+
+	_, err := h.generator.NewBlockTemplate(nil)
+	if err == nil {
+		t.Fatal("expected template generation to fail when expiry snapshot tip is out of sync")
+	}
+	if !strings.Contains(err.Error(), "expiry accumulator snapshot out of sync") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewBlockTemplateExpiryCommitmentRequiresStateSourceAfterActivation(t *testing.T) {
+	h := setupBoundaryHarnessAtHeight(t, 220, []int32{100})
+	defer h.cleanup()
+
+	h.generator.reapIndex = nil
+	h.generator.SetExpiryCommitmentSource(nil)
+
+	_, err := h.generator.NewBlockTemplate(nil)
+	if err == nil {
+		t.Fatal("expected template generation to fail without expiry commitment state source")
+	}
+	if !strings.Contains(err.Error(), "expiry commitment state source is unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewBlockTemplateExpiryCommitmentPropagatesSnapshotError(t *testing.T) {
+	h := setupBoundaryHarnessAtHeight(t, 220, []int32{100})
+	defer h.cleanup()
+
+	h.generator.reapIndex = nil
+	h.generator.SetExpiryCommitmentSource(staticExpiryCommitmentSource{
+		err: errors.New("boom"),
+	})
+
+	_, err := h.generator.NewBlockTemplate(nil)
+	if err == nil {
+		t.Fatal("expected template generation to fail when snapshot read fails")
+	}
+	if !strings.Contains(err.Error(), "failed to get expiry accumulator snapshot") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

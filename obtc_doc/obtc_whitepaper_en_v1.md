@@ -166,9 +166,9 @@ The key points are:
 
 | Network | Fork Height | Expiry Index Start | Expiry Enable | REAP Hardening | Replay Protection |
 |---|---:|---:|---:|---:|---:|
-| Mainnet | 950000 | 950000 | 1050000 | 1060000 | 1065000 |
-| Testnet | 2800000 | 2800000 | 2800100 | 2800120 | 2800130 |
-| Regtest | 100 | 100 | 110 | 112 | 114 |
+| Mainnet | 950000 | 0 | 1050000 | 1060000 | 1065000 |
+| Testnet | 2800000 | 0 | 2800100 | 2800120 | 2800130 |
+| Regtest | 100 | 0 | 110 | 112 | 114 |
 
 Explanation:
 
