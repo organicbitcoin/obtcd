@@ -18,7 +18,7 @@ import (
 //
 // 1. bktExpiryMeta: Stores index metadata (version, tip height, etc.)
 // 2. bktOutpoint2Expiry: Maps OutPoint -> ExpiryKey for fast deletion
-// 3. bktExpiry2Outpoints: Maps ExpiryKey -> []OutPoint for scanning
+// 3. bktExpiry2Outpoints: Stores ordered composite keys for scanning
 var (
 	// bktExpiryMeta stores metadata about the index state
 	// Keys: keyTipHeightIndexed, keyIndexVersion
@@ -28,8 +28,9 @@ var (
 	// This enables fast lookup when UTXOs are spent or renewed
 	bktOutpoint2Expiry = []byte("outpoint-to-expiry")
 
-	// bktExpiry2Outpoints maps expiry key (8 bytes) -> compressed outpoint list
-	// This enables efficient scanning of UTXOs by expiry order
+	// bktExpiry2Outpoints stores one ordered composite-key entry per indexed
+	// UTXO: expiry key (8 bytes) || ordered outpoint (36 bytes) -> empty.
+	// This enables efficient scanning of UTXOs by expiry order.
 	bktExpiry2Outpoints = []byte("expiry-to-outpoints")
 )
 
@@ -54,11 +55,7 @@ var (
 const (
 	// CurrentIndexVersion tracks the current index format version
 	// Increment this when making breaking changes to the index format
-	CurrentIndexVersion = 3
-
-	// MaxOutpointsPerKey limits the size of outpoint lists to prevent
-	// unbounded memory usage for keys with many UTXOs
-	MaxOutpointsPerKey = 10000
+	CurrentIndexVersion = 4
 
 	// DefaultBatchSize is the default number of entries to process in a single
 	// database transaction to balance memory usage and transaction overhead

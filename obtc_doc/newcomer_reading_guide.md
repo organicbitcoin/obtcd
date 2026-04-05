@@ -315,7 +315,7 @@ blockchain/expiryindex/
 ├── commitment_test.go      # commitment 脚本测试
 ├── database_test.go        # 数据库集成测试
 ├── encode_test.go          # 编码单元测试
-├── encode_extra_test.go    # 编码边界测试
+├── pressure_theoretical_max_test.go # 理论上限压力测试（env-gated）
 ├── expiryindex_test.go     # 核心索引测试
 ├── helpers_extra_test.go   # 辅助函数测试
 ├── muhash_test.go          # MuHash 向量/性质测试
@@ -375,14 +375,16 @@ ExpiryIndex 在数据库中维护两层状态：
   例如: {txid:abc..., vout:0} → 468880
 
 反向映射（用于按到期顺序扫描）：
-  bktExpiry2Outpoints: ExpiryKey(8字节) → [OutPoint列表]
+  bktExpiry2Outpoints: (ExpiryKey(8字节) || OrderedOutPoint(36字节)) → empty
 
-  例如: 468880 → [{txid:abc...,vout:0}, {txid:def...,vout:1}, ...]
+  例如:
+  468880 || ordered({txid:abc...,vout:0}) → ∅
+  468880 || ordered({txid:def...,vout:1}) → ∅
 ```
 
 **为什么需要双向映射**？
-- 当一个 UTXO 被花费时，需要从索引中删除它。此时只知道 OutPoint，需要正向映射找到它的 ExpiryKey，然后从反向映射中移除。
-- 当矿工构建 REAP 交易时，需要找到所有"在某个高度范围内到期"的 UTXO。此时用反向映射按 ExpiryKey 范围扫描。
+- 当一个 UTXO 被花费时，需要从索引中删除它。此时只知道 OutPoint，需要正向映射找到它的 ExpiryKey，然后删除对应的复合键。
+- 当矿工构建 REAP 交易时，需要找到所有"在某个高度范围内到期"的 UTXO。此时直接对复合键做 ExpiryKey 前缀扫描。
 
 MuHash accumulator 承诺的是语义集合：
 
@@ -443,8 +445,11 @@ func (idx *ExpiryIndex) connectTxOut(dbTx, outpoint, createHeight) error {
     expiryKey := createHeight + WindowBlocks   // 计算到期高度
     // 正向映射：存储 outpoint → expiryKey
     bktOutpoint2Expiry.Put(encodeOutPoint(outpoint), encodeExpiryKey(expiryKey))
-    // 反向映射：将 outpoint 追加到 expiryKey 的列表中
-    appendOutPointToList(bktExpiry2Outpoints, expiryKey, outpoint)
+    // 反向扫描索引：存储一条复合键 entry
+    bktExpiry2Outpoints.Put(
+        encodeExpiryOutpointCompositeKey(expiryKey, outpoint),
+        empty,
+    )
 }
 ```
 
@@ -490,8 +495,9 @@ ExpiryKey=300: [utxo_f, utxo_g, utxo_h, ...] ← 第三级阶梯
 3. 依此类推
 
 **关键实现细节**：
-- 使用 `findOutPointStartIndex()` 做二分查找，定位"上一页最后一项"在当前 ExpiryKey 列表中的位置
-- `compareOutPoint()` 比较两个 OutPoint：先按 Hash 字典序，再按 Index 数值
+- `startAfter` 不再需要在某个 ExpiryKey 的 value 列表里做二分查找，而是直接 seek 到 `(fromKey, startAfter)` 这条复合键
+- 如果 seek 命中了精确键，就先 `Next()` 一次，再继续顺序扫描
+- `OrderedOutPoint` 的编码顺序必须和 `compareOutPoint()` 的排序语义完全一致
 
 #### 5.2.7 索引重建策略（smartRebuild）
 
@@ -565,18 +571,24 @@ OP_RETURN OP_DATA_37 <TAG(4B)="OEXP"> <VERSION(1B)> <ROOT(32B)>
 
 **为什么用大端序**？因为数据库（bbolt）按键的字节序排序。大端序保证数值小的 ExpiryKey 排在前面，从而实现**自然有序扫描**——直接遍历数据库键就是按到期时间从早到晚。
 
-#### OutPointList 编码（变长）
+#### OrderedOutPoint 编码（固定 36 字节）
 ```
-[0:4]    列表长度 N，4 字节小端序
-[4:40]   第一个 OutPoint（36 字节）
-[40:76]  第二个 OutPoint（36 字节）
-...
+[0:32]   交易哈希（TxID），32 字节，反转后的 hash bytes
+[32:36]  输出索引（Vout），4 字节，大端序（Big-Endian）
 ```
-列表中的 OutPoint 按字典序排列，保证编码的确定性。
+
+这样做的目的，是让数据库里复合键的字节序，严格等价于 `compareOutPoint()` / `Hash.String()` 的排序语义。
+
+#### CompositeKey 编码（固定 44 字节）
+```
+[0:8]    ExpiryKey，8 字节大端序
+[8:44]   OrderedOutPoint，36 字节
+```
 
 **关键函数**：
-- `appendOutPointToList()` —— 追加新 OutPoint 到已编码的列表，自动去重
-- `removeOutPointFromList()` —— 从列表中删除指定 OutPoint，列表为空时返回 nil
+- `encodeOrderedOutPoint()` —— 按扫描排序语义编码 OutPoint
+- `encodeExpiryOutpointCompositeKey()` —— 生成 `ExpiryKey || OrderedOutPoint`
+- `decodeExpiryOutpointCompositeKey()` —— 从复合键恢复 `(expiryKey, outpoint)`
 
 ### 5.4 文件：`buckets.go`
 
@@ -591,16 +603,15 @@ bktExpiry2Outpoints  = "expiry-to-outpoints"  // 反向映射
 元数据键：
 ```go
 keyTipHeightIndexed = "tip-height"  // 已索引到的最高块高度
-keyIndexVersion     = "version"     // 索引版本号（当前为 2）
+keyIndexVersion     = "version"     // 索引版本号（当前为 4）
 keyAccumulatorState = "accumulator-state"
 keyAccumulatorTipHash = "accumulator-tip-hash"
 ```
 
 重要常量：
 ```go
-CurrentIndexVersion = 2
-MaxOutpointsPerKey = 10000   // 单个 ExpiryKey 下最多存多少个 OutPoint
-DefaultBatchSize   = 1000    // 默认事务批处理大小
+CurrentIndexVersion = 4
+DefaultBatchSize    = 1000   // fast rebuild 的默认批处理大小
 ```
 
 `keyAccumulatorTipHash` 的意义很实际：矿工生成模板时不能只拿一个 root，还必须知道这个 root 对应的是**哪一个 tip**。所以现在导出的快照是：
@@ -1548,7 +1559,7 @@ chmod +x .githooks/pre-commit .githooks/pre-push scripts/ci-validate.sh
 | `expiryindex_test.go` | ConnectBlock/DisconnectBlock、基本 CRUD |
 | `buckets_test.go` | 桶操作、元数据读写 |
 | `encode_test.go` | 编码/解码正确性 |
-| `encode_extra_test.go` | 编码边界条件 |
+| `pressure_theoretical_max_test.go` | 单 expiryKey 最坏场景压力边界 |
 | `database_test.go` | 数据库集成 |
 | `muhash_test.go` | MuHash3072 基本性质 |
 | `rebuild_test.go` | 重建策略（smart/fast/incremental）+ live/rebuild accumulator 一致性 |

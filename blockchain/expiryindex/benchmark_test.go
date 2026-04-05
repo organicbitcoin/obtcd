@@ -65,31 +65,53 @@ func BenchmarkExpiryKeyEncoding(b *testing.B) {
 	})
 }
 
-// BenchmarkOutPointListEncoding benchmarks OutPointList encoding/decoding
-func BenchmarkOutPointListEncoding(b *testing.B) {
-	// Create test outpoints
-	var outpoints []*wire.OutPoint
-	for i := 0; i < 100; i++ {
-		hash := chainhash.Hash{}
-		rand.Read(hash[:])
-		outpoints = append(outpoints, &wire.OutPoint{
-			Hash:  hash,
-			Index: uint32(i),
-		})
+// BenchmarkOrderedOutPointEncoding benchmarks ordered OutPoint encoding/decoding.
+func BenchmarkOrderedOutPointEncoding(b *testing.B) {
+	hash := chainhash.Hash{}
+	rand.Read(hash[:])
+	outpoint := &wire.OutPoint{
+		Hash:  hash,
+		Index: 12345,
 	}
 
 	b.ResetTimer()
 
 	b.Run("Encode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = encodeOutPointList(outpoints)
+			_ = encodeOrderedOutPoint(outpoint)
 		}
 	})
 
-	encoded := encodeOutPointList(outpoints)
+	encoded := encodeOrderedOutPoint(outpoint)
 	b.Run("Decode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = decodeOutPointList(encoded)
+			_, _ = decodeOrderedOutPoint(encoded)
+		}
+	})
+}
+
+// BenchmarkExpiryCompositeKeyEncoding benchmarks composite key encoding/decoding.
+func BenchmarkExpiryCompositeKeyEncoding(b *testing.B) {
+	hash := chainhash.Hash{}
+	rand.Read(hash[:])
+	outpoint := &wire.OutPoint{
+		Hash:  hash,
+		Index: 12345,
+	}
+	expiryKey := uint64(1000000)
+
+	b.ResetTimer()
+
+	b.Run("Encode", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_ = encodeExpiryOutpointCompositeKey(expiryKey, outpoint)
+		}
+	})
+
+	encoded := encodeExpiryOutpointCompositeKey(expiryKey, outpoint)
+	b.Run("Decode", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, _, _ = decodeExpiryOutpointCompositeKey(encoded)
 		}
 	})
 }

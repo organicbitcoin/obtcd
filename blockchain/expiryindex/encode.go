@@ -7,188 +7,131 @@ package expiryindex
 import (
 	"encoding/binary"
 	"fmt"
-	"sort"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
-// Key and value encoding functions for the expiry index
+// Key and value encoding functions for the expiry index.
 //
 // This file provides deterministic encoding and decoding functions for:
 // 1. OutPoint serialization (36 bytes: 32-byte hash + 4-byte index)
-// 2. ExpiryKey encoding (8 bytes big-endian for natural sorting)
-// 3. OutPointList compression (variable length with deterministic ordering)
-//
-// All encodings are designed to be:
-// - Deterministic: Same input always produces same output
-// - Sortable: Keys sort in logical order (expiry time ascending)
-// - Compact: Minimal space usage for efficient storage
-// - Cross-platform: Fixed endianness for consistency
+// 2. Ordered OutPoint serialization for lexicographic scans
+// 3. ExpiryKey encoding (8 bytes big-endian for natural sorting)
+// 4. Composite key encoding: ExpiryKey || OrderedOutPoint
 
-// OutPoint encoding format:
-// [0:32]  - Transaction hash (32 bytes, preserved as-is from chainhash.Hash)
-// [32:36] - Output index (4 bytes, little-endian uint32)
-//
-// Total: 36 bytes per OutPoint
+const (
+	outPointEncodedSize            = chainhash.HashSize + 4
+	expiryKeyEncodedSize           = 8
+	orderedOutPointEncodedSize     = chainhash.HashSize + 4
+	expiryOutpointCompositeKeySize = expiryKeyEncodedSize + orderedOutPointEncodedSize
+)
+
+var emptyIndexValue = []byte{}
+
+// encodeOutPoint serializes an outpoint as 32 raw hash bytes followed by the
+// vout index encoded as little-endian.
 func encodeOutPoint(op *wire.OutPoint) []byte {
-	encoded := make([]byte, 36)
-	copy(encoded[0:32], op.Hash[:])
-	binary.LittleEndian.PutUint32(encoded[32:36], op.Index)
+	encoded := make([]byte, outPointEncodedSize)
+	copy(encoded[:chainhash.HashSize], op.Hash[:])
+	binary.LittleEndian.PutUint32(encoded[chainhash.HashSize:], op.Index)
 	return encoded
 }
 
-// decodeOutPoint reconstructs an OutPoint from its 36-byte encoding
+// decodeOutPoint reconstructs an OutPoint from its 36-byte encoding.
 func decodeOutPoint(encoded []byte) (*wire.OutPoint, error) {
-	if len(encoded) != 36 {
-		return nil, fmt.Errorf("invalid outpoint encoding length: got %d, expected 36", len(encoded))
+	if len(encoded) != outPointEncodedSize {
+		return nil, fmt.Errorf("invalid outpoint encoding length: got %d, expected %d",
+			len(encoded), outPointEncodedSize)
 	}
 
 	var hash chainhash.Hash
-	copy(hash[:], encoded[0:32])
-	index := binary.LittleEndian.Uint32(encoded[32:36])
+	copy(hash[:], encoded[:chainhash.HashSize])
 
-	return &wire.OutPoint{Hash: hash, Index: index}, nil
+	return &wire.OutPoint{
+		Hash:  hash,
+		Index: binary.LittleEndian.Uint32(encoded[chainhash.HashSize:]),
+	}, nil
 }
 
-// ExpiryKey encoding format:
-// 8 bytes, big-endian uint64
-//
-// Big-endian encoding ensures that keys sort in natural expiry order:
-// - For height mode: earlier heights < later heights
-// - For time mode: earlier timestamps < later timestamps
-//
-// This natural sorting is critical for efficient range scans.
+// encodeOrderedOutPoint serializes an outpoint so lexicographic byte order
+// matches compareOutPoint / chainhash.Hash.String() ordering.
+func encodeOrderedOutPoint(op *wire.OutPoint) []byte {
+	encoded := make([]byte, orderedOutPointEncodedSize)
+	for i := 0; i < chainhash.HashSize; i++ {
+		encoded[i] = op.Hash[chainhash.HashSize-1-i]
+	}
+	binary.BigEndian.PutUint32(encoded[chainhash.HashSize:], op.Index)
+	return encoded
+}
+
+// decodeOrderedOutPoint reconstructs an OutPoint from its ordered encoding.
+func decodeOrderedOutPoint(encoded []byte) (*wire.OutPoint, error) {
+	if len(encoded) != orderedOutPointEncodedSize {
+		return nil, fmt.Errorf("invalid ordered outpoint encoding length: got %d, expected %d",
+			len(encoded), orderedOutPointEncodedSize)
+	}
+
+	var hash chainhash.Hash
+	for i := 0; i < chainhash.HashSize; i++ {
+		hash[chainhash.HashSize-1-i] = encoded[i]
+	}
+
+	return &wire.OutPoint{
+		Hash:  hash,
+		Index: binary.BigEndian.Uint32(encoded[chainhash.HashSize:]),
+	}, nil
+}
+
+// encodeExpiryKey encodes the expiry key as big-endian uint64 so keys sort in
+// natural expiry order.
 func encodeExpiryKey(expiry uint64) []byte {
-	key := make([]byte, 8)
+	key := make([]byte, expiryKeyEncodedSize)
 	binary.BigEndian.PutUint64(key, expiry)
 	return key
 }
 
-// decodeExpiryKey extracts the expiry value from its 8-byte encoding
+// decodeExpiryKey extracts the expiry value from its 8-byte encoding.
 func decodeExpiryKey(encoded []byte) (uint64, error) {
-	if len(encoded) != 8 {
-		return 0, fmt.Errorf("invalid expiry key length: got %d, expected 8", len(encoded))
+	if len(encoded) != expiryKeyEncodedSize {
+		return 0, fmt.Errorf("invalid expiry key length: got %d, expected %d",
+			len(encoded), expiryKeyEncodedSize)
 	}
 	return binary.BigEndian.Uint64(encoded), nil
 }
 
-// OutPointList encoding format:
-// [0:4]    - Count of outpoints (4 bytes, little-endian uint32)
-// [4:40]   - First outpoint (36 bytes)
-// [40:76]  - Second outpoint (36 bytes)
-// ...      - Additional outpoints (36 bytes each)
-//
-// Outpoints are sorted deterministically by (txid, vout) to ensure
-// consistent encoding across different implementations and platforms.
-//
-// Total length: 4 + (count * 36) bytes
-func encodeOutPointList(outpoints []*wire.OutPoint) []byte {
-	// Sort for deterministic encoding
-	sortedOPs := make([]*wire.OutPoint, len(outpoints))
-	copy(sortedOPs, outpoints)
-
-	sort.Slice(sortedOPs, func(i, j int) bool {
-		// Primary sort: transaction hash (lexicographic)
-		hashCmp := sortedOPs[i].Hash.String() < sortedOPs[j].Hash.String()
-		if sortedOPs[i].Hash != sortedOPs[j].Hash {
-			return hashCmp
-		}
-		// Secondary sort: output index (numeric)
-		return sortedOPs[i].Index < sortedOPs[j].Index
-	})
-
-	// Encode: count (4 bytes) + outpoints (36 bytes each)
-	encoded := make([]byte, 4+len(sortedOPs)*36)
-	binary.LittleEndian.PutUint32(encoded[0:4], uint32(len(sortedOPs)))
-
-	for i, op := range sortedOPs {
-		offset := 4 + i*36
-		copy(encoded[offset:offset+36], encodeOutPoint(op))
-	}
-
+// encodeExpiryOutpointCompositeKey encodes the scan key used by
+// bktExpiry2Outpoints: expiry key prefix followed by the ordered outpoint.
+func encodeExpiryOutpointCompositeKey(expiryKey uint64, outpoint *wire.OutPoint) []byte {
+	encoded := make([]byte, expiryOutpointCompositeKeySize)
+	binary.BigEndian.PutUint64(encoded[:expiryKeyEncodedSize], expiryKey)
+	copy(encoded[expiryKeyEncodedSize:], encodeOrderedOutPoint(outpoint))
 	return encoded
 }
 
-// decodeOutPointList reconstructs a list of OutPoints from encoded data
-func decodeOutPointList(encoded []byte) ([]*wire.OutPoint, error) {
-	if len(encoded) < 4 {
-		return nil, fmt.Errorf("invalid outpoint list encoding: too short (got %d bytes)", len(encoded))
+// decodeExpiryOutpointCompositeKey reconstructs the expiry key and outpoint
+// from a composite scan key.
+func decodeExpiryOutpointCompositeKey(encoded []byte) (uint64, *wire.OutPoint, error) {
+	if len(encoded) != expiryOutpointCompositeKeySize {
+		return 0, nil, fmt.Errorf("invalid expiry composite key length: got %d, expected %d",
+			len(encoded), expiryOutpointCompositeKeySize)
 	}
 
-	count := binary.LittleEndian.Uint32(encoded[0:4])
-	expectedLen := 4 + int(count)*36
-	if len(encoded) != expectedLen {
-		return nil, fmt.Errorf("invalid outpoint list length: got %d, expected %d",
-			len(encoded), expectedLen)
-	}
-
-	outpoints := make([]*wire.OutPoint, count)
-	for i := uint32(0); i < count; i++ {
-		offset := 4 + int(i)*36
-		op, err := decodeOutPoint(encoded[offset : offset+36])
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode outpoint %d: %v", i, err)
-		}
-		outpoints[i] = op
-	}
-
-	return outpoints, nil
-}
-
-// appendOutPointToList adds an outpoint to an existing encoded list
-// This is an optimization to avoid full decode/encode cycles for single additions
-func appendOutPointToList(existingEncoded []byte, newOutPoint *wire.OutPoint) ([]byte, error) {
-	// Decode existing list
-	existingOutPoints, err := decodeOutPointList(existingEncoded)
+	expiryKey, err := decodeExpiryKey(encoded[:expiryKeyEncodedSize])
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode existing list: %v", err)
+		return 0, nil, err
 	}
 
-	// Check if already exists (duplicate prevention)
-	for _, existing := range existingOutPoints {
-		if existing.Hash == newOutPoint.Hash && existing.Index == newOutPoint.Index {
-			// Already exists, return unchanged
-			return existingEncoded, nil
-		}
-	}
-
-	// Add new outpoint and re-encode
-	allOutPoints := append(existingOutPoints, newOutPoint)
-	return encodeOutPointList(allOutPoints), nil
-}
-
-// removeOutPointFromList removes an outpoint from an existing encoded list
-// Returns the updated list, or nil if the list becomes empty
-func removeOutPointFromList(existingEncoded []byte, targetOutPoint *wire.OutPoint) ([]byte, error) {
-	// Decode existing list
-	existingOutPoints, err := decodeOutPointList(existingEncoded)
+	outpoint, err := decodeOrderedOutPoint(encoded[expiryKeyEncodedSize:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode existing list: %v", err)
+		return 0, nil, err
 	}
 
-	// Filter out the target outpoint
-	var filteredOutPoints []*wire.OutPoint
-	for _, existing := range existingOutPoints {
-		if existing.Hash != targetOutPoint.Hash || existing.Index != targetOutPoint.Index {
-			filteredOutPoints = append(filteredOutPoints, existing)
-		}
-	}
-
-	// If list is now empty, return nil (caller should delete the key)
-	if len(filteredOutPoints) == 0 {
-		return nil, nil
-	}
-
-	// Re-encode the filtered list
-	return encodeOutPointList(filteredOutPoints), nil
+	return expiryKey, outpoint, nil
 }
 
-// validateOutPointListSize checks if a list exceeds the maximum size limit
-func validateOutPointListSize(outpoints []*wire.OutPoint) error {
-	if len(outpoints) > MaxOutpointsPerKey {
-		return fmt.Errorf("outpoint list too large: %d > %d (max)",
-			len(outpoints), MaxOutpointsPerKey)
-	}
-	return nil
+// expiryCompositePrefix returns the prefix used to seek all entries for the
+// provided expiry key.
+func expiryCompositePrefix(expiryKey uint64) []byte {
+	return encodeExpiryKey(expiryKey)
 }

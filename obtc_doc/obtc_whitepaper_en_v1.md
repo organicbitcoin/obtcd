@@ -279,12 +279,12 @@ That is why a dedicated expiry index is required.
 At an implementation level, the index can be abstracted as:
 
 1. `OutPoint -> ExpiryKey`
-2. `ExpiryKey -> OutPoint set`
+2. `(ExpiryKey || OrderedOutPoint) -> empty`
 
 Benefits:
 
-- fast deletion when an output is spent,
-- fast range scanning by walking `ExpiryKey` in order.
+- fast deletion by looking up `ExpiryKey` from `OutPoint`, then deleting the composite entry,
+- fast range scanning by walking composite keys grouped by `ExpiryKey`.
 
 ## 7.3 Block connection and rollback
 

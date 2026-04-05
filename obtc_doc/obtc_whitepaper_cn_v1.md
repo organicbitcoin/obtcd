@@ -276,12 +276,12 @@ OBTC 实现可以分为三层，每层职责不同。
 实现上可抽象为：
 
 1. `OutPoint -> ExpiryKey`
-2. `ExpiryKey -> OutPoint set`
+2. `(ExpiryKey || OrderedOutPoint) -> empty`
 
 优势：
 
-- 删除快：花费时快速反查并移除；
-- 扫描快：按 ExpiryKey 区间顺序遍历。
+- 删除快：花费时可先由 `OutPoint` 反查 `ExpiryKey`，再删除对应复合键；
+- 扫描快：按 `ExpiryKey` 前缀顺序遍历复合键。
 
 ## 7.3 区块连接与回滚
 

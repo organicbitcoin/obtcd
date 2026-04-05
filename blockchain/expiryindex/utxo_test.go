@@ -117,29 +117,14 @@ func TestConnectTxOut(t *testing.T) {
 					}
 
 					encodedExpiry := encodeExpiryKey(expectedExpiry)
-					outpointListBytes := expiryBucket.Get(encodedExpiry)
-					if outpointListBytes == nil {
-						t.Error("Expiry key not found in index")
+					if got := expiryBucket.Get(encodedExpiry); got != nil {
+						t.Error("legacy expiry key entry should not exist in composite index")
 						return nil
 					}
 
-					// Verify outpoint is in the list
-					outpointList, err := decodeOutPointList(outpointListBytes)
-					if err != nil {
-						t.Errorf("Failed to decode outpoint list: %v", err)
-						return nil
-					}
-
-					found := false
-					for _, op := range outpointList {
-						if op.Hash.IsEqual(&outpoint.Hash) && op.Index == outpoint.Index {
-							found = true
-							break
-						}
-					}
-
-					if !found {
-						t.Error("Outpoint not found in expiry list")
+					compositeKey := encodeExpiryOutpointCompositeKey(expectedExpiry, outpoint)
+					if got := expiryBucket.Get(compositeKey); got == nil {
+						t.Error("Outpoint not found in expiry composite index")
 					}
 
 					return nil
@@ -276,6 +261,15 @@ func TestDisconnectTxOut(t *testing.T) {
 						t.Error("Outpoint still exists in index after removal")
 					}
 
+					expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
+					if expiryBucket != nil {
+						expectedExpiry := idx.expiryParams.CalculateExpiryKey(150)
+						compositeKey := encodeExpiryOutpointCompositeKey(expectedExpiry, test.outpoint)
+						if got := expiryBucket.Get(compositeKey); got != nil {
+							t.Error("Outpoint still exists in expiry composite index after removal")
+						}
+					}
+
 					return nil
 				})
 
@@ -359,6 +353,56 @@ func TestConnectDisconnectTxOutRoundTrip(t *testing.T) {
 	if finalStats.TotalUTXOs != initialStats.TotalUTXOs {
 		t.Errorf("UTXO count should be back to initial: initial=%d, final=%d",
 			initialStats.TotalUTXOs, finalStats.TotalUTXOs)
+	}
+}
+
+func TestGetStatsCountsDistinctExpiryKeys(t *testing.T) {
+	db, teardown, err := createUTXOTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+
+	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
+		t.Fatalf("Failed to create index: %v", err)
+	}
+	if err := idx.Init(); err != nil {
+		t.Fatalf("Failed to initialize index: %v", err)
+	}
+
+	hash1 := chainhash.DoubleHashH([]byte("stats-1"))
+	hash2 := chainhash.DoubleHashH([]byte("stats-2"))
+	hash3 := chainhash.DoubleHashH([]byte("stats-3"))
+	outpoint1 := &wire.OutPoint{Hash: hash1, Index: 0}
+	outpoint2 := &wire.OutPoint{Hash: hash2, Index: 0}
+	outpoint3 := &wire.OutPoint{Hash: hash3, Index: 0}
+
+	if err := db.Update(func(dbTx database.Tx) error {
+		if err := idx.connectTxOut(dbTx, outpoint1, 10); err != nil {
+			return err
+		}
+		if err := idx.connectTxOut(dbTx, outpoint2, 10); err != nil {
+			return err
+		}
+		return idx.connectTxOut(dbTx, outpoint3, 11)
+	}); err != nil {
+		t.Fatalf("Failed to seed index: %v", err)
+	}
+
+	stats, err := idx.GetStats()
+	if err != nil {
+		t.Fatalf("Failed to get stats: %v", err)
+	}
+	if stats.TotalUTXOs != 3 {
+		t.Fatalf("unexpected utxo count: got %d want 3", stats.TotalUTXOs)
+	}
+	if stats.TotalExpiryKeys != 2 {
+		t.Fatalf("unexpected expiry key count: got %d want 2", stats.TotalExpiryKeys)
 	}
 }
 

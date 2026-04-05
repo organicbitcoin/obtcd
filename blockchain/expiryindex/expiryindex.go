@@ -5,6 +5,7 @@
 package expiryindex
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -448,6 +449,29 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	return nil
 }
 
+func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64) error {
+	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
+	if outpointBucket == nil {
+		return fmt.Errorf("outpoint-to-expiry bucket does not exist")
+	}
+
+	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
+	if expiryBucket == nil {
+		return fmt.Errorf("expiry-to-outpoints bucket does not exist")
+	}
+
+	if err := outpointBucket.Put(encodeOutPoint(outpoint), encodeExpiryKey(expiryKey)); err != nil {
+		return fmt.Errorf("failed to store outpoint mapping: %v", err)
+	}
+
+	compositeKey := encodeExpiryOutpointCompositeKey(expiryKey, outpoint)
+	if err := expiryBucket.Put(compositeKey, emptyIndexValue); err != nil {
+		return fmt.Errorf("failed to store expiry mapping: %v", err)
+	}
+
+	return nil
+}
+
 // connectTxOut adds a new UTXO to the expiry index
 func (idx *ExpiryIndex) connectTxOut(dbTx database.Tx, outpoint *wire.OutPoint,
 	createHeight int32) error {
@@ -457,50 +481,7 @@ func (idx *ExpiryIndex) connectTxOut(dbTx database.Tx, outpoint *wire.OutPoint,
 
 	// Calculate the expiry key for this UTXO
 	expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)
-
-	// Encode the outpoint and expiry key
-	encodedOutpoint := encodeOutPoint(outpoint)
-	encodedExpiryKey := encodeExpiryKey(expiryKey)
-
-	// Add the outpoint -> expiry mapping
-	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
-	if outpointBucket == nil {
-		return fmt.Errorf("outpoint-to-expiry bucket does not exist")
-	}
-
-	if err := outpointBucket.Put(encodedOutpoint, encodedExpiryKey); err != nil {
-		return fmt.Errorf("failed to store outpoint mapping: %v", err)
-	}
-
-	// Add to the expiry -> outpoints mapping
-	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
-	if expiryBucket == nil {
-		return fmt.Errorf("expiry-to-outpoints bucket does not exist")
-	}
-
-	// Get existing outpoint list for this expiry key
-	existingEncoded := expiryBucket.Get(encodedExpiryKey)
-
-	var newEncoded []byte
-	var err error
-
-	if existingEncoded == nil {
-		// First outpoint for this expiry key
-		newEncoded = encodeOutPointList([]*wire.OutPoint{outpoint})
-	} else {
-		// Append to existing list
-		newEncoded, err = appendOutPointToList(existingEncoded, outpoint)
-		if err != nil {
-			return fmt.Errorf("failed to append outpoint to list: %v", err)
-		}
-	}
-
-	// Store the updated list
-	if err := expiryBucket.Put(encodedExpiryKey, newEncoded); err != nil {
-		return fmt.Errorf("failed to store expiry mapping: %v", err)
-	}
-
-	return nil
+	return putTxOutMapping(dbTx, outpoint, expiryKey)
 }
 
 // disconnectTxOut removes a UTXO from the expiry index
@@ -520,39 +501,26 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 		return nil
 	}
 
-	// Remove the outpoint -> expiry mapping
-	if err := outpointBucket.Delete(encodedOutpoint); err != nil {
-		return fmt.Errorf("failed to delete outpoint mapping: %v", err)
+	expiryKey, err := decodeExpiryKey(encodedExpiryKey)
+	if err != nil {
+		return fmt.Errorf("failed to decode expiry key: %v", err)
 	}
 
-	// Update the expiry -> outpoints mapping
 	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
 	if expiryBucket == nil {
 		return fmt.Errorf("expiry-to-outpoints bucket does not exist")
 	}
 
-	existingEncoded := expiryBucket.Get(encodedExpiryKey)
-	if existingEncoded == nil {
-		// This shouldn't happen if the index is consistent
-		return fmt.Errorf("inconsistent index: expiry key %x not found", encodedExpiryKey)
+	compositeKey := encodeExpiryOutpointCompositeKey(expiryKey, outpoint)
+	if existingValue := expiryBucket.Get(compositeKey); existingValue == nil {
+		return fmt.Errorf("inconsistent index: expiry composite key %x not found", compositeKey)
 	}
 
-	// Remove the outpoint from the list
-	newEncoded, err := removeOutPointFromList(existingEncoded, outpoint)
-	if err != nil {
-		return fmt.Errorf("failed to remove outpoint from list: %v", err)
+	if err := outpointBucket.Delete(encodedOutpoint); err != nil {
+		return fmt.Errorf("failed to delete outpoint mapping: %v", err)
 	}
-
-	if newEncoded == nil {
-		// List is now empty, delete the entire key
-		if err := expiryBucket.Delete(encodedExpiryKey); err != nil {
-			return fmt.Errorf("failed to delete empty expiry mapping: %v", err)
-		}
-	} else {
-		// Update the list
-		if err := expiryBucket.Put(encodedExpiryKey, newEncoded); err != nil {
-			return fmt.Errorf("failed to update expiry mapping: %v", err)
-		}
+	if err := expiryBucket.Delete(compositeKey); err != nil {
+		return fmt.Errorf("failed to delete expiry mapping: %v", err)
 	}
 
 	return nil
@@ -666,6 +634,9 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 	if idx.disabled {
 		return nil, false, fmt.Errorf("expiry index is disabled")
 	}
+	if maxResults <= 0 {
+		return nil, false, nil
+	}
 
 	var results []*ExpiringUTXO
 	var hasMore bool
@@ -678,86 +649,44 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 
 		cursor := expiryBucket.Cursor()
 
-		// Start from the fromKey
-		encodedFromKey := encodeExpiryKey(fromKey)
-		found := cursor.Seek(encodedFromKey)
-		if !found {
-			return nil
+		var (
+			found   bool
+			seekKey []byte
+		)
+		if startAfter != nil {
+			seekKey = encodeExpiryOutpointCompositeKey(fromKey, startAfter)
+			found = cursor.Seek(seekKey)
+			if found && bytes.Equal(cursor.Key(), seekKey) {
+				found = cursor.Next()
+			}
+		} else {
+			seekKey = expiryCompositePrefix(fromKey)
+			found = cursor.Seek(seekKey)
 		}
 
-		// Now we can safely get the key and value since found is true
-	outer:
-		for found && len(results) < maxResults {
+		for found {
 			key := cursor.Key()
-			value := cursor.Value()
-
 			if key == nil {
 				break
 			}
-			// Decode the expiry key
-			expiryKey, err := decodeExpiryKey(key)
-			if err != nil {
-				return fmt.Errorf("failed to decode expiry key: %v", err)
-			}
 
-			// Stop if we've exceeded the range
+			expiryKey, outpoint, err := decodeExpiryOutpointCompositeKey(key)
+			if err != nil {
+				return fmt.Errorf("failed to decode expiry composite key: %v", err)
+			}
 			if expiryKey > toKey {
 				break
 			}
-
-			// Decode the outpoint list
-			outpoints, err := decodeOutPointList(value)
-			if err != nil {
-				return fmt.Errorf("failed to decode outpoint list: %v", err)
+			if len(results) >= maxResults {
+				hasMore = true
+				break
 			}
 
-			startIdx := 0
-			if startAfter != nil && expiryKey == fromKey {
-				startIdx = findOutPointStartIndex(outpoints, startAfter)
-			}
+			results = append(results, &ExpiringUTXO{
+				OutPoint:  *outpoint,
+				ExpiryKey: expiryKey,
+			})
 
-			// Add each outpoint to results
-			for i := startIdx; i < len(outpoints); i++ {
-				outpoint := outpoints[i]
-				if len(results) >= maxResults {
-					// Check if there are more results in-range
-					if i < len(outpoints) {
-						hasMore = true
-					} else if cursor.Next() {
-						nextKey := cursor.Key()
-						if nextKey != nil {
-							nextExpiryKey, err := decodeExpiryKey(nextKey)
-							if err == nil && nextExpiryKey <= toKey {
-								hasMore = true
-							}
-						}
-					}
-					break outer
-				}
-
-				results = append(results, &ExpiringUTXO{
-					OutPoint:  *outpoint,
-					ExpiryKey: expiryKey,
-				})
-
-				if len(results) >= maxResults {
-					// Determine if more results remain
-					if i+1 < len(outpoints) {
-						hasMore = true
-					} else if cursor.Next() {
-						nextKey := cursor.Key()
-						if nextKey != nil {
-							nextExpiryKey, err := decodeExpiryKey(nextKey)
-							if err == nil && nextExpiryKey <= toKey {
-								hasMore = true
-							}
-						}
-					}
-					break outer
-				}
-			}
-
-			// Move to next key
 			found = cursor.Next()
 		}
 
@@ -773,10 +702,14 @@ func (idx *ExpiryIndex) ScanExpiringUTXOs(fromKey, toKey uint64,
 
 func compareOutPoint(a, b *wire.OutPoint) int {
 	if a.Hash != b.Hash {
-		if a.Hash.String() < b.Hash.String() {
-			return -1
+		for i := chainhash.HashSize - 1; i >= 0; i-- {
+			switch {
+			case a.Hash[i] < b.Hash[i]:
+				return -1
+			case a.Hash[i] > b.Hash[i]:
+				return 1
+			}
 		}
-		return 1
 	}
 	switch {
 	case a.Index < b.Index:
@@ -837,8 +770,25 @@ func (idx *ExpiryIndex) GetStats() (*ExpiryIndexStats, error) {
 		if expiryBucket != nil {
 			cursor := expiryBucket.Cursor()
 			found := cursor.First()
+			var (
+				lastExpiry uint64
+				haveExpiry bool
+			)
 			for found {
-				stats.TotalExpiryKeys++
+				key := cursor.Key()
+				if len(key) != expiryOutpointCompositeKeySize {
+					return fmt.Errorf("invalid expiry composite key length: got %d, expected %d",
+						len(key), expiryOutpointCompositeKeySize)
+				}
+				expiryKey, err := decodeExpiryKey(key[:expiryKeyEncodedSize])
+				if err != nil {
+					return fmt.Errorf("failed to decode expiry key prefix: %v", err)
+				}
+				if !haveExpiry || expiryKey != lastExpiry {
+					stats.TotalExpiryKeys++
+					lastExpiry = expiryKey
+					haveExpiry = true
+				}
 				found = cursor.Next()
 			}
 		}
@@ -935,6 +885,32 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	// Iterate all UTXOs and add qualifying entries, building the
 	// MuHash accumulator in memory alongside the index.
 	mh := NewMuHash()
+	type rebuildBatchEntry struct {
+		outpoint  wire.OutPoint
+		expiryKey uint64
+	}
+	batch := make([]rebuildBatchEntry, 0, DefaultBatchSize)
+	flushBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+
+		if err := idx.db.Update(func(dbTx database.Tx) error {
+			for i := range batch {
+				entry := batch[i]
+				if err := putTxOutMapping(dbTx, &entry.outpoint, entry.expiryKey); err != nil {
+					return fmt.Errorf("failed to add UTXO %v: %v", entry.outpoint, err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		batch = batch[:0]
+		return nil
+	}
+
 	populateErr := idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
 		// Only index UTXOs created at or after the scan start height.
 		if createHeight < idx.expiryParams.StartScanHeight {
@@ -943,12 +919,14 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 		expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)
 		mh.Add(computeEntryData(&outpoint, expiryKey))
-
-		err := idx.db.Update(func(dbTx database.Tx) error {
-			return idx.connectTxOut(dbTx, &outpoint, createHeight)
+		batch = append(batch, rebuildBatchEntry{
+			outpoint:  outpoint,
+			expiryKey: expiryKey,
 		})
-		if err != nil {
-			return fmt.Errorf("failed to add UTXO %v: %v", outpoint, err)
+		if len(batch) >= DefaultBatchSize {
+			if err := flushBatch(); err != nil {
+				return err
+			}
 		}
 
 		processed++
@@ -959,6 +937,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		}
 		return nil
 	})
+	if populateErr == nil {
+		populateErr = flushBatch()
+	}
 	if populateErr != nil {
 		// Re-clear so the index is in a clean empty state rather than
 		// partially populated; the next start will retry from scratch.
