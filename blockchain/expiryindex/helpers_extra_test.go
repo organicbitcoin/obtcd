@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btclog"
 )
 
@@ -49,4 +51,75 @@ func TestGetChainTipHeightAndUseLogger(t *testing.T) {
 
 	UseLogger(btclog.Disabled)
 	DisableLog()
+}
+
+func TestSetChainAccessorDisabledSkipsDeferredRebuild(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new index: %v", err)
+	}
+	idx.disabled = true
+
+	mock := &rebuildMockChain{
+		bestHeight: -1,
+		blocks:     make(map[int32]*btcutil.Block),
+		utxos:      make(map[wire.OutPoint]int32),
+	}
+	idx.SetChainAccessor(mock)
+	if mock.forEachCalls != 0 {
+		t.Fatalf("disabled SetChainAccessor should not rebuild, got %d calls", mock.forEachCalls)
+	}
+}
+
+func TestGetAccumulatorSnapshotDisabled(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new index: %v", err)
+	}
+	idx.disabled = true
+
+	if _, err := idx.GetAccumulatorSnapshot(); err == nil {
+		t.Fatal("expected disabled snapshot to fail")
+	}
+	if _, err := idx.GetAccumulatorDigest(); err == nil {
+		t.Fatal("expected disabled digest to fail")
+	}
+}
+
+func TestSetChainAccessorSwallowsDeferredRebuildError(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new index: %v", err)
+	}
+
+	mock := &rebuildMockChain{
+		bestHeight: 5,
+		blocks:     make(map[int32]*btcutil.Block),
+		utxos:      make(map[wire.OutPoint]int32),
+	}
+	idx.SetChainAccessor(mock)
+	if idx.chain != mock {
+		t.Fatal("SetChainAccessor should retain the provided accessor even on rebuild failure")
+	}
+	if len(mock.blockRequests) == 0 && mock.forEachCalls == 0 {
+		t.Fatal("expected SetChainAccessor to attempt deferred rebuild work")
+	}
 }

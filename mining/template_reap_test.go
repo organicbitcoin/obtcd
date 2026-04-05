@@ -248,6 +248,28 @@ func TestCollectExpiredOutpointsIdempotentAndConcurrent(t *testing.T) {
 	}
 }
 
+func TestCollectExpiredOutpointsPreservesExpiryIndexOrderWithinSingleExpiryKey(t *testing.T) {
+	idx, teardown := createMiningTestExpiryIndexWithOutputsAtHeight(t, true, 4, 120)
+	defer teardown()
+
+	g := &BlkTmplGenerator{reapIndex: idx, chainParams: &chaincfg.ObtcRegTestParams}
+	p := reap.DefaultREAPParams(reap.SortModeStrict)
+	p.ScanBatch = 10
+
+	ops, err := g.collectExpiredOutpoints(500, p)
+	if err != nil {
+		t.Fatalf("collectExpiredOutpoints failed: %v", err)
+	}
+	if len(ops) != 4 {
+		t.Fatalf("expected 4 collected outpoints, got %d", len(ops))
+	}
+	for i := range ops {
+		if ops[i].Index != uint32(i) {
+			t.Fatalf("unexpected outpoint order at %d: got vout=%d want %d", i, ops[i].Index, i)
+		}
+	}
+}
+
 func TestSetREAPIndexDirect(t *testing.T) {
 	idx, teardown := createMiningTestExpiryIndex(t)
 	defer teardown()

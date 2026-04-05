@@ -44,6 +44,9 @@ func clearExpiryIndexBuckets(dbTx database.Tx) error {
 	if err := dbPutAccumulatorTipHash(dbTx, &zero); err != nil {
 		return fmt.Errorf("failed to reset accumulator tip hash: %v", err)
 	}
+	if err := dbPutTipHeightIndexed(dbTx, -1); err != nil {
+		return fmt.Errorf("failed to reset indexed tip height: %v", err)
+	}
 
 	return nil
 }

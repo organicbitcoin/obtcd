@@ -192,6 +192,26 @@ func TestExpiryCompositePrefix(t *testing.T) {
 	}
 }
 
+func TestExpiryCompositePrefixDoesNotMatchAdjacentKeys(t *testing.T) {
+	expiryKey := uint64(321)
+	nextExpiryKey := expiryKey + 1
+	outpoint := wire.OutPoint{
+		Hash:  chainhash.DoubleHashH([]byte("adjacent")),
+		Index: 5,
+	}
+
+	prefix := expiryCompositePrefix(expiryKey)
+	current := encodeExpiryOutpointCompositeKey(expiryKey, &outpoint)
+	next := encodeExpiryOutpointCompositeKey(nextExpiryKey, &outpoint)
+
+	if !bytes.HasPrefix(current, prefix) {
+		t.Fatalf("expected current composite key to match prefix %x", prefix)
+	}
+	if bytes.HasPrefix(next, prefix) {
+		t.Fatalf("unexpected adjacent composite key %x to match prefix %x", next, prefix)
+	}
+}
+
 func TestDecodeInvalidData(t *testing.T) {
 	tests := []struct {
 		name string
@@ -238,6 +258,71 @@ func TestDecodeInvalidData(t *testing.T) {
 				t.Fatalf("expected error for invalid data, got nil")
 			}
 		})
+	}
+}
+
+func TestDecodeExpiryOutpointCompositeKeyRejectsInvalidLengths(t *testing.T) {
+	for _, size := range []int{0, 1, 7, 8, 9, expiryOutpointCompositeKeySize - 1, expiryOutpointCompositeKeySize + 1, 100} {
+		data := make([]byte, size)
+		if _, _, err := decodeExpiryOutpointCompositeKey(data); err == nil {
+			t.Fatalf("expected error for composite key size %d", size)
+		}
+	}
+}
+
+func TestOrderedEncodingMatchesCompareOutPointEdgeCases(t *testing.T) {
+	baseHash := chainhash.DoubleHashH([]byte("same-hash"))
+	otherHash := chainhash.DoubleHashH([]byte("other-hash"))
+	maxHash := chainhash.Hash{}
+	for i := range maxHash {
+		maxHash[i] = 0xff
+	}
+
+	tests := []struct {
+		name string
+		a    wire.OutPoint
+		b    wire.OutPoint
+		want int
+	}{
+		{
+			name: "same hash lower index sorts first",
+			a:    wire.OutPoint{Hash: baseHash, Index: 0},
+			b:    wire.OutPoint{Hash: baseHash, Index: 1},
+			want: -1,
+		},
+		{
+			name: "same hash higher index sorts last",
+			a:    wire.OutPoint{Hash: baseHash, Index: 2},
+			b:    wire.OutPoint{Hash: baseHash, Index: 1},
+			want: 1,
+		},
+		{
+			name: "different hashes respect compareOutPoint ordering",
+			a:    wire.OutPoint{Hash: otherHash, Index: 0},
+			b:    wire.OutPoint{Hash: baseHash, Index: 0},
+			want: compareOutPoint(&wire.OutPoint{Hash: otherHash, Index: 0}, &wire.OutPoint{Hash: baseHash, Index: 0}),
+		},
+		{
+			name: "zero hash sorts before max hash",
+			a:    wire.OutPoint{Hash: chainhash.Hash{}, Index: 0},
+			b:    wire.OutPoint{Hash: maxHash, Index: 0},
+			want: -1,
+		},
+	}
+
+	for _, test := range tests {
+		got := bytes.Compare(
+			encodeOrderedOutPoint(&test.a),
+			encodeOrderedOutPoint(&test.b),
+		)
+		switch {
+		case test.want < 0 && got >= 0:
+			t.Fatalf("%s: expected a < b, got %d", test.name, got)
+		case test.want > 0 && got <= 0:
+			t.Fatalf("%s: expected a > b, got %d", test.name, got)
+		case test.want == 0 && got != 0:
+			t.Fatalf("%s: expected equality, got %d", test.name, got)
+		}
 	}
 }
 

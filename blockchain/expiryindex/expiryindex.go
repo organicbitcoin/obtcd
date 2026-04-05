@@ -871,6 +871,16 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 	log.Infof("ExpiryIndex: Starting fast rebuild from UTXO set")
 
+	resetToEmpty := func(logPrefix string, cause error) {
+		log.Warnf("%s: %v", logPrefix, cause)
+		if clearErr := idx.db.Update(func(dbTx database.Tx) error {
+			return idx.clearIndexBuckets(dbTx)
+		}); clearErr != nil {
+			log.Errorf("ExpiryIndex: failed to reset index after fast rebuild failure: %v", clearErr)
+		}
+		idx.curTipHeight = -1
+	}
+
 	// Clear existing index data then repopulate from the UTXO set.
 	// If repopulation fails partway through, we re-clear the index so that
 	// the next startup triggers a clean full rebuild rather than leaving a
@@ -881,6 +891,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	if err != nil {
 		return fmt.Errorf("failed to clear index buckets: %v", err)
 	}
+	idx.curTipHeight = -1
 
 	// Iterate all UTXOs and add qualifying entries, building the
 	// MuHash accumulator in memory alongside the index.
@@ -943,11 +954,10 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	if populateErr != nil {
 		// Re-clear so the index is in a clean empty state rather than
 		// partially populated; the next start will retry from scratch.
-		log.Warnf("ExpiryIndex: fast rebuild failed after %d UTXOs, re-clearing index: %v",
-			processed, populateErr)
-		_ = idx.db.Update(func(dbTx database.Tx) error {
-			return idx.clearIndexBuckets(dbTx)
-		})
+		resetToEmpty(
+			fmt.Sprintf("ExpiryIndex: fast rebuild failed after %d UTXOs, re-clearing index", processed),
+			populateErr,
+		)
 		return populateErr
 	}
 
@@ -977,6 +987,10 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		return nil
 	})
 	if err != nil {
+		resetToEmpty(
+			fmt.Sprintf("ExpiryIndex: fast rebuild finalization failed after %d UTXOs, re-clearing index", processed),
+			err,
+		)
 		return err
 	}
 

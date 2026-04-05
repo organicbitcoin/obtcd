@@ -189,6 +189,26 @@ func TestValidateExpiryCommitmentRejectsMissingAfterActivation(t *testing.T) {
 	}
 }
 
+func TestValidateExpiryCommitmentBeforeActivationIsNoop(t *testing.T) {
+	idx := &ExpiryIndex{
+		expiryParams: &ExpiryParams{ExpiryCommitmentEnableAtHeight: 10},
+	}
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 50 * btcutil.SatoshiPerBitcoin})
+
+	block := btcutil.NewBlock(&wire.MsgBlock{
+		Transactions: []*wire.MsgTx{msgTx},
+	})
+	block.SetHeight(9)
+
+	var expectedRoot [AccumulatorDigestSize]byte
+	if err := idx.validateExpiryCommitment(block, expectedRoot); err != nil {
+		t.Fatalf("expected pre-activation block to skip commitment validation, got %v", err)
+	}
+}
+
 func TestValidateExpiryCommitmentRejectsMismatchedRootAfterActivation(t *testing.T) {
 	idx := &ExpiryIndex{
 		expiryParams: &ExpiryParams{ExpiryCommitmentEnableAtHeight: 10},
@@ -224,5 +244,65 @@ func TestValidateExpiryCommitmentRejectsMismatchedRootAfterActivation(t *testing
 	if ruleErr.ErrorCode != blockchain.ErrBadExpiryCommitmentMismatch {
 		t.Fatalf("unexpected error code: got %v want %v",
 			ruleErr.ErrorCode, blockchain.ErrBadExpiryCommitmentMismatch)
+	}
+}
+
+func TestValidateExpiryCommitmentRejectsDuplicateAfterActivation(t *testing.T) {
+	idx := &ExpiryIndex{
+		expiryParams: &ExpiryParams{ExpiryCommitmentEnableAtHeight: 10},
+	}
+
+	var root [AccumulatorDigestSize]byte
+	root[0] = 0x11
+	script := BuildExpiryCommitmentScript(root)
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 50 * btcutil.SatoshiPerBitcoin})
+	msgTx.AddTxOut(&wire.TxOut{Value: 0, PkScript: script})
+	msgTx.AddTxOut(&wire.TxOut{Value: 0, PkScript: script})
+
+	block := btcutil.NewBlock(&wire.MsgBlock{
+		Transactions: []*wire.MsgTx{msgTx},
+	})
+	block.SetHeight(10)
+
+	err := idx.validateExpiryCommitment(block, root)
+	if err == nil {
+		t.Fatal("expected duplicate commitments to be rejected")
+	}
+	ruleErr, ok := err.(blockchain.RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T", err)
+	}
+	if ruleErr.ErrorCode != blockchain.ErrBadExpiryCommitmentDuplicate {
+		t.Fatalf("unexpected error code: got %v want %v",
+			ruleErr.ErrorCode, blockchain.ErrBadExpiryCommitmentDuplicate)
+	}
+}
+
+func TestValidateExpiryCommitmentAcceptsMatchingRootAfterActivation(t *testing.T) {
+	idx := &ExpiryIndex{
+		expiryParams: &ExpiryParams{ExpiryCommitmentEnableAtHeight: 10},
+	}
+
+	var root [AccumulatorDigestSize]byte
+	root[0] = 0x44
+
+	msgTx := wire.NewMsgTx(1)
+	msgTx.AddTxIn(&wire.TxIn{})
+	msgTx.AddTxOut(&wire.TxOut{Value: 50 * btcutil.SatoshiPerBitcoin})
+	msgTx.AddTxOut(&wire.TxOut{
+		Value:    0,
+		PkScript: BuildExpiryCommitmentScript(root),
+	})
+
+	block := btcutil.NewBlock(&wire.MsgBlock{
+		Transactions: []*wire.MsgTx{msgTx},
+	})
+	block.SetHeight(10)
+
+	if err := idx.validateExpiryCommitment(block, root); err != nil {
+		t.Fatalf("expected matching commitment to pass validation, got %v", err)
 	}
 }

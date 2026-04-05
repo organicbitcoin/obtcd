@@ -1,6 +1,9 @@
 package expiryindex
 
 import (
+	"bytes"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -107,6 +110,140 @@ func TestScanExpiringUTXOsErrors(t *testing.T) {
 	// Buckets not created yet.
 	if _, _, err := idx.ScanExpiringUTXOs(0, 10, 10, nil); err == nil {
 		t.Fatalf("expected missing bucket error")
+	}
+}
+
+func TestScanExpiringUTXOsContract(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.Create(dbTx)
+	}); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+
+	hashWithLastByte := func(b byte) chainhash.Hash {
+		var h chainhash.Hash
+		h[chainhash.HashSize-1] = b
+		return h
+	}
+	entries := []ExpiringUTXO{
+		{ExpiryKey: 100, OutPoint: wire.OutPoint{Hash: hashWithLastByte(0x01), Index: 0}},
+		{ExpiryKey: 100, OutPoint: wire.OutPoint{Hash: hashWithLastByte(0x01), Index: 2}},
+		{ExpiryKey: 100, OutPoint: wire.OutPoint{Hash: hashWithLastByte(0x02), Index: 0}},
+		{ExpiryKey: 101, OutPoint: wire.OutPoint{Hash: hashWithLastByte(0x03), Index: 0}},
+		{ExpiryKey: 102, OutPoint: wire.OutPoint{Hash: hashWithLastByte(0x04), Index: 0}},
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].ExpiryKey != entries[j].ExpiryKey {
+			return entries[i].ExpiryKey < entries[j].ExpiryKey
+		}
+		return compareOutPoint(&entries[i].OutPoint, &entries[j].OutPoint) < 0
+	})
+
+	if err := db.Update(func(dbTx database.Tx) error {
+		for i := range entries {
+			if err := putTxOutMapping(dbTx, &entries[i].OutPoint, entries[i].ExpiryKey); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed index: %v", err)
+	}
+
+	assertScan := func(name string, fromKey, toKey uint64, maxResults int, startAfter *wire.OutPoint,
+		want []ExpiringUTXO, wantHasMore bool) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			got, hasMore, err := idx.ScanExpiringUTXOs(fromKey, toKey, maxResults, startAfter)
+			if err != nil {
+				t.Fatalf("scan failed: %v", err)
+			}
+			if hasMore != wantHasMore {
+				t.Fatalf("hasMore mismatch: got %t want %t", hasMore, wantHasMore)
+			}
+			gotRows := make([]ExpiringUTXO, len(got))
+			for i := range got {
+				gotRows[i] = *got[i]
+			}
+			if !reflect.DeepEqual(gotRows, want) {
+				t.Fatalf("scan mismatch: got %#v want %#v", gotRows, want)
+			}
+		})
+	}
+
+	missingBetween := wire.OutPoint{Hash: entries[0].OutPoint.Hash, Index: 1}
+	afterLastInKey100 := wire.OutPoint{Hash: entries[2].OutPoint.Hash, Index: 1}
+
+	assertScan("all entries", 100, 102, 10, nil, entries, false)
+	assertScan("single key", 100, 100, 10, nil, entries[:3], false)
+	assertScan("empty range when from exceeds to", 103, 102, 10, nil, []ExpiringUTXO{}, false)
+	assertScan("max results one sets hasMore", 100, 102, 1, nil, entries[:1], true)
+	assertScan("startAfter exact composite key", 100, 102, 10, &entries[0].OutPoint, entries[1:], false)
+	assertScan("startAfter missing outpoint within key", 100, 102, 10, &missingBetween, entries[1:], false)
+	assertScan("startAfter skips to next key when tail reached", 100, 102, 10, &afterLastInKey100, entries[3:], false)
+}
+
+func TestScanExpiringUTXOsRejectsCorruptCompositeKey(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error {
+		if err := idx.Create(dbTx); err != nil {
+			return err
+		}
+		return dbTx.Metadata().Bucket(bktExpiry2Outpoints).Put(
+			append(encodeExpiryKey(77), []byte{0x01, 0x02, 0x03}...),
+			emptyIndexValue,
+		)
+	}); err != nil {
+		t.Fatalf("seed corrupt composite key: %v", err)
+	}
+
+	if _, _, err := idx.ScanExpiringUTXOs(77, 77, 10, nil); err == nil {
+		t.Fatal("expected corrupt composite key scan to fail")
+	}
+}
+
+func TestGetStatsRejectsCorruptCompositeKey(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error {
+		if err := idx.Create(dbTx); err != nil {
+			return err
+		}
+		badKey := append(encodeExpiryKey(88), bytes.Repeat([]byte{0xaa}, orderedOutPointEncodedSize-1)...)
+		return dbTx.Metadata().Bucket(bktExpiry2Outpoints).Put(badKey, emptyIndexValue)
+	}); err != nil {
+		t.Fatalf("seed corrupt composite key: %v", err)
+	}
+
+	if _, err := idx.GetStats(); err == nil {
+		t.Fatal("expected corrupt composite key stats read to fail")
 	}
 }
 

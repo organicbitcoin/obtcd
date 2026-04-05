@@ -904,6 +904,79 @@ func TestOBTCRPCObservabilityAndFilters(t *testing.T) {
 	require.GreaterOrEqual(t, len(allPaginated), len(expiring.ExpiringUTXOs))
 }
 
+func TestOBTCListExpiringOrderingAndCursorContract(t *testing.T) {
+	t.Parallel()
+
+	r, err := rpctest.New(
+		&chaincfg.ObtcRegTestParams, nil, []string{"--expiryindex"}, "",
+	)
+	require.NoError(t, err)
+	require.NoError(t, r.SetUp(true, 44))
+	t.Cleanup(func() {
+		require.NoError(t, r.TearDown())
+	})
+
+	outputs := make([]*wire.TxOut, 0, 3)
+	for _, btc := range []int64{90, 91, 92} {
+		addr, err := r.NewAddress()
+		require.NoError(t, err)
+		pkScript, err := txscript.PayToAddrScript(addr)
+		require.NoError(t, err)
+		outputs = append(outputs, &wire.TxOut{
+			Value:    btc * btcutil.SatoshiPerBitcoin,
+			PkScript: pkScript,
+		})
+	}
+
+	fundingHash, err := r.SendOutputs(outputs, 10)
+	require.NoError(t, err)
+	_, err = r.Client.Generate(1)
+	require.NoError(t, err)
+	_, err = r.Client.Generate(143)
+	require.NoError(t, err)
+	height, err := r.Client.GetBlockCount()
+	require.NoError(t, err)
+	require.EqualValues(t, 288, height)
+
+	startHeight := int32(289)
+	endHeight := int32(289)
+	maxResults := 100
+	minAmount := int64(90 * btcutil.SatoshiPerBitcoin)
+
+	fullPage, err := callListExpiringWithMinAmount(r.Client, &startHeight, &endHeight, &maxResults, &minAmount)
+	require.NoError(t, err)
+	require.Len(t, fullPage.ExpiringUTXOs, 3, "expected only the high-value outputs from the crafted transaction")
+
+	for i, utxo := range fullPage.ExpiringUTXOs {
+		require.Equal(t, fundingHash.String(), utxo.TxID)
+		require.EqualValues(t, i, utxo.Vout)
+	}
+
+	pageSize := 1
+	scanStart := startHeight
+	scanEnd := endHeight
+	var cursor *string
+	var paginated []btcjson.ExpiringUTXOResult
+	for pages := 0; ; pages++ {
+		require.Less(t, pages, 200, "pagination should terminate")
+		page, err := callListExpiringWithCursorAndMinAmount(
+			r.Client, &scanStart, &scanEnd, &pageSize, cursor, &minAmount,
+		)
+		require.NoError(t, err)
+		paginated = append(paginated, page.ExpiringUTXOs...)
+		if page.NextOutpoint == nil {
+			break
+		}
+		cursor = page.NextOutpoint
+		if page.NextHeight != nil {
+			scanStart = *page.NextHeight
+		}
+	}
+
+	require.Equal(t, fullPage.ExpiringUTXOs, paginated,
+		"cursor pagination under min_amount_sat filter should preserve ordering and membership")
+}
+
 func callGetReapPlan(client *rpcclient.Client) (*btcjson.GetReapPlanResult, error) {
 	result, err := client.RawRequest("getreapplan", nil)
 	if err != nil {
@@ -947,6 +1020,21 @@ func callListExpiringWithCursor(client *rpcclient.Client, start, end *int32,
 	max *int, cursor *string) (*btcjson.ListExpiringResult, error) {
 
 	params := buildListExpiringParamsFull(start, end, max, cursor, nil)
+	result, err := client.RawRequest("listexpiring", params)
+	if err != nil {
+		return nil, err
+	}
+	var list btcjson.ListExpiringResult
+	if err := json.Unmarshal(result, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+func callListExpiringWithCursorAndMinAmount(client *rpcclient.Client, start, end *int32,
+	max *int, cursor *string, minAmt *int64) (*btcjson.ListExpiringResult, error) {
+
+	params := buildListExpiringParamsFull(start, end, max, cursor, minAmt)
 	result, err := client.RawRequest("listexpiring", params)
 	if err != nil {
 		return nil, err
