@@ -28,7 +28,7 @@ OBTC is a chain evolved from a Bitcoin fork:
 
 - coins still exist as **UTXOs**;
 - but every UTXO has a lifecycle;
-- after expiry it can be reclaimed by a system-level mechanism called **REAP**:
+- after expiry it can be reclaimed by a system-level mechanism called **REAP (Reclaim Expired Assets Protocol)**:
   - **70%** is returned to the original script as a refund,
   - **30%** enters the miner security budget as tax;
 - and **Namespace Isolation + Replay Protection** are used together to reduce cross-chain replay risk and accidental cross-chain transfers.
@@ -309,7 +309,7 @@ Suggested interface:
 
 ## 8.1 What REAP is
 
-REAP is a block-internal system transaction:
+REAP (Reclaim Expired Assets Protocol) is a block-internal system transaction:
 
 - its purpose is to process expired UTXOs;
 - it is not an ordinary user transaction template and does not rely on mempool relay.
@@ -686,7 +686,7 @@ The expiry and reclaim mechanism may be interpreted in different jurisdictions a
 | Expiry | Expiry | The point where an asset reaches its protocol age limit | Triggers renewal or system reclaim |
 | Expiry height | Expiry Height | The block height where a UTXO becomes expired | The hard consensus threshold |
 | Expiry index | Expiry Index | The data structure tracking who expires when | Makes scanning and deletion efficient |
-| System reclaim | REAP | The protocol mechanism that processes expired UTXOs inside blocks | Returns part of dormant value into the security budget |
+| System reclaim | REAP (Reclaim Expired Assets Protocol) | The protocol mechanism that processes expired UTXOs inside blocks | Returns part of dormant value into the security budget |
 | REAP transaction | REAP Tx | The system transaction used to execute REAP | Not an ordinary user transaction template |
 | Refund | Refund | The `70%` portion returned to the original script | Preserves continuity of ownership |
 | Tax | Tax | The `30%` portion routed to miner revenue | Forms a continuing security-budget source |

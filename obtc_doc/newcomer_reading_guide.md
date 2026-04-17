@@ -31,7 +31,7 @@
 
 ### 1.1 OBTC 是什么
 
-OBTC（Organic Bitcoin）是基于 btcd（Go 语言实现的 Bitcoin 全节点）的**硬分叉（hard fork）**项目。它在比特币的基础架构上引入了一套叫做 **REAP（Resource Expiration and Allocation Protocol，资源到期与分配协议）** 的新机制。
+OBTC（Organic Bitcoin）是基于 btcd（Go 语言实现的 Bitcoin 全节点）的**硬分叉（hard fork）**项目。它在比特币的基础架构上引入了一套叫做 **REAP（Reclaim Expired Assets Protocol，到期资产回收协议）** 的新机制。
 
 **一句话概括**：OBTC 让长时间不动的 UTXO（未花费交易输出）自动"到期"，系统通过 REAP 交易回收这些到期资产，其中 70% 退还原持有者，30% 作为税收分配给矿工。
 
@@ -1766,7 +1766,7 @@ Day 5：重放保护 + 测试验证
 | 术语 | 英文全称 | 含义 |
 |------|---------|------|
 | OBTC | Organic Bitcoin | 本项目链实现名称 |
-| REAP | Resource Expiration and Allocation Protocol | 到期资产回收协议 |
+| REAP | Reclaim Expired Assets Protocol | 到期资产回收协议 |
 | UTXO | Unspent Transaction Output | 未花费交易输出——比特币的"余额"单元 |
 | ExpiryKey | Expiry Key | 到期键——UTXO 到期的区块高度 |
 | ExpiryIndex | Expiry Index | 到期索引——跟踪哪些 UTXO 何时到期 |

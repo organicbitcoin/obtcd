@@ -318,7 +318,7 @@ OBTC 在比特币的基础上加了一条核心规则：
 
 当一个 UTXO 到期后，OBTC 会通过一个叫做 **REAP** 的机制来处理它。
 
-REAP 是 **Resource Expiration and Allocation Protocol（资源到期与分配协议）** 的缩写。
+REAP 是 **Reclaim Expired Assets Protocol（到期资产回收协议）** 的缩写。
 
 这个名字很贴切——"Reap"在英文里是"收割"的意思，就像秋天收割庄稼一样，系统"收割"那些到期的闲置资源。
 

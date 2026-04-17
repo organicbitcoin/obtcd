@@ -7,12 +7,12 @@ OBTCD (Organic Bitcoin)
 
 > ⚠️ **Active Development Status**: OBTCD includes OBTC network parameters, expiry indexing, REAP baseline logic, replay protection, expiry commitment support, an explicit `--reindex-expiry` recovery path, and a minimal `obtc-status` read-only status page. Rollout, seed replacement, and release hardening are still in progress.
 
-OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements the **Resource Expiration and Allocation Protocol (REAP)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
+OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements **REAP (Reclaim Expired Assets Protocol)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
 
 ## 🎯 Key Features
 
 - **Hard Fork of Bitcoin**: OBTC shares Bitcoin's history up to fork height (~950,000, Q2 2026)
-- **REAP Protocol**: UTXOs expire after 7 years, with 30% value redistributed to miners
+- **REAP (Reclaim Expired Assets Protocol)**: UTXOs expire after 7 years, with 30% value redistributed to miners
 - **Network Isolation**: Complete separation from Bitcoin networks (unique ports, addresses, magic numbers)
 - **btcd Foundation**: Built on the stable, production-tested btcd codebase
 

@@ -28,7 +28,7 @@ obtcd 是 **Organic Bitcoin (OBTC)** 协议的全节点实现，基于 btcd 硬�
 
 ### 1.1 核心特性
 
-- **REAP 协议**（Resource Expiration and Allocation Protocol）：引入 UTXO 时间衰减机制
+- **REAP 协议**（Reclaim Expired Assets Protocol，到期资产回收协议）：引入 UTXO 时间衰减机制
   - UTXO 在 7 年后到期
   - 到期价值的 30% 重新分配给矿工
   - 交易重放保护

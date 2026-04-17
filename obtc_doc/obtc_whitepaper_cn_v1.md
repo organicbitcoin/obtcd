@@ -28,7 +28,7 @@ OBTC 是一条从 Bitcoin 分叉演进的链：
 
 - 币仍以 **UTXO** 形式存在；
 - 但每个 UTXO 都有“生命周期”；
-- 到期后可由系统机制 **REAP** 回收：
+- 到期后可由系统机制 **REAP（Reclaim Expired Assets Protocol，到期资产回收协议）** 回收：
   - **70%** 返还到原脚本（Refund）
   - **30%** 进入矿工安全预算（Tax）
 - 同时通过 **Namespace Isolation + Replay Protection** 降低跨链重放与误转风险。
@@ -304,7 +304,7 @@ OBTC 实现可以分为三层，每层职责不同。
 
 ## 8.1 REAP 是什么
 
-REAP 是 block-internal system transaction：
+REAP（Reclaim Expired Assets Protocol）是 block-internal system transaction：
 
 - 目标：处理 expired UTXO；
 - 特点：不是普通用户交易模板，不依赖 mempool relay。
@@ -678,7 +678,7 @@ OBTC 是独立链，不等同于 Bitcoin。到期与回收机制在不同法域�
 | 到期 | Expiry | 资产到达规则年龄上限 | 触发续期或系统回收 |
 | 到期高度 | Expiry Height | UTXO 变成 expired 的区块高度 | 共识判断的硬阈值 |
 | 到期索引 | Expiry Index | 专门记“谁何时到期”的索引结构 | 让扫描与删除高效可行 |
-| 系统回收 | REAP | 协议在区块内处理 expired UTXO 的机制 | 把沉睡资产部分回流安全预算 |
+| 系统回收 | REAP（Reclaim Expired Assets Protocol） | 协议在区块内处理 expired UTXO 的机制 | 把沉睡资产部分回流安全预算 |
 | 回收交易 | REAP Tx | 用于执行 REAP 的系统交易 | 非普通用户交易模板 |
 | 返还 | Refund | REAP 后回到原脚本的部分（70%） | 保留资产连续性 |
 | 税额 | Tax | REAP 后进入矿工收益的部分（30%） | 构成持续安全预算来源 |

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-OBTC is a hard-fork of btcd (Go Bitcoin full node) implementing the REAP protocol (Resource Expiration and Allocation Protocol). Key additions: 7-year UTXO expiry, 30% value redistribution to miners, replay protection, and separate network parameters.
+OBTC is a hard-fork of btcd (Go Bitcoin full node) implementing REAP (Reclaim Expired Assets Protocol). Key additions: 7-year UTXO expiry, 30% value redistribution to miners, replay protection, and separate network parameters.
 
 ## Build & Test
 
