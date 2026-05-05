@@ -36,7 +36,7 @@ BTCCTL() {
     --notls \
     --rpcuser=test \
     --rpcpass=test \
-    --rpcserver=127.0.0.1:18667 \
+    --rpcserver=127.0.0.1:29528 \
     "$@"
 }
 ```

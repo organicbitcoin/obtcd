@@ -145,11 +145,11 @@ func parseFlags() *Config {
 	if config.RPCHost == "" {
 		switch config.Network {
 		case "obtcregtest":
-			config.RPCHost = "localhost:18667"
+			config.RPCHost = "localhost:29528"
 		case "obtctestnet":
-			config.RPCHost = "localhost:18556"
+			config.RPCHost = "localhost:19528"
 		case "obtcmainnet":
-			config.RPCHost = "localhost:8556"
+			config.RPCHost = "localhost:9528"
 		case "regtest":
 			config.RPCHost = "localhost:18334"
 		case "testnet":

@@ -186,11 +186,11 @@ func parseFlags() (*config, error) {
 	if cfg.RPCHost == "" {
 		switch strings.ToLower(cfg.Network) {
 		case "obtcregtest":
-			cfg.RPCHost = "127.0.0.1:18556"
+			cfg.RPCHost = "127.0.0.1:29528"
 		case "obtctestnet":
-			cfg.RPCHost = "127.0.0.1:18556"
+			cfg.RPCHost = "127.0.0.1:19528"
 		case "obtcmainnet":
-			cfg.RPCHost = "127.0.0.1:8556"
+			cfg.RPCHost = "127.0.0.1:9528"
 		case "regtest":
 			cfg.RPCHost = "127.0.0.1:18334"
 		case "testnet":

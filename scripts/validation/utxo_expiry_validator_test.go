@@ -340,7 +340,7 @@ func TestBuildReport(t *testing.T) {
 		tipHeight: 1000,
 		config: &Config{
 			Network:    "obtcregtest",
-			RPCHost:    "localhost:18667",
+			RPCHost:    "localhost:29528",
 			MaxResults: 100,
 			StartSet:   false,
 			EndSet:     false,

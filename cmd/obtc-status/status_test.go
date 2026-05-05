@@ -87,7 +87,7 @@ func TestStatusCollectorSnapshot(t *testing.T) {
 		},
 	}
 
-	collector := &statusCollector{rpc: fake, rpcServer: "127.0.0.1:18556"}
+	collector := &statusCollector{rpc: fake, rpcServer: "127.0.0.1:19528"}
 	snapshot, err := collector.Snapshot(context.Background())
 	if err != nil {
 		t.Fatalf("snapshot failed: %v", err)
@@ -129,7 +129,7 @@ func TestStatusCollectorOptionalWarnings(t *testing.T) {
 		},
 	}
 
-	collector := &statusCollector{rpc: fake, rpcServer: "127.0.0.1:8556"}
+	collector := &statusCollector{rpc: fake, rpcServer: "127.0.0.1:9528"}
 	snapshot, err := collector.Snapshot(context.Background())
 	if err != nil {
 		t.Fatalf("snapshot failed: %v", err)
@@ -156,7 +156,7 @@ func TestStatusServerHandlers(t *testing.T) {
 	}
 
 	server := &statusServer{
-		collector: &statusCollector{rpc: fake, rpcServer: "127.0.0.1:8556"},
+		collector: &statusCollector{rpc: fake, rpcServer: "127.0.0.1:9528"},
 		refresh:   5 * time.Second,
 		timeout:   2 * time.Second,
 	}
@@ -167,7 +167,7 @@ func TestStatusServerHandlers(t *testing.T) {
 	if jsonRec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", jsonRec.Code)
 	}
-	if !strings.Contains(jsonRec.Body.String(), "\"rpc_server\": \"127.0.0.1:8556\"") {
+	if !strings.Contains(jsonRec.Body.String(), "\"rpc_server\": \"127.0.0.1:9528\"") {
 		t.Fatalf("unexpected json body: %s", jsonRec.Body.String())
 	}
 

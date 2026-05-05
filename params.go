@@ -73,19 +73,19 @@ var sigNetParams = params{
 // obtcMainNetParams contains parameters specific to the OBTC main network.
 var obtcMainNetParams = params{
 	Params:  &chaincfg.ObtcMainNetParams,
-	rpcPort: "8556",
+	rpcPort: "9528",
 }
 
 // obtcTestNetParams contains parameters specific to the OBTC test network.
 var obtcTestNetParams = params{
 	Params:  &chaincfg.ObtcTestNetParams,
-	rpcPort: "18556",
+	rpcPort: "19528",
 }
 
 // obtcRegTestParams contains parameters specific to the OBTC regression test network.
 var obtcRegTestParams = params{
 	Params:  &chaincfg.ObtcRegTestParams,
-	rpcPort: "18667",
+	rpcPort: "29528",
 }
 
 // netName returns the name used when referring to a bitcoin network.  At the

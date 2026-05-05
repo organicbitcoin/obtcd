@@ -204,13 +204,13 @@ fi
 if [[ -z "$RPC_HOST" ]]; then
     case $NETWORK in
         obtcregtest)
-            RPC_HOST="localhost:18667"
+            RPC_HOST="localhost:29528"
             ;;
         obtctestnet)
-            RPC_HOST="localhost:18556"
+            RPC_HOST="localhost:19528"
             ;;
         obtcmainnet)
-            RPC_HOST="localhost:8556"
+            RPC_HOST="localhost:9528"
             ;;
         regtest)
             RPC_HOST="localhost:18334"

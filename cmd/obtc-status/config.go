@@ -88,12 +88,14 @@ func networkParams(cfg *config) (*chaincfg.Params, error) {
 
 func defaultRPCPort(params *chaincfg.Params) string {
 	switch params {
+	case &chaincfg.ObtcMainNetParams:
+		return "9528"
 	case &chaincfg.ObtcTestNetParams:
-		return "18556"
+		return "19528"
 	case &chaincfg.ObtcRegTestParams:
-		return "18667"
+		return "29528"
 	default:
-		return "8556"
+		return "9528"
 	}
 }
 

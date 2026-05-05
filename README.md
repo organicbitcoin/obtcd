@@ -38,10 +38,9 @@ go build
 ./btcd --obtctestnet --reindex-expiry --rpcuser=u --rpcpass=p
 
 # Start the read-only status page against an existing node.
-# Use the node's actual RPC port: obtctestnet defaults to 18556 unless you
-# override it explicitly (for example to 19528 in operator docs).
+# Use the node's actual RPC port: obtctestnet defaults to 19528.
 go build ./cmd/obtc-status
-./cmd/obtc-status/obtc-status --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:18556 --notls
+./cmd/obtc-status/obtc-status --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:19528 --notls
 ```
 
 ### Start Development Network (2-node simnet)

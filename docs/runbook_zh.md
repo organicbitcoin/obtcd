@@ -150,7 +150,7 @@ rpcuser=myuser
 rpcpass=mypassword
 
 # RPC 监听地址
-rpclisten=127.0.0.1:18556
+rpclisten=127.0.0.1:19528
 
 # 受限 RPC 用户（只能调用安全方法）
 rpclimituser=limiteduser
@@ -252,7 +252,7 @@ btcd \
   --obtcmainnet \
   --datadir=/data/obtcd \
   --logdir=/data/obtcd/logs \
-  --rpclisten=0.0.0.0:8556 \
+  --rpclisten=0.0.0.0:9528 \
   --rpcuser=rpc_user \
   --rpcpass=rpc_password \
   --rpccert=/data/obtcd/certs/rpc.cert \
@@ -343,9 +343,9 @@ sudo journalctl -u obtcd -f
 
 | 网络 | RPC 端口 |
 |------|---------|
-| OBTC MainNet | 8556 |
-| OBTC TestNet | 18556 |
-| OBTC RegTest | 18667 |
+| OBTC MainNet | 9528 |
+| OBTC TestNet | 19528 |
+| OBTC RegTest | 29528 |
 | Bitcoin MainNet | 8334 |
 | Bitcoin TestNet | 18334 |
 | SimNet | 18556 |
@@ -358,8 +358,8 @@ iptables -A INPUT -p tcp --dport 9527 -j ACCEPT       # OBTC 主网
 iptables -A INPUT -p tcp --dport 19527 -j ACCEPT      # OBTC 测试网
 
 # RPC 端口 — 仅允许内网
-iptables -A INPUT -p tcp --dport 8556 -s 10.0.0.0/8 -j ACCEPT
-iptables -A INPUT -p tcp --dport 8556 -j DROP
+iptables -A INPUT -p tcp --dport 9528 -s 10.0.0.0/8 -j ACCEPT
+iptables -A INPUT -p tcp --dport 9528 -j DROP
 ```
 
 ### 5.4 地址格式
@@ -576,7 +576,7 @@ systemctl start obtcd
 # 基本用法
 btcctl --obtctestnet \
   --rpcuser=myuser --rpcpass=mypassword \
-  --rpcserver=127.0.0.1:18556 \
+  --rpcserver=127.0.0.1:19528 \
   <command> [args]
 
 # 查看节点信息
@@ -605,12 +605,12 @@ btcctl --obtctestnet --rpcuser=u --rpcpass=p --notls getinfo
 curl -s --user myuser:mypassword \
   --data-binary '{"jsonrpc":"1.0","id":"1","method":"getblockcount","params":[]}' \
   -H 'Content-Type: application/json' \
-  https://localhost:18556/
+  https://localhost:19528/
 
 # 禁用 TLS 验证（自签名证书）
 curl -sk --user myuser:mypassword \
   --data-binary '{"jsonrpc":"1.0","id":"1","method":"getinfo","params":[]}' \
-  https://localhost:18556/
+  https://localhost:19528/
 ```
 
 ---
@@ -770,7 +770,7 @@ OBTC 使用独立的 sighash domain，确保 OBTC 交易无法在比特币网络
 go build ./cmd/obtc-status
 
 # 启动（会连接到 obtcd 的 RPC 接口）
-./obtc-status --rpcserver=127.0.0.1:18556 --rpcuser=u --rpcpass=p --listen=:8080
+./obtc-status --rpcserver=127.0.0.1:19528 --rpcuser=u --rpcpass=p --listen=:8080
 ```
 
 ---
@@ -1199,7 +1199,7 @@ rpcuser=CHANGE_ME
 rpcpass=CHANGE_ME
 rpclimituser=CHANGE_ME_LIMITED
 rpclimitpass=CHANGE_ME_LIMITED
-rpclisten=0.0.0.0:8556
+rpclisten=0.0.0.0:9528
 rpccert=/data/obtcd/certs/rpc.cert
 rpckey=/data/obtcd/certs/rpc.key
 rpcmaxclients=20

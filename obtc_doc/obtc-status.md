@@ -17,12 +17,12 @@ go build ./cmd/obtc-status
   --obtctestnet \
   --rpcuser=<user> \
   --rpcpass=<pass> \
-  --rpcserver=127.0.0.1:18556 \
+  --rpcserver=127.0.0.1:19528 \
   --notls
 ```
 
-`18556` 是当前 `obtctestnet` 的默认 RPC 端口；如果节点启动时显式改成了其他端口
-（例如 [testnet-join.md](testnet-join.md) 里的 `19528`），这里也要改成对应值。
+`19528` 是当前 `obtctestnet` 的默认节点 JSON-RPC 端口；如果节点启动时显式改成了其他端口，
+这里也要改成对应值。
 
 默认会在 `127.0.0.1:9680` 提供以下端点：
 

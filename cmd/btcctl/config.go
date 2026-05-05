@@ -151,19 +151,22 @@ func normalizeAddress(addr string, chain *chaincfg.Params, useWallet bool) (stri
 			}
 		case &chaincfg.ObtcMainNetParams:
 			if useWallet {
-				return "", fmt.Errorf("cannot use -wallet with -obtcmainnet, btcwallet not yet compatible with OBTC")
+				defaultPort = "9554"
+			} else {
+				defaultPort = "9528"
 			}
-			defaultPort = "8556"
 		case &chaincfg.ObtcTestNetParams:
 			if useWallet {
-				return "", fmt.Errorf("cannot use -wallet with -obtctestnet, btcwallet not yet compatible with OBTC")
+				defaultPort = "19554"
+			} else {
+				defaultPort = "19528"
 			}
-			defaultPort = "18556"
 		case &chaincfg.ObtcRegTestParams:
 			if useWallet {
-				return "", fmt.Errorf("cannot use -wallet with -obtcregtest, btcwallet not yet compatible with OBTC")
+				defaultPort = "29554"
+			} else {
+				defaultPort = "29528"
 			}
-			defaultPort = "18667"
 		case &chaincfg.SigNetParams:
 			if useWallet {
 				defaultPort = "38332"
