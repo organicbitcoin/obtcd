@@ -58,7 +58,9 @@ btcutil/psbt/coverage.txt
 /obtc-status
 /obtcd
 cmd/btcctl/btcctl
+cmd/obtc-status/obtc-status
 cmd/devnetsim/devnetsim
+devnet-data/
 
 .DS_Store
 .aider*
