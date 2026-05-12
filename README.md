@@ -58,6 +58,8 @@ Website:
 ## Network parameters
 
 Current implementation values are defined in `chaincfg/params_obtc.go`.
+The dedicated mainnet checklist is maintained in
+[`docs/mainnet-params.md`](docs/mainnet-params.md).
 
 | Parameter | Mainnet | Testnet | Regtest |
 | --- | --- | --- | --- |

@@ -3,6 +3,9 @@
 The table below summarizes the public OBTC network namespaces used by this
 repository.
 
+For the full mainnet review checklist, see
+[OBTC Mainnet Parameters](mainnet-params.md).
+
 | Network | Flag | P2P | Node RPC | Bech32 HRP | Magic |
 |---|---|---:|---:|---|---|
 | OBTC mainnet | `--obtcmainnet` | `9527` | `9528` | `obtc` | `0x4F425443` |

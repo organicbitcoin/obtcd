@@ -14,6 +14,7 @@ mining, or development practices that are still shared with btcd.
 * [Getting Started](getting-started.md)
 * [OBTC Testnet Join Guide](testnet-join.md)
 * [Network Parameters](network-parameters.md)
+* [OBTC Mainnet Parameters](mainnet-params.md)
 
 ## Reference
 
