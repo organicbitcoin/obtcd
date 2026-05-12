@@ -1,5 +1,4 @@
-OBTCD (Organic Bitcoin) 
-=====================
+# OBTCD
 
 [![Build Status](https://github.com/organicbitcoin/obtcd/workflows/Build%20and%20Test/badge.svg)](https://github.com/organicbitcoin/obtcd/actions)
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
@@ -7,173 +6,207 @@ OBTCD (Organic Bitcoin)
 
 OBTC is a Bitcoin-derived lifecycle-money experiment.
 
-> ⚠️ **Active Development Status**: OBTCD includes OBTC network parameters, expiry indexing, REAP baseline logic, replay protection, expiry commitment support, an explicit `--reindex-expiry` recovery path, and a minimal `obtc-status` read-only status page. Rollout, seed replacement, and release hardening are still in progress.
+`obtcd` is the OBTC node implementation. It is derived from
+[btcsuite/btcd](https://github.com/btcsuite/btcd) and adds OBTC network
+parameters, expiry-aware indexing, replay protection, expiry commitment support,
+REAP validation paths, and operator tooling for testnet and mainnet-candidate
+work.
 
-OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements **REAP (Reclaim Expired Assets Protocol)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
+This repository is public for developer, node operator, miner, and reviewer
+inspection. It is not production financial infrastructure.
 
-## 🎯 Key Features
+## Status
 
-- **Hard Fork of Bitcoin**: OBTC shares Bitcoin's history up to fork height (~950,000, Q2 2026)
-- **REAP (Reclaim Expired Assets Protocol)**: UTXOs expire after 7 years, with 30% value redistributed to miners
-- **Network Isolation**: Complete separation from Bitcoin networks (unique ports, addresses, magic numbers)
-- **btcd Foundation**: Built on the stable, production-tested btcd codebase
+The current public target is `mainnet-candidate-2026-07`, not a mature
+production mainnet.
 
-## 🚀 Quick Start
+Current milestone:
 
-### Prerequisites
+- [mainnet-candidate-2026-07](https://github.com/organicbitcoin/obtcd/milestone/1)
 
-- [Go](http://golang.org) 1.22 or newer
+Current companion wallet repository:
+
+- [obtcwallet](https://github.com/organicbitcoin/obtcwallet)
+
+Website:
+
+- <https://organicbitcoin.org>
+
+## What is implemented
+
+- OBTC mainnet, testnet, and regtest network parameters.
+- Network isolation through distinct magic values, ports, and address prefixes.
+- Bitcoin shared-history fork parameters.
+- ExpiryIndex state and scan RPC support.
+- Expiry commitment support in coinbase data.
+- REAP candidate selection, transaction validation, and mining template paths.
+- Replay protection and OBTC-specific consensus/policy tests.
+- `--reindex-expiry` for rebuilding persisted ExpiryIndex state.
+- `obtc-status`, a read-only node status page for operators.
+- Devnet traffic simulation and validation scripts.
+
+## Important limits
+
+- This is a mainnet-candidate codebase, not a production financial system.
+- Seed replacement, public observation, and release hardening are still active
+  launch work.
+- Miner-facing material must not be read as a revenue guarantee. REAP-related
+  miner accounting depends on activation state, candidate availability, and
+  block template validation.
+- The Go module path still inherits upstream `github.com/btcsuite/btcd`.
+
+## Network parameters
+
+Current implementation values are defined in `chaincfg/params_obtc.go`.
+
+| Parameter | Mainnet | Testnet | Regtest |
+| --- | --- | --- | --- |
+| Network magic | `0x4F425443` | `0x4F544553` | `0x4F524547` |
+| P2P port | `9527` | `19527` | `29527` |
+| RPC port | `9528` | `19528` | `29528` |
+| Fork height | `950000` | `2800000` | `100` |
+| Bech32 HRP | `obtc` | `obtct` | `obtcrt` |
+| P2PKH prefix | `0x47` | `0x71` | `0x72` |
+| P2SH prefix | `0x32` | `0xD1` | `0xD2` |
+| BIP44 coin type | `20260` | `20261` | `20262` |
+
+## Requirements
+
+- Go 1.24.0 or newer
 - Git
 
-### Build OBTCD
+## Build
 
 ```bash
 git clone https://github.com/organicbitcoin/obtcd.git
 cd obtcd
-go build
+
+go build -o ./btcd .
+go build -o ./btcctl ./cmd/btcctl
+go build -o ./obtc-status ./cmd/obtc-status
 ```
 
-### Operations Helpers
+## Test
 
 ```bash
-# Explicitly reset and rebuild the persisted ExpiryIndex state.
-./btcd --obtctestnet --reindex-expiry --rpcuser=u --rpcpass=p
-
-# Start the read-only status page against an existing node.
-# Use the node's actual RPC port: obtctestnet defaults to 19528.
-go build ./cmd/obtc-status
-./cmd/obtc-status/obtc-status --obtctestnet --rpcuser=u --rpcpass=p --rpcserver=127.0.0.1:19528 --notls
+go test ./...
 ```
 
-### Start Development Network (2-node simnet)
+Focused OBTC checks:
 
 ```bash
-# Start DevNet (simnet with 2 nodes)
+go test ./chaincfg ./wire -run OBTC -count=1
+go test ./mempool -run 'REAP|RejectREAPSystemTxFromMempool' -count=1
+go test ./mining -run 'REAP|Accounting|Witness' -count=1
+```
+
+## Minimal testnet node
+
+```bash
+./btcd --obtctestnet \
+  --listen=0.0.0.0:19527 \
+  --rpclisten=127.0.0.1:19528 \
+  --rpcuser=testuser \
+  --rpcpass=testpass \
+  --txindex \
+  --expiryindex \
+  --notls
+```
+
+Check basic RPC connectivity:
+
+```bash
+./btcctl --obtctestnet \
+  --rpcuser=testuser \
+  --rpcpass=testpass \
+  --rpcserver=127.0.0.1:19528 \
+  --notls \
+  getinfo
+```
+
+Inspect OBTC expiry and REAP state:
+
+```bash
+./btcctl --obtctestnet \
+  --rpcuser=testuser \
+  --rpcpass=testpass \
+  --rpcserver=127.0.0.1:19528 \
+  --notls \
+  getexpiryindexstats
+
+./btcctl --obtctestnet \
+  --rpcuser=testuser \
+  --rpcpass=testpass \
+  --rpcserver=127.0.0.1:19528 \
+  --notls \
+  getexpirycommitment
+
+./btcctl --obtctestnet \
+  --rpcuser=testuser \
+  --rpcpass=testpass \
+  --rpcserver=127.0.0.1:19528 \
+  --notls \
+  getreapplan
+```
+
+Start the read-only status page against the same node:
+
+```bash
+./obtc-status \
+  --obtctestnet \
+  --rpcuser=testuser \
+  --rpcpass=testpass \
+  --rpcserver=127.0.0.1:19528 \
+  --notls
+```
+
+## Local devnet
+
+The repository includes a two-node simnet/devnet helper for repeatable local
+traffic and restart testing:
+
+```bash
 ./scripts/devnet-up.sh start
-
-# Run dynamic mixed traffic demo
 ./scripts/devnet-up.sh demo
-
-# Prepare two deterministic wallets and inject traffic from both nodes
-./scripts/devnet-up.sh prepare 512 300000
-./scripts/devnet-up.sh prepare-peer 256 240000
-./scripts/devnet-up.sh spam --count 200 --mode feemarket --value 150000
-./scripts/devnet-up.sh spam-peer --count 80 --mode mixed --value 110000
-
-# Run fee-market / conflict / multisource scenarios
 ./scripts/devnet-up.sh scenario feemarket
 ./scripts/devnet-up.sh scenario conflict
 ./scripts/devnet-up.sh scenario multisource
-
-# Resume the same devnet data after a stop
-./scripts/devnet-up.sh restart
-
-# Check network status
 ./scripts/devnet-up.sh status
-
-# Stop network
 ./scripts/devnet-up.sh stop
 ```
 
-### Example Transaction
+## Documentation
 
-```bash
-# Build btcctl
-cd cmd/btcctl && go build
+- [Newcomer Reading Guide](obtc_doc/newcomer_reading_guide.md)
+- [Expiry Commitment Implementation](obtc_doc/expiry_commitment_implementation.md)
+- [Phase 6 Testnet Notes](obtc_doc/phase6_implementation.md)
+- [Phase 7 Hardening Notes](obtc_doc/phase7_implementation.md)
+- [Phase 8 Mainnet Candidate Notes](obtc_doc/phase8_implementation.md)
+- [OBTC Testnet Join Guide](docs/testnet-join.md)
+- [Devnet Traffic Simulator Guide](docs/devnet_traffic_simulator.md)
+- [OBTC Status Tool](docs/obtc-status.md)
+- [Inherited btcd Documentation](docs/)
 
-# Get network info
-./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getinfo
+## Issues
 
-# Validate OBTC expiry / REAP state
-./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getexpiryindexstats
-./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getexpirycommitment
-./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 getreapplan
+Use this repository's issue tracker for node bugs, release evidence,
+mainnet-candidate blockers, mining-template review, and operator feedback:
 
-# Generate blocks (node 1)
-./btcctl --obtcregtest --rpcuser=obtc --rpcpass=obtcpass --rpcserver=127.0.0.1:18556 generate 1
-```
+<https://github.com/organicbitcoin/obtcd/issues>
 
-## 📊 OBTC Network Parameters
+For launch-tracking work, prefer the
+[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1)
+milestone and the labels `mainnet-blocker`, `evidence`, `comms`, and
+`post-launch`.
 
-> Current implementation values are defined in `chaincfg/params_obtc.go`.
+## Upstream attribution
 
-| Parameter | MainNet | TestNet | RegTest |
-|-----------|---------|---------|---------|
-| **Network Magic** | `0x4F425443` | `0x4F544553` | `0x4F524547` |
-| **Default Port** | `9527` | `19527` | `29527` |
-| **Fork Height** | `950000` (Q2 2026) | `2800000` | `100` |
-| **Bech32 HRP** | `obtc` | `obtct` | `obtcrt` |
-| **Address Prefixes** | `P2PKH=0x47`, `P2SH=0x32` | `P2PKH=0x71`, `P2SH=0xD1` | `P2PKH=0x72`, `P2SH=0xD2` |
-| **HD Key Prefixes** | `0B47B01E / 0B47B5D4` | `0B48B01E / 0B48B5D4` | `0B49B01E / 0B49B5D4` |
-| **BIP44 Coin Type** | `20260` | `20261` | `20262` |
+`obtcd` is derived from [btcsuite/btcd](https://github.com/btcsuite/btcd). The
+upstream project's networking, wallet-adjacent RPC foundations, database
+interfaces, and consensus architecture remain visible throughout this
+repository. OBTC-specific changes are layered on top for lifecycle rules,
+expiry/reclaim validation, network isolation, and launch tooling.
 
-### Network Isolation Features
-
-- ✅ **Unique Magic Numbers**: Prevents cross-network communication
-- ✅ **Separate Ports**: Avoids conflicts with Bitcoin nodes  
-- ✅ **Custom Address Encoding**: Unique prefixes are defined per OBTC network
-- ✅ **Fork Height Detection**: `IsPostOBTCFork()` function available
-- ✅ **Network Detection**: `IsOBTC()` function for conditional logic
-
-## 🧪 Development & Testing
-
-### Running Tests
-
-```bash
-# Run all tests
-go test ./...
-
-# Run OBTC-specific tests  
-go test ./chaincfg ./wire -v -run "OBTC"
-
-# Run with race detection
-go test -race ./...
-```
-
-### Development Workflow
-
-```bash
-# Development network management
-./scripts/devnet-up.sh start           # Start 2-node simnet
-./scripts/devnet-up.sh demo            # Run demo transaction  
-./scripts/devnet-up.sh logs            # View node logs
-./scripts/devnet-up.sh clean           # Clean all data
-```
-
-## 🗓️ Development Roadmap
-
-- **Phase 1-4** ✅: Core protocol baseline implemented
-- **Phase 5**: Wallet extension and RPC
-- **Phase 6**: TestNet deployment and monitoring
-- **Phase 7**: Hardening and stress testing
-- **Phase 8**: MainNet candidate release
-
-## 📚 Documentation
-
-- [Development Roadmap](obtc_doc/obtc_roadmap_plan.md) - Complete 8-phase development plan
-- [Newcomer Reading Guide](obtc_doc/newcomer_reading_guide.md) - Current architecture and code-reading map
-- [Expiry Commitment Implementation](obtc_doc/expiry_commitment_implementation.md) - Coinbase commitment design as implemented
-- [Phase 5 Implementation](obtc_doc/phase5_implementation.md) - Wallet and RPC scope
-- [Phase 6 Implementation](obtc_doc/phase6_implementation.md) - Testnet rollout notes
-- [Phase 7 Implementation](obtc_doc/phase7_implementation.md) - Hardening status and gaps
-- [Phase 8 Implementation](obtc_doc/phase8_implementation.md) - Mainnet rollout notes
-- [OBTC Testnet Join Guide](docs/testnet-join.md) - Current testnet bootstrap and observability steps
-- [DevNet Traffic Simulator Guide](docs/devnet_traffic_simulator.md) - Traffic modes, scenarios, and smoke validation
-- [OBTC Status Tool](docs/obtc-status.md) - Read-only status page for operators
-- [Original btcd Documentation](docs/) - Inherited btcd documentation
-
-## ⚠️ Important Notes
-
-- **Development Status**: Core OBTC chain logic is in tree; rollout and operational tooling are still evolving
-- **Network**: simnet/regtest are practical for local testing; OBTC network parameters are defined for mainnet/testnet/regtest
-- **Consensus Rules**: Expiry indexing, expiry commitment, replay protection, and REAP-related validation exist in the codebase
-- **Compatibility**: Shares Bitcoin history up to the configured fork height
-- **Production Use**: Not ready for production until Phase 8
-
-## 🤝 Contributing
-
-This project follows an 8-phase development timeline with specific milestones. Please refer to the [development roadmap](obtc_doc/obtc_roadmap_plan.md) for current priorities.
-
-## 📜 License
+## License
 
 OBTCD is licensed under the [copyfree](http://copyfree.org) ISC License.
