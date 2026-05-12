@@ -5,6 +5,8 @@ OBTCD (Organic Bitcoin)
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
 
+OBTC is a Bitcoin-derived lifecycle-money experiment.
+
 > ⚠️ **Active Development Status**: OBTCD includes OBTC network parameters, expiry indexing, REAP baseline logic, replay protection, expiry commitment support, an explicit `--reindex-expiry` recovery path, and a minimal `obtc-status` read-only status page. Rollout, seed replacement, and release hardening are still in progress.
 
 OBTCD is a full node implementation of the Organic Bitcoin (OBTC) protocol, forked from [btcd](https://github.com/btcsuite/btcd). OBTC implements **REAP (Reclaim Expired Assets Protocol)**, introducing temporal scarcity to Bitcoin through UTXO expiration and value redistribution.
