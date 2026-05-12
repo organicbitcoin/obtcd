@@ -8,10 +8,9 @@ and [hidden service](#HiddenService) configurations along with
 bridge between regular nodes and hidden service nodes without routing the
 regular connections through Tor.
 
-While it is easier to only run as a client, it is more beneficial to the Bitcoin
-network to run as both a client and a server so others may connect to you to as
-you are connecting to them.  We recommend you take the time to setup a Tor
-hidden service for this reason.
+While it is easier to only run as a client, it is more useful to the network to
+run as both a client and a server so others may connect to you as you are
+connecting to them.  Consider setting up a Tor hidden service for this reason.
 
 ## Client-only
 
@@ -60,7 +59,7 @@ address.
 
 ```text
 HiddenServiceDir /var/tor/btcd
-HiddenServicePort 8333 127.0.0.1:8333
+HiddenServicePort 19527 127.0.0.1:19527
 ```
 
 Once Tor is configured to provide the hidden service and you have obtained your
@@ -76,7 +75,7 @@ three flags:
 ### Command line example
 
 ```bash
-./btcd --proxy=127.0.0.1:9050 --listen=127.0.0.1 --externalip=fooanon.onion
+./btcd --obtctestnet --proxy=127.0.0.1:9050 --listen=127.0.0.1:19527 --externalip=fooanon.onion
 ```
 
 ### Config file example
@@ -85,7 +84,8 @@ three flags:
 [Application Options]
 
 proxy=127.0.0.1:9050
-listen=127.0.0.1
+obtctestnet=1
+listen=127.0.0.1:19527
 externalip=fooanon.onion
 ```
 

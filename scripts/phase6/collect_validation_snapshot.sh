@@ -30,8 +30,8 @@ Options:
   -h, --help                show this help
 
 Examples:
-  $0 --rpcuser=u --rpcpass=p --out docs/phase6-validation-snapshot.md
-  $0 --rpcuser=u --rpcpass=p --append docs/phase6-validation.md
+  $0 --rpcuser=u --rpcpass=p --out /tmp/obtc-phase6-validation-snapshot.md
+  $0 --rpcuser=u --rpcpass=p --append /tmp/obtc-phase6-validation.md
 EOF
 }
 

@@ -18,12 +18,12 @@ from recommonmark.transform import AutoStructify
 
 # -- Project information -----------------------------------------------------
 
-project = 'btcd'
-copyright = '2020, btcd'
-author = 'btcsuite developers'
+project = 'obtcd'
+copyright = '2026, organicbitcoin'
+author = 'organicbitcoin maintainers'
 
 # The full version, including alpha/beta/rc tags
-release = 'beta'
+release = 'mainnet-candidate'
 
 source_suffix = ['.md']
 

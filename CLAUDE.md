@@ -59,6 +59,6 @@ go test -tags=rpctest ./integration/... -count=1 -v
 
 ## Documentation
 
-- `obtc_doc/` — Phase implementation plans (phases 1–8)
+- `docs/` — Public node documentation and operator guides
 - `AGENTS.md` — Directory structure and module boundaries
 - `scripts/devnet-up.sh` — DevNet launcher

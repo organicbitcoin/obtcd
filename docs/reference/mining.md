@@ -13,6 +13,9 @@ miningaddr=12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX
 miningaddr=1M83ju3EChKYyysmM2FXtLNftbacagd8FR
 ```
 
+For OBTC networks, use an address for the selected OBTC network, for example an
+`obtc1...` mainnet address or an `obtct1...` testnet address.
+
 ## Add btcd's RPC TLS certificate to system Certificate Authority list
 
 `cgminer` uses [curl](http://curl.haxx.se/) to fetch data from the RPC server.
@@ -27,4 +30,11 @@ certificate into the default system Certificate Authority list.
 
 ## Set your mining software url to use https
 
-`cgminer -o https://127.0.0.1:8334 -u rpcuser -p rpcpassword`
+For OBTC testnet:
+
+```bash
+cgminer -o https://127.0.0.1:19528 -u rpcuser -p rpcpassword
+```
+
+For OBTC mainnet-candidate, use port `9528` unless the node was started with a
+custom `--rpclisten`.

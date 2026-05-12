@@ -14,7 +14,7 @@ and that entity will be btcd.
 
 When a client wants programmatic access to the data provided by btcd, they'll
 likely want to use the [rpcclient](https://github.com/btcsuite/btcd/tree/master/rpcclient)
-package which makes use of the [JSON-RPC API](https://github.com/btcsuite/btcd/tree/master/docs/json_rpc_api.md).
+package which makes use of the [JSON-RPC API](../docs/reference/json-rpc-api.md).
 
 However, this package could be extremely useful for any applications requiring
 Bitcoin block storage capabilities.

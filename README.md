@@ -177,15 +177,9 @@ traffic and restart testing:
 
 ## Documentation
 
-- [Newcomer Reading Guide](obtc_doc/newcomer_reading_guide.md)
-- [Expiry Commitment Implementation](obtc_doc/expiry_commitment_implementation.md)
-- [Phase 6 Testnet Notes](obtc_doc/phase6_implementation.md)
-- [Phase 7 Hardening Notes](obtc_doc/phase7_implementation.md)
-- [Phase 8 Mainnet Candidate Notes](obtc_doc/phase8_implementation.md)
+- [OBTC Node Documentation](docs/)
 - [OBTC Testnet Join Guide](docs/testnet-join.md)
-- [Devnet Traffic Simulator Guide](docs/devnet_traffic_simulator.md)
-- [OBTC Status Tool](docs/obtc-status.md)
-- [Inherited btcd Documentation](docs/)
+- [Network Parameters](docs/network-parameters.md)
 
 ## Issues
 

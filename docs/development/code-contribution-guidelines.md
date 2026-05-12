@@ -197,7 +197,7 @@ but it was left as a magic number to show how much of a difference a good
 comment can make.
 
 **Please refer to the [code formatting rules
-document](./code_formatting_rules.md)** to see the list of additional style
+document](./code-formatting-rules.md)** to see the list of additional style
 rules we enforce.
 
 
@@ -236,7 +236,7 @@ Further paragraphs come after blank lines.
 Prefix the summary with the subsystem/package when possible. Many other
 projects make use of the code and this makes it easier for them to tell when
 something they're using has changed. Have a look at [past
-commits](https://github.com/btcsuite/btcd/commits/master) for examples of
+commits](https://github.com/organicbitcoin/obtcd/commits/master) for examples of
 commit messages.
 
 Here are some of the reasons why wrapping your commit messages to 72 columns is
@@ -310,7 +310,7 @@ keep a clean commit history over a tangled weave of merge commits.  However,
 regardless of the specific merge method used, the code will be integrated with
 the master branch and the pull request will be closed.
 
-Rejoice as you will now be listed as a [contributor](https://github.com/btcsuite/btcd/graphs/contributors)!
+Rejoice as you will now be listed as a [contributor](https://github.com/organicbitcoin/obtcd/graphs/contributors)!
 
 ## Contribution Standards
 
@@ -334,5 +334,5 @@ Rejoice as you will now be listed as a [contributor](https://github.com/btcsuite
 ## Licensing of Contributions
 
 All contributions must be licensed with the
-[ISC license](https://github.com/btcsuite/btcd/blob/master/LICENSE).  This is
+[ISC license](../LICENSE).  This is
 the same license as all of the code in the btcd suite.

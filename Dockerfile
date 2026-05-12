@@ -1,4 +1,5 @@
-# This Dockerfile builds btcd from source and creates a small (55 MB) docker container based on alpine linux.
+# This Dockerfile builds btcd from source and creates a small docker container
+# based on alpine linux.
 #
 # Clone this repository and run the following command to build and tag a fresh btcd amd64 container:
 #
@@ -8,11 +9,12 @@
 #
 # docker build . -t yourregistry/btcd --build-arg ARCH=arm64v8
 #
-# For more information how to use this docker image visit:
-# https://github.com/btcsuite/btcd/tree/master/docs
+# For Docker usage examples, see docs/reference/docker.md.
 #
-# 8333  Mainnet Bitcoin peer-to-peer port
-# 8334  Mainet RPC port
+# 9527   OBTC mainnet peer-to-peer port
+# 9528   OBTC mainnet RPC port
+# 19527  OBTC testnet peer-to-peer port
+# 19528  OBTC testnet RPC port
 
 ARG ARCH=amd64
 # using the SHA256 instead of tags
@@ -40,6 +42,6 @@ COPY --from=build-container /go/bin /bin
 
 VOLUME ["/root/.btcd"]
 
-EXPOSE 8333 8334
+EXPOSE 9527 9528 19527 19528 29527 29528
 
 ENTRYPOINT ["btcd"]

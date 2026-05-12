@@ -27,23 +27,13 @@ obtcd/ (repo root)
     devnet-up.sh       # Week 1: devnet bootstrap script
     validation/        # Week 2: validation scripts and tools
   docs/
-    phase1-validation.md
-    phase2-summary.md
-    phase2-validation.md
-    phase3-validation.md
-    phase4-validation.md
+    index.md
+    getting-started.md
     testnet-join.md
-    mainnet-join.md
-  obtc_doc/
-    AGENTS.md
-    obtc_roadmap_plan.md
-    newcomer_reading_guide.md
-    expiry_commitment_implementation.md
-    reap_dust_behavior.md
-    phase5_implementation.md
-    phase6_implementation.md
-    phase7_implementation.md
-    phase8_implementation.md
+    network-parameters.md
+    reference/
+    development/
+    heritage/
 ```
 
 ## Notes
@@ -51,6 +41,7 @@ obtcd/ (repo root)
 - The layout above is a recommended placement guide and mixes implemented and planned work.
 - If the live repository layout differs, treat the repository state as the source of truth and update this file when needed.
 - Keep new modules grouped by responsibility instead of adding unrelated files at the repository root.
+- Keep internal planning, roadmap, and draft strategy documents outside this public node repository.
 
 ## Interaction Constraints
 

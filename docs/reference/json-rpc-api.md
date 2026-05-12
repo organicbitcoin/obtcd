@@ -1,5 +1,10 @@
 # JSON RPC API
 
+This reference is inherited from btcd and remains useful for shared node RPC
+behavior.  Examples have been adjusted to use the OBTC testnet node RPC port
+`19528` where a concrete endpoint is needed.  For OBTC mainnet-candidate, use
+`9528` unless the node was started with a custom `--rpclisten`.
+
 1. [Overview](#Overview)<br />
 2. [HTTP POST Versus Websockets](#HttpPostVsWebsockets)<br />
 3. [Authentication](#Authentication)<br />
@@ -27,32 +32,29 @@
 
 ### 1. Overview
 
-btcd provides a [JSON-RPC](http://json-rpc.org/wiki/specification) API that is
-fully compatible with the original bitcoind/bitcoin-qt.  There are a few key
-differences between btcd and bitcoind as far as how RPCs are serviced:
+btcd provides a [JSON-RPC](http://json-rpc.org/wiki/specification) API derived
+from the original bitcoind/bitcoin-qt interface.  There are a few key
+differences as far as how RPCs are serviced:
 * Unlike bitcoind that has the wallet and chain intermingled in the same process
   which leads to several issues, btcd intentionally splits the wallet and chain
-  services into independent processes.  See the blog post
-  [here](https://blog.conformal.com/btcd-not-your-moms-bitcoin-daemon/) for
-  further details on why they were separated.  This means that if you are
-  talking directly to btcd, only chain-related RPCs are available.  However both
-  chain-related and wallet-related RPCs are available via
-  [btcwallet](https://github.com/btcsuite/btcwallet).
+  services into independent processes.  This means that if you are talking
+  directly to btcd, only chain-related RPCs are available.  Wallet-related OBTC
+  RPCs are provided by `obtcwallet`.
 * btcd is secure by default which means that the RPC connection is TLS-enabled
   by default
 * btcd provides access to the API through both
   [HTTP POST](http://en.wikipedia.org/wiki/POST_%28HTTP%29) requests and
   [Websockets](http://en.wikipedia.org/wiki/WebSocket)
 
-Websockets are the preferred transport for btcd RPC and are used by applications
-such as [btcwallet](https://github.com/btcsuite/btcwallet) for inter-process
-communication with btcd.  The websocket connection endpoint for btcd is
-`wss://your_ip_or_domain:8334/ws`.
+Websockets are the preferred transport for btcd RPC and are used by
+applications such as `obtcwallet` for inter-process communication with btcd.
+The OBTC testnet websocket connection endpoint is
+`wss://your_ip_or_domain:19528/ws`.
 
 In addition to the [standard API](#Methods), an [extension API](#WSExtMethods)
 has been developed that is exclusive to clients using Websockets. In its current
 state, this API attempts to cover features found missing in the standard API
-during the development of btcwallet.
+during wallet development.
 
 While the [standard API](#Methods) is stable, the
 [Websocket extension API](#WSExtMethods) should be considered a work in
@@ -71,8 +73,8 @@ described in this documentation can be accessed through both.  As the name
 indicates, the [Websocket-specific extension](#WSExtMethods) methods can only be
 accessed when connected via Websockets.
 
-As mentioned in the [overview](#Overview), the websocket connection endpoint for
-btcd is `wss://your_ip_or_domain:8334/ws`.
+As mentioned in the [overview](#Overview), the OBTC testnet websocket
+connection endpoint is `wss://your_ip_or_domain:19528/ws`.
 
 The most important differences between the two transports as it pertains to the
 JSON-RPC API are:
@@ -251,8 +253,8 @@ the method name for further details such as parameter and return information.
 |Description|Returns information about manually added (persistent) peers.|
 |Returns (dns=false)|`["ip:port", ...]`|
 |Returns (dns=true)|`[ (json array of objects)`<br />&nbsp;&nbsp;`{ (json object)`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addednode": "ip_or_domain",  (string) the ip address or domain of the added peer`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"connected": true or false,  (boolean) whether or not the peer is currently connected`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addresses": [  (json array or objects) DNS lookup and connection information about the peer`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{ (json object)`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"address": "ip",  (string) the ip address for this DNS entry`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"connected": "inbound/outbound/false"  (string) the connection 'direction' (if connected)`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`}, ...`<br />&nbsp;&nbsp;&nbsp;&nbsp;`]`<br />&nbsp;&nbsp;`}, ...`<br />`]`|
-|Example Return (dns=false)|`["192.168.0.10:8333", "mydomain.org:8333"]`|
-|Example Return (dns=true)|`[`<br />&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addednode": "mydomain.org:8333",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"connected": true,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addresses": [`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"address": "1.2.3.4",`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"connected": "outbound"`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`},`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"address": "5.6.7.8",`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"connected": "false"`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`}`<br />&nbsp;&nbsp;&nbsp;&nbsp;`]`<br />&nbsp;&nbsp;`}`<br />`]`|
+|Example Return (dns=false)|`["192.168.0.10:19527", "mydomain.org:19527"]`|
+|Example Return (dns=true)|`[`<br />&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addednode": "mydomain.org:19527",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"connected": true,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addresses": [`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"address": "1.2.3.4",`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"connected": "outbound"`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`},`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"address": "5.6.7.8",`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`"connected": "false"`<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`}`<br />&nbsp;&nbsp;&nbsp;&nbsp;`]`<br />&nbsp;&nbsp;`}`<br />`]`|
 [Return to Overview](#MethodOverview)<br />
 
 ***
@@ -448,7 +450,7 @@ Example Return|`{`<br />&nbsp;&nbsp;`"bytes": 310768,`<br />&nbsp;&nbsp;`"size":
 |Parameters|None|
 |Description|Returns data about each connected network peer as an array of json objects.|
 |Returns|`[`<br />&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addr": "host:port",  (string) the ip address and port of the peer`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"services": "00000001",  (string) the services supported by the peer`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"lastrecv": n,  (numeric) time the last message was received in seconds since 1 Jan 1970 GMT`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"lastsend": n,  (numeric) time the last message was sent in seconds since 1 Jan 1970 GMT`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"bytessent": n,  (numeric) total bytes sent`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"bytesrecv": n,  (numeric) total bytes received`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"conntime": n,  (numeric) time the connection was made in seconds since 1 Jan 1970 GMT`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"pingtime": n,  (numeric) number of microseconds the last ping took`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"pingwait": n,  (numeric) number of microseconds a queued ping has been waiting for a response`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"version": n,  (numeric) the protocol version of the peer`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"subver": "useragent",  (string) the user agent of the peer`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"inbound": true_or_false,  (boolean) whether or not the peer is an inbound connection`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"startingheight": n,  (numeric) the latest block height the peer knew about when the connection was established`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"currentheight": n,  (numeric) the latest block height the peer is known to have relayed since connected`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"syncnode": true_or_false,  (boolean) whether or not the peer is the sync peer`<br />&nbsp;&nbsp;`}, ...`<br />`]`|
-|Example Return|`[`<br />&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addr": "178.172.xxx.xxx:8333",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"services": "00000001",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"lastrecv": 1388183523,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"lastsend": 1388185470,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"bytessent": 287592965,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"bytesrecv": 780340,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"conntime": 1388182973,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"pingtime": 405551,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"pingwait": 183023,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"version": 70001,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"subver": "/btcd:0.4.0/",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"inbound": false,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"startingheight": 276921,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"currentheight": 276955,`<br/>&nbsp;&nbsp;&nbsp;&nbsp;`"syncnode": true,`<br />&nbsp;&nbsp;`}`<br />`]`|
+|Example Return|`[`<br />&nbsp;&nbsp;`{`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"addr": "178.172.xxx.xxx:19527",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"services": "00000001",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"lastrecv": 1388183523,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"lastsend": 1388185470,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"bytessent": 287592965,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"bytesrecv": 780340,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"conntime": 1388182973,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"pingtime": 405551,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"pingwait": 183023,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"version": 70001,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"subver": "/btcd:0.4.0/",`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"inbound": false,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"startingheight": 276921,`<br />&nbsp;&nbsp;&nbsp;&nbsp;`"currentheight": 276955,`<br/>&nbsp;&nbsp;&nbsp;&nbsp;`"syncnode": true,`<br />&nbsp;&nbsp;`}`<br />`]`|
 [Return to Overview](#MethodOverview)<br />
 
 ***
@@ -1088,7 +1090,7 @@ various languages.
 **9.1 Go**
 
 This section provides examples of using the RPC interface using Go and the
-[rpcclient](https://github.com/btcsuite/btcd/tree/master/rpcclient) package.
+[rpcclient](../rpcclient) package.
 
 * [Using getblockcount to Retrieve the Current Block Height](#ExampleGetBlockCount)
 * [Using getblock to Retrieve the Genesis Block](#ExampleGetBlock)
@@ -1100,7 +1102,7 @@ This section provides examples of using the RPC interface using Go and the
 **9.1.1 Using getblockcount to Retrieve the Current Block Height**<br />
 
 The following is an example Go application which uses the
-[rpcclient](https://github.com/btcsuite/btcd/tree/master/rpcclient) package to connect with
+[rpcclient](../rpcclient) package to connect with
 a btcd instance via Websockets, issues [getblockcount](#getblockcount) to
 retrieve the current block height, and displays it.
 
@@ -1130,7 +1132,7 @@ func main() {
 	// not long-lived, the connection will be closed as soon as the program
 	// exits.
 	connCfg := &rpcclient.ConnConfig{
-		Host:         "localhost:8334",
+		Host:         "localhost:19528",
 		Endpoint:     "ws",
 		User:         "yourrpcuser",
 		Pass:         "yourrpcpass",
@@ -1162,7 +1164,7 @@ Which results in:
 **9.1.2 Using getblock to Retrieve the Genesis Block**<br />
 
 The following is an example Go application which uses the
-[rpcclient](https://github.com/btcsuite/btcd/tree/master/rpcclient) package to connect with
+[rpcclient](../rpcclient) package to connect with
 a btcd instance via Websockets, issues [getblock](#getblock) to retrieve
 information about the Genesis block, and display a few details about it.
 
@@ -1194,7 +1196,7 @@ func main() {
 	// not long-lived, the connection will be closed as soon as the program
 	// exits.
 	connCfg := &rpcclient.ConnConfig{
-		Host:         "localhost:18334",
+		Host:         "localhost:19528",
 		Endpoint:     "ws",
 		User:         "yourrpcuser",
 		Pass:         "yourrpcpass",
@@ -1252,7 +1254,7 @@ Num transactions: 1
 Notifications (Websocket-specific)**<br />
 
 The following is an example Go application which uses the
-[rpcclient](https://github.com/btcsuite/btcd/tree/master/rpcclient) package to connect with
+[rpcclient](../rpcclient) package to connect with
 a btcd instance via Websockets and registers for
 [blockconnected](#blockconnected) and [blockdisconnected](#blockdisconnected)
 notifications with [notifyblocks](#notifyblocks).  It also sets up handlers for
@@ -1295,7 +1297,7 @@ func main() {
 
 	// Create a new RPC client using websockets.
 	connCfg := &rpcclient.ConnConfig{
-		Host:         "localhost:8334",
+		Host:         "localhost:19528",
 		Endpoint:     "ws",
 		User:         "yourrpcuser",
 		Pass:         "yourrpcpass",
@@ -1370,7 +1372,7 @@ var password = "yourpassword";
 // Initiate the websocket connection.  The btcd generated certificate acts as
 // its own certificate authority, so it needs to be specified in the 'ca' array
 // for the certificate to properly validate.
-var ws = new WebSocket('wss://127.0.0.1:8334/ws', {
+var ws = new WebSocket('wss://127.0.0.1:19528/ws', {
   headers: {
     'Authorization': 'Basic '+new Buffer(user+':'+password).toString('base64')
   },

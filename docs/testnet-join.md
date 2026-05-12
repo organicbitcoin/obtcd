@@ -100,14 +100,14 @@ If `--expiryindex` is enabled:
 
 ## 5. Collect validation evidence (recommended)
 
-Append a markdown snapshot into your Phase 6 validation record:
+Append a markdown snapshot into a local validation record:
 
 ```bash
 scripts/phase6/collect_validation_snapshot.sh \
   --rpcuser=<u> \
   --rpcpass=<p> \
   --rpcserver=127.0.0.1:19528 \
-  --append docs/phase6-validation.md
+  --append /tmp/obtc-phase6-validation.md
 ```
 
 Or write to a standalone file:
@@ -116,7 +116,7 @@ Or write to a standalone file:
 scripts/phase6/collect_validation_snapshot.sh \
   --rpcuser=<u> \
   --rpcpass=<p> \
-  --out docs/phase6-validation-snapshot.md
+  --out /tmp/obtc-phase6-validation-snapshot.md
 ```
 
 ## 6. Seed/peering notes (Phase 6)
