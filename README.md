@@ -60,6 +60,8 @@ Website:
 Current implementation values are defined in `chaincfg/params_obtc.go`.
 The dedicated mainnet checklist is maintained in
 [`docs/mainnet-params.md`](docs/mainnet-params.md).
+The mainnet-candidate join draft is maintained in
+[`docs/mainnet-join.md`](docs/mainnet-join.md).
 
 | Parameter | Mainnet | Testnet | Regtest |
 | --- | --- | --- | --- |
@@ -180,6 +182,7 @@ traffic and restart testing:
 ## Documentation
 
 - [OBTC Node Documentation](docs/)
+- [OBTC Mainnet Join Runbook](docs/mainnet-join.md)
 - [OBTC Testnet Join Guide](docs/testnet-join.md)
 - [Network Parameters](docs/network-parameters.md)
 
