@@ -1,21 +1,24 @@
 # OBTC UTXO Expiry Index Validation Tools
 
-This directory contains comprehensive validation tools for testing the OBTC UTXO Expiry Index implementation across different Bitcoin networks (mainnet, testnet, regtest).
+This directory contains validation tools for testing OBTC expiry, REAP, replay,
+and observability behavior across OBTC mainnet, testnet, regtest, and local
+devnet runs.
 
 ## 🎯 Purpose
 
-These tools validate that the Week2 ExpiryIndex implementation works correctly by:
+These tools validate that the current OBTC implementation works correctly by:
 
 1. **Testing RPC Connectivity** - Ensuring basic RPC communication works
-2. **Validating Index Availability** - Confirming the expiry index is enabled and functional
-3. **Testing Core Functionality** - Verifying `listexpiring` and `getexpiryindexstats` commands
+2. **Validating Index Availability** - Confirming the expiry index RPC surface is enabled and functional
+3. **Testing Core Functionality** - Verifying expiry, REAP, and commitment observability commands
 4. **Parameter Validation** - Testing edge cases and invalid parameters
 5. **Performance Testing** - Benchmarking query performance across different scenarios
 6. **Stress Testing** - Validating stability under load
+7. **Replay Auditing** - Replaying blocks and checking expiry commitments plus REAP consensus rules
 
 ## 📁 Files
 
-- **`utxo_expiry_validator.go`** - Comprehensive validation tool with full test suite
+- **`utxo_expiry_validator.go`** - Expiry index RPC validation tool
 - **`replay_block_audit/`** - Deterministic block replay auditor for block-by-block consensus checks
 - **`devnet_replay_audit.sh`** - DevNet wrapper that runs the replay auditor against node1 with strong REAP checks enabled
 - **`quick_validate.sh`** - Bash script for easy validation across networks
@@ -322,7 +325,7 @@ Max Results: 100
 - **Cause**: ExpiryIndex not enabled or command not recognized
 - **Solution**:
   - Ensure OBTCD started with `--expiryindex` flag
-  - Verify you're using OBTCD with Week2 changes
+  - Verify you're using an obtcd build that includes the OBTC expiry RPCs
   - Check OBTCD version supports expiry index
 
 #### "expiry index is disabled"
@@ -348,25 +351,25 @@ Max Results: 100
 
 ### Network-Specific Notes
 
-#### Regtest
+#### OBTC Regtest
 - Fast sync and index build
 - Ideal for development testing
 - Can generate custom test scenarios
 
-#### Testnet
+#### OBTC Testnet
 - Longer sync time
-- Real Bitcoin network conditions
+- Public OBTC test network conditions
 - Good for integration testing
 
-#### Mainnet
+#### OBTC Mainnet
 - **READ-ONLY VALIDATION ONLY**
 - Long sync time (hours/days)
-- Production network conditions
+- Mainnet-candidate network conditions
 - Use only for final validation
 
 ## 📋 Testing Checklist
 
-Before considering Week2 complete, ensure:
+Before considering expiry and REAP validation complete, ensure:
 
 - [ ] All core tests pass on regtest
 - [ ] All core tests pass on testnet
@@ -405,13 +408,15 @@ The validation tool should use minimal memory:
 
 ## 🎯 Success Criteria
 
-Week2 ExpiryIndex implementation is considered successful if:
+The OBTC validation implementation is considered successful if:
 
 1. **All core tests pass** on all three networks
 2. **Performance is acceptable** (< 1s for reasonable queries)
 3. **Memory usage is stable** during stress testing
 4. **Error handling is robust** for edge cases
-5. **API is consistent** with btcd patterns
-6. **Documentation is complete** and accurate
+5. **Replay audits pass** for local devnet chains with REAP checks enabled
+6. **API is consistent** with btcd patterns
+7. **Documentation is complete** and accurate
 
-This validation suite provides comprehensive coverage to ensure the ExpiryIndex implementation meets production quality standards.
+This validation suite provides coverage to ensure the OBTC expiry, commitment,
+and REAP implementation meets mainnet-candidate quality standards.

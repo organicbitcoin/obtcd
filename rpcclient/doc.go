@@ -1,4 +1,5 @@
 // Copyright (c) 2014-2017 The btcsuite developers
+// Copyright (c) 2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -17,6 +18,10 @@ In addition to the compatible standard HTTP POST JSON-RPC API, btcd and
 btcwallet provide a websocket interface that is more efficient than the standard
 HTTP POST method of accessing RPC.  The section below discusses the differences
 between HTTP POST and websockets.
+
+The obtcd fork adds typed client helpers for OBTC observability RPCs including
+expiring UTXO scans, expiry index statistics, REAP dry-run plans, and expiry
+commitment state.
 
 By default, this client assumes the RPC server supports websockets and has
 TLS enabled.  In practice, this currently means it assumes you are talking to

@@ -1,9 +1,10 @@
 // Copyright (c) 2013-2016 The btcsuite developers
+// Copyright (c) 2025-2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 /*
-Package wire implements the bitcoin wire protocol.
+Package wire implements the Bitcoin wire protocol.
 
 For the complete details of the bitcoin protocol, see the official wiki entry
 at https://en.bitcoin.it/wiki/Protocol_specification.  The following only serves
@@ -13,6 +14,10 @@ At a high level, this package provides support for marshalling and unmarshalling
 supported bitcoin messages to and from the wire.  This package does not deal
 with the specifics of message handling such as what to do when a message is
 received.  This provides the caller with a high level of flexibility.
+
+This fork also defines OBTC network magic constants for mainnet, testnet, and
+regtest. The message formats remain inherited from the Bitcoin wire protocol,
+while the network identifier separates OBTC peers from Bitcoin peers.
 
 # Bitcoin Message Overview
 
@@ -88,6 +93,9 @@ the following constants:
 	wire.TestNet3 (Test network version 3)
 	wire.SigNet   (Signet, default)
 	wire.SimNet   (Simulation test network)
+	wire.ObtcMainNet (OBTC main network)
+	wire.ObtcTestNet (OBTC test network)
+	wire.ObtcRegNet  (OBTC regression test network)
 
 # Determining Message Type
 

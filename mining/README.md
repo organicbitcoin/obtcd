@@ -1,19 +1,24 @@
 mining
 ======
 
-[![Build Status](https://github.com/btcsuite/btcd/workflows/Build%20and%20Test/badge.svg)](https://github.com/btcsuite/btcd/actions)
-[![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/btcsuite/btcd/mining)
+Package mining builds block templates for obtcd.
 
-## Overview
+The package retains the btcd template generator and adds OBTC-specific template
+behavior:
 
-This package is currently a work in progress.
+- expiry commitment outputs in coinbase data when required
+- deterministic REAP candidate selection and transaction injection
+- REAP tax/refund accounting in generated templates
+- policy tests for boundary, conflict, dependency, and witness cases
 
-## Installation and Updating
+The `reap/` subpackage contains the selector, packer, marker, and dry-run
+helpers used by template generation and observability RPCs.
 
-```bash
-$ go get -u github.com/btcsuite/btcd/mining
-```
+## Module Path
+
+The repository still uses the upstream Go module path
+`github.com/btcsuite/btcd`. For OBTC behavior, build from this repository
+checkout rather than installing the upstream module with `go get`.
 
 ## License
 

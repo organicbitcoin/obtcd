@@ -1,23 +1,18 @@
 cpuminer
 ========
 
-[![Build Status](https://github.com/btcsuite/btcd/workflows/Build%20and%20Test/badge.svg)](https://github.com/btcsuite/btcd/actions)
-[![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/btcsuite/btcd/mining/cpuminer)
-=======
+Package cpuminer provides the CPU mining loop used by tests and local
+development networks.
 
-## Overview
+It delegates block construction to the mining template generator. On OBTC
+networks that means mined templates may include expiry commitments and REAP
+transactions when those rules are active.
 
-This package is currently a work in progress.  It works without issue since it
-is used in several of the integration tests, but the API is not really ready for
-public consumption as it has simply been refactored out of the main codebase for
-now.
+## Module Path
 
-## Installation and Updating
-
-```bash
-$ go get -u github.com/btcsuite/btcd/mining/cpuminer
-```
+The repository still uses the upstream Go module path
+`github.com/btcsuite/btcd`. For OBTC behavior, build from this repository
+checkout rather than installing the upstream module with `go get`.
 
 ## License
 

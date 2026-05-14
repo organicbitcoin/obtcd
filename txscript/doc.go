@@ -1,4 +1,5 @@
 // Copyright (c) 2013-2017 The btcsuite developers
+// Copyright (c) 2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -11,6 +12,11 @@ overview to provide information on how to use the package.
 
 This package provides data structures and functions to parse and execute
 bitcoin transaction scripts.
+
+This fork also includes OBTC replay-protected signature hash support. Callers
+enable enforcement with ScriptVerifyOBTCReplayProtection after the active
+chaincfg parameters report that replay protection is active for the block
+height being validated.
 
 # Script Overview
 

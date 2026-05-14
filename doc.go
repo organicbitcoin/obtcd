@@ -1,9 +1,17 @@
 // Copyright (c) 2013-2017 The btcsuite developers
+// Copyright (c) 2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 /*
-btcd is a full-node bitcoin implementation written in Go.
+btcd is a full-node implementation written in Go. In this repository it is the
+OBTC node implementation derived from btcd, while retaining the upstream
+command name and Go module path for compatibility.
+
+The OBTC-specific runtime paths are selected explicitly with --obtcmainnet,
+--obtctestnet, or --obtcregtest. These networks use separate magic values,
+ports, address namespaces, expiry parameters, REAP validation paths, and
+replay-protection activation rules.
 
 The default options are sane for most users.  This means btcd will work 'out of
 the box' for most users.  However, there are also a wide variety of flags that
@@ -29,6 +37,9 @@ Application Options:
 	    --addrindex             Maintain a full address-based transaction index
 	                            which makes the searchrawtransactions RPC
 	                            available
+	    --expiryindex           Enable ExpiryIndex scan/RPC features on OBTC
+	                            networks. Expiry commitment consensus state is
+	                            maintained regardless.
 	    --banduration=          How long to ban misbehaving peers.  Valid time
 	                            units are {s, m, h}.  Minimum 1 second (default:
 	                            24h0m0s)
@@ -119,6 +130,9 @@ Application Options:
 	    --proxypass=            Password for proxy server
 	    --proxyuser=            Username for proxy server
 	    --regtest               Use the regression test network
+	    --obtcmainnet           Use the OBTC main network
+	    --obtctestnet           Use the OBTC test network
+	    --obtcregtest           Use the OBTC regression test network
 	    --rejectnonstd          Reject non-standard transactions regardless of
 	                            the default settings for the active network.
 	    --relaynonstd           Relay non-standard transactions regardless of the

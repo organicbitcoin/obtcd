@@ -1,4 +1,5 @@
 // Copyright (c) 2015 The btcsuite developers
+// Copyright (c) 2025-2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -13,6 +14,10 @@ provides data structures and primitives to ease this process.
 
 In addition, it also provides some additional features such as custom command
 registration, command categorization, and reflection-based help generation.
+
+The obtcd fork registers OBTC observability command and result types for
+listing expiring UTXOs, expiry index statistics, REAP dry-run planning, and
+expiry commitment state.
 
 # JSON-RPC Protocol Overview
 

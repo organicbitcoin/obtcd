@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # OBTC UTXO Expiry Index Quick Validation Script
-# This script provides quick validation of the ExpiryIndex functionality
-# across different networks with minimal setup.
+# This script provides quick validation of expiry index RPC behavior
+# across OBTC networks with minimal setup.
 
 set -e  # Exit on any error
 
@@ -54,9 +54,9 @@ NETWORKS:
     obtcregtest  - OBTC regression test network (default)
     obtctestnet  - OBTC testnet
     obtcmainnet  - OBTC mainnet (read-only validation)
-    regtest      - Bitcoin regtest
-    testnet      - Bitcoin testnet
-    mainnet      - Bitcoin mainnet (read-only validation)
+    regtest      - Legacy alias accepted by the validator
+    testnet      - Legacy alias accepted by the validator
+    mainnet      - Legacy alias accepted by the validator
 
 OPTIONS:
     -h, --help          Show this help message

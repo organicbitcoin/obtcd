@@ -1,11 +1,21 @@
+// Copyright (c) 2013 The btcsuite developers
+// Copyright (c) 2026 The OBTC developers
+// Use of this source code is governed by an ISC
+// license that can be found in the LICENSE file.
+
 // Package chaincfg defines chain configuration parameters.
 //
-// In addition to the main Bitcoin network, which is intended for the transfer
-// of monetary value, there also exists two currently active standard networks:
-// regression test and testnet (version 3).  These networks are incompatible
-// with each other (each sharing a different genesis block) and software should
-// handle errors where input intended for one network is used on an application
-// instance running on a different network.
+// In addition to the standard Bitcoin networks, this fork registers OBTC
+// mainnet, testnet, and regtest parameters. OBTC networks are intentionally
+// isolated with distinct wire magic values, default ports, address/key
+// namespaces, fork heights, UTXO expiry parameters, REAP activation heights,
+// expiry commitment activation heights, and replay-protection activation
+// heights.
+//
+// Software should handle errors where input intended for one network is used on
+// an application instance running on a different network. This is particularly
+// important for OBTC because addresses, keys, P2P messages, and replay-protected
+// signatures are designed not to overlap Bitcoin namespaces.
 //
 // For library packages, chaincfg provides the ability to lookup chain
 // parameters and encoding magics when passed a *Params.  Older APIs not updated
@@ -53,9 +63,8 @@
 //	        fmt.Println(addr)
 //	}
 //
-// If an application does not use one of the three standard Bitcoin networks,
-// a new Params struct may be created which defines the parameters for the
-// non-standard network.  As a general rule of thumb, all network parameters
-// should be unique to the network, but parameter collisions can still occur
-// (unfortunately, this is the case with regtest and testnet3 sharing magics).
+// If an application does not use one of the registered Bitcoin or OBTC
+// networks, a new Params struct may be created which defines the parameters for
+// the non-standard network. As a general rule of thumb, all network parameters
+// should be unique to the network, but parameter collisions can still occur.
 package chaincfg

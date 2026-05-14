@@ -1,9 +1,10 @@
 // Copyright (c) 2016 The btcsuite developers
+// Copyright (c) 2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 /*
-Package mempool provides a policy-enforced pool of unmined bitcoin transactions.
+Package mempool provides a policy-enforced pool of unmined transactions.
 
 A key responsibility of the bitcoin network is mining user-generated transactions
 into blocks.  In order to facilitate this, the mining process relies on having a
@@ -13,6 +14,11 @@ solved.
 At a high level, this package satisfies that requirement by providing an
 in-memory pool of fully validated transactions that can also optionally be
 further filtered based upon a configurable policy.
+
+For OBTC networks, mempool validation applies replay-protection script flags
+after activation and keeps REAP system transactions out of the regular mempool.
+REAP construction is handled by mining template logic instead of being accepted
+as ordinary relay traffic.
 
 One of the policy configuration options controls whether or not "standard"
 transactions are accepted.  In essence, a "standard" transaction is one that
@@ -43,6 +49,7 @@ be an exhaustive list.
     4. Reject invalid transactions according to the network consensus rules
     5. Full script execution and validation with signature cache support
     6. Individual transaction query support
+    7. OBTC replay-protection script validation when active
   - Orphan transaction support (transactions that spend from unknown outputs)
     1. Configurable limits (see transaction acceptance policy)
     2. Automatic addition of orphan transactions that are no longer orphans as new
@@ -56,6 +63,7 @@ be an exhaustive list.
     5. Max signature operations per transaction
     6. Max orphan transaction size
     7. Max number of orphan transactions allowed
+    8. Reject REAP system transactions from normal mempool admission
   - Additional metadata tracking for each transaction
     1. Timestamp when the transaction was added to the pool
     2. Most recent block height when the transaction was added to the pool

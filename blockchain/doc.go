@@ -1,18 +1,25 @@
 // Copyright (c) 2013-2014 The btcsuite developers
+// Copyright (c) 2026 The OBTC developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 /*
-Package blockchain implements bitcoin block handling and chain selection rules.
+Package blockchain implements block handling and chain selection rules.
 
-The bitcoin block handling and chain selection rules are an integral, and quite
-likely the most important, part of bitcoin.  Unfortunately, at the time of
+Bitcoin block handling and chain selection rules are an integral, and quite
+likely the most important, part of Bitcoin.  Unfortunately, at the time of
 this writing, these rules are also largely undocumented and had to be
 ascertained from the bitcoind source code.  At its core, bitcoin is a
 distributed consensus of which blocks are valid and which ones will comprise the
 main block chain (public ledger) that ultimately determines accepted
 transactions, so it is extremely important that fully validating nodes agree on
 all rules.
+
+In obtcd, this package also contains OBTC validation paths layered on top of
+the inherited Bitcoin-compatible block handling. Those paths include UTXO expiry
+rule checks, REAP transaction validation, expiry commitment validation, and
+activation of OBTC replay-protected script flags according to chaincfg
+parameters.
 
 At a high level, this package provides support for inserting new blocks into
 the block chain according to the aforementioned rules.  It includes
@@ -59,6 +66,8 @@ is by no means exhaustive:
     transaction values
   - Run the transaction scripts to verify the spender is allowed to spend the
     coins
+  - On OBTC networks, enforce active expiry, REAP, expiry commitment, and replay
+    protection rules
   - Insert the block into the block database
 
 # Errors
