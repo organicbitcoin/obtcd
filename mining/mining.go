@@ -647,11 +647,17 @@ mempoolLoop:
 	}
 
 	// Choose which transactions make it into the block.
-	normalTxWeightLimit := g.normalTxWeightLimit(nextBlockHeight, plannedREAPTx != nil)
+	var plannedREAPWeight uint32
+	if plannedREAPTx != nil {
+		plannedREAPWeight = uint32(blockchain.GetTransactionWeight(plannedREAPTx))
+	}
+	normalTxWeightLimit := g.normalTxWeightLimit(
+		nextBlockHeight, plannedREAPTx != nil, plannedREAPWeight,
+	)
 	logOBTCDevf(g.chainParams,
-		"template planning height=%d plannedReap=%t plannedReapFee=%d normalTxWeightLimit=%d blockMaxWeight=%d",
+		"template planning height=%d plannedReap=%t plannedReapFee=%d plannedReapWeight=%d normalTxWeightLimit=%d blockMaxWeight=%d",
 		nextBlockHeight, plannedREAPTx != nil, plannedREAPFee,
-		normalTxWeightLimit, g.policy.BlockMaxWeight)
+		plannedREAPWeight, normalTxWeightLimit, g.policy.BlockMaxWeight)
 	for priorityQueue.Len() > 0 {
 		// Grab the highest priority (or highest fee per kilobyte
 		// depending on the sort order) transaction.

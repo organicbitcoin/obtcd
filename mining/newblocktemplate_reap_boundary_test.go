@@ -348,7 +348,7 @@ func TestNewBlockTemplateNormalAndREAPRegionBoundaries(t *testing.T) {
 		t.Fatalf("expected a planned REAP tx at height %d", nextHeight)
 	}
 
-	reserve := h.generator.reservedREAPWeight(nextHeight)
+	reserve := uint32(blockchain.GetTransactionWeight(plannedREAPTx))
 	if reserve == 0 {
 		t.Fatalf("expected non-zero REAP reserve at height %d", nextHeight)
 	}
@@ -365,7 +365,7 @@ func TestNewBlockTemplateNormalAndREAPRegionBoundaries(t *testing.T) {
 		h.generator.policy.BlockMaxWeight = normalLimit + reserve
 		h.generator.txSource = newStaticTxSource([]*TxDesc{makeTxDesc(txA, fee, 10_000)})
 
-		if got := h.generator.normalTxWeightLimit(nextHeight, true); got != normalLimit {
+		if got := h.generator.normalTxWeightLimit(nextHeight, true, reserve); got != normalLimit {
 			t.Fatalf("normal limit mismatch: got %d want %d", got, normalLimit)
 		}
 
@@ -393,7 +393,7 @@ func TestNewBlockTemplateNormalAndREAPRegionBoundaries(t *testing.T) {
 		h.generator.policy.BlockMaxWeight = normalLimit + reserve
 		h.generator.txSource = newStaticTxSource([]*TxDesc{makeTxDesc(txA, fee, 10_000)})
 
-		if got := h.generator.normalTxWeightLimit(nextHeight, true); got != normalLimit {
+		if got := h.generator.normalTxWeightLimit(nextHeight, true, reserve); got != normalLimit {
 			t.Fatalf("normal limit mismatch: got %d want %d", got, normalLimit)
 		}
 
@@ -418,7 +418,7 @@ func TestNewBlockTemplateNormalAndREAPRegionBoundaries(t *testing.T) {
 			makeTxDesc(txB, fee, 9_000),
 		})
 
-		if got := h.generator.normalTxWeightLimit(nextHeight, true); got != normalLimit {
+		if got := h.generator.normalTxWeightLimit(nextHeight, true, reserve); got != normalLimit {
 			t.Fatalf("normal limit mismatch: got %d want %d", got, normalLimit)
 		}
 

@@ -31,7 +31,7 @@ func TestNewBlockTemplatePriorityFeeSwitchWithREAPBoundary(t *testing.T) {
 	weightLowFee := uint32(blockchain.GetTransactionWeight(txLowFeeHighPriority))
 	weightHighFee := uint32(blockchain.GetTransactionWeight(txHighFeeLowPriority))
 	baseWeight := initialTemplateWeight(t, h.params, nextHeight)
-	reserve := h.generator.reservedREAPWeight(nextHeight)
+	reserve := uint32(blockchain.GetTransactionWeight(plannedREAPTx))
 
 	t.Run("switches-to-fee-order-under-reap-reserve", func(t *testing.T) {
 		h.generator.policy.BlockPrioritySize = 1 // force immediate switch + requeue
@@ -72,7 +72,7 @@ func TestNewBlockTemplatePriorityFeeSwitchWithREAPBoundary(t *testing.T) {
 			makeTxDesc(txHighFeeLowPriority, fee, 100_000),
 		})
 
-		if got := h.generator.normalTxWeightLimit(nextHeight, true); got != normalLimit {
+		if got := h.generator.normalTxWeightLimit(nextHeight, true, reserve); got != normalLimit {
 			t.Fatalf("unexpected normal limit: got %d want %d", got, normalLimit)
 		}
 
@@ -110,7 +110,7 @@ func TestNewBlockTemplateLowFeePolicyWithREAPReserveMatrix(t *testing.T) {
 	lowFeeTx := buildOPTrueSpendTx(h.spendable[122], h.values[122], fee, 0)
 	lowFeeWeight := uint32(blockchain.GetTransactionWeight(lowFeeTx))
 	baseWeight := initialTemplateWeight(t, h.params, nextHeight)
-	reserve := h.generator.reservedREAPWeight(nextHeight)
+	reserve := uint32(blockchain.GetTransactionWeight(plannedREAPTx))
 	blockMax := baseWeight + lowFeeWeight + reserve + 8_000
 
 	tests := []struct {

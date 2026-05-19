@@ -515,7 +515,7 @@ func TestNewBlockTemplateREAPConflictWithNormalSkipsREAP(t *testing.T) {
 	conflictNormalTx := buildOPTrueSpendTx(h.spendable[120], h.values[120], fee, 0)
 	baseWeight := initialTemplateWeight(t, h.params, nextHeight)
 	conflictWeight := uint32(blockchain.GetTransactionWeight(conflictNormalTx))
-	reserve := h.generator.reservedREAPWeight(nextHeight)
+	reserve := uint32(blockchain.GetTransactionWeight(reapTx))
 
 	h.generator.policy.BlockMaxWeight = baseWeight + conflictWeight + reserve + 1024
 	h.generator.txSource = newStaticTxSource([]*TxDesc{makeTxDesc(conflictNormalTx, fee, 10_000)})

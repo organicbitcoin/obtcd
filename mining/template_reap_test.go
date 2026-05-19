@@ -337,6 +337,40 @@ func TestNormalTxWeightLimitNoReserveWithoutREAP(t *testing.T) {
 	}
 }
 
+func TestNormalTxWeightLimitUsesPlannedREAPWeight(t *testing.T) {
+	const blockMax = uint32(1_000_000)
+	g := &BlkTmplGenerator{
+		policy:      &Policy{BlockMaxWeight: blockMax},
+		chainParams: &chaincfg.ObtcMainNetParams,
+		reapIndex:   new(expiryindex.ExpiryIndex),
+	}
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+
+	tests := []struct {
+		name          string
+		plannedWeight uint32
+		wantLimit     uint32
+	}{
+		{name: "actual_smaller_than_default_budget", plannedWeight: 125_000, wantLimit: 875_000},
+		{name: "actual_larger_than_default_budget", plannedWeight: 250_000, wantLimit: 750_000},
+		{name: "actual_equals_block_max", plannedWeight: blockMax, wantLimit: blockMax},
+		{name: "actual_zero", plannedWeight: 0, wantLimit: blockMax},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := g.normalTxWeightLimit(ep.EnableAtHeight, true, tc.plannedWeight)
+			if got != tc.wantLimit {
+				t.Fatalf("normal tx weight limit mismatch: got %d want %d",
+					got, tc.wantLimit)
+			}
+		})
+	}
+}
+
 func TestReservedREAPWeightScenarios(t *testing.T) {
 	mainEP := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
 	if mainEP == nil {

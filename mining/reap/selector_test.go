@@ -107,6 +107,33 @@ func TestSelectCandidatesMaxInputsAndWeightBudget(t *testing.T) {
 	}
 }
 
+func TestSelectCandidatesAllowsSingleInputOverWeightBudget(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	scanner := &stubScanner{}
+
+	for i := 0; i < 3; i++ {
+		op := addUtxo(t, view, 1000, uint32(300+i))
+		scanner.items = append(scanner.items, &expiryindex.ExpiringUTXO{
+			OutPoint:  op,
+			ExpiryKey: 1,
+		})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.WeightBudget = 1
+	plan, err := selectCandidatesWithScanner(context.Background(), 100, scanner, view, p)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(plan.Inputs) != 1 {
+		t.Fatalf("expected single-input escape over tiny budget, got %d", len(plan.Inputs))
+	}
+	if plan.Stats.Picked != 1 || plan.Stats.Skipped != 2 {
+		t.Fatalf("unexpected stats picked=%d skipped=%d",
+			plan.Stats.Picked, plan.Stats.Skipped)
+	}
+}
+
 func TestSelectCandidatesIntegrationFiltersMissingAndSpent(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
 	scanner := &stubScanner{}

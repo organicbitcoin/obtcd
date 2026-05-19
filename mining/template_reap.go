@@ -87,31 +87,50 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 		nextBlockHeight, plan.Stats.Candidates, plan.Stats.Picked, plan.Stats.Skipped,
 		plan.RefundTotal, plan.TaxTotal, plan.Stats.EstWeight)
 
-	tx, err := reap.BuildBlueprint(plan, view, p)
+	maxTxWeight := int64(0)
+	if g.policy != nil {
+		maxTxWeight = int64(g.policy.BlockMaxWeight)
+	}
+
+	tx, plan, actualWeight, err := reap.BuildBudgetedBlueprint(plan, view, p, maxTxWeight)
 	if err != nil {
 		logOBTCDevf(g.chainParams,
 			"REAP build failed nextHeight=%d reason=blueprint err=%v", nextBlockHeight, err)
 		return nil, 0, err
 	}
-	builtTx := btcutil.NewTx(tx)
+	if tx == nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build skipped nextHeight=%d reason=no-budgeted-blueprint", nextBlockHeight)
+		return nil, 0, nil
+	}
+	builtTx := tx
 	logOBTCDevf(g.chainParams,
-		"REAP build done nextHeight=%d tx=%s inputs=%d outputs=%d fee=%d",
-		nextBlockHeight, builtTx.Hash(), len(tx.TxIn), len(tx.TxOut), plan.TaxTotal)
+		"REAP build done nextHeight=%d tx=%s inputs=%d outputs=%d fee=%d weight=%d",
+		nextBlockHeight, builtTx.Hash(), len(tx.MsgTx().TxIn), len(tx.MsgTx().TxOut),
+		plan.TaxTotal, actualWeight)
 	return builtTx, plan.TaxTotal, nil
 }
 
 // normalTxWeightLimit returns the weight cap used while selecting regular
 // mempool transactions before attempting to append a REAP system tx.
 //
-// When REAP is active, we reserve up to REAP's weight budget so heavily loaded
-// mempools still leave headroom for expiry processing.
-func (g *BlkTmplGenerator) normalTxWeightLimit(nextBlockHeight int32, reserveForREAP bool) uint32 {
+// When a REAP tx is planned, reserve its actual weight when available so
+// heavily loaded mempools still leave headroom for expiry processing.  Callers
+// that do not have a planned tx yet fall back to the network REAP budget.
+func (g *BlkTmplGenerator) normalTxWeightLimit(nextBlockHeight int32,
+	reserveForREAP bool, plannedREAPWeight ...uint32) uint32 {
+
 	limit := g.policy.BlockMaxWeight
 	if !reserveForREAP {
 		return limit
 	}
 
-	reserve := g.reservedREAPWeight(nextBlockHeight)
+	var reserve uint32
+	if len(plannedREAPWeight) > 0 {
+		reserve = plannedREAPWeight[0]
+	} else {
+		reserve = g.reservedREAPWeight(nextBlockHeight)
+	}
 	if reserve > 0 && reserve < limit {
 		return limit - reserve
 	}

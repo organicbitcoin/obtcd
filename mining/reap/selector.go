@@ -110,7 +110,8 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 			break
 		}
 		nextWeight := EstimateBlueprintWeight(len(plan.Inputs) + 1)
-		if p.WeightBudget > 0 && nextWeight > p.WeightBudget {
+		if p.WeightBudget > 0 && nextWeight > p.WeightBudget &&
+			len(plan.Inputs) > 0 {
 			plan.Stats.Skipped += len(all) - len(plan.Inputs)
 			p.debugLogf("REAP select stop reason=weight-budget picked=%d nextWeight=%d budget=%d skipped=%d",
 				len(plan.Inputs), nextWeight, p.WeightBudget, plan.Stats.Skipped)

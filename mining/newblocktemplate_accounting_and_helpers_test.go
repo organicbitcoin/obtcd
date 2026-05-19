@@ -33,7 +33,7 @@ func TestNewBlockTemplateFeeAccountingConsistency(t *testing.T) {
 		normalTx := buildOPTrueSpendTx(h.spendable[120], h.values[120], normalFee, 0)
 		baseWeight := initialTemplateWeight(t, h.params, nextHeight)
 		normalWeight := uint32(blockchain.GetTransactionWeight(normalTx))
-		reserve := h.generator.reservedREAPWeight(nextHeight)
+		reserve := uint32(blockchain.GetTransactionWeight(plannedREAPTx))
 
 		h.generator.policy.BlockPrioritySize = 0
 		h.generator.policy.BlockMinWeight = 0
