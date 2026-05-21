@@ -135,6 +135,10 @@ sudo systemctl enable --now obtcd-mainnet
 sudo systemctl status obtcd-mainnet
 ```
 
+The repository also includes a starter unit at
+`scripts/phase6/systemd/obtcd-mainnet.service`. Copy it into `/etc/systemd/system/`
+and replace credentials and peers before enabling it.
+
 ## Firewall
 
 Example with UFW:
@@ -251,6 +255,12 @@ explicitly allowlisted:
 
 ```bash
 nc -vz <node-host> 9528
+```
+
+Or use the firewall preflight helper from an external host:
+
+```bash
+scripts/phase6/firewall_preflight.sh --host <node-host>
 ```
 
 ## 72h Observation Template

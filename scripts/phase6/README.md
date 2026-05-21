@@ -8,6 +8,8 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
   - Start/stop/restart/status/tail for a local or remote OBTC testnet node.
 - `systemd/obtcd-testnet.service`
   - Example `systemd` unit for long-running seed/observer nodes.
+- `systemd/obtcd-mainnet.service`
+  - Example `systemd` unit for mainnet-candidate seed/observer nodes.
 - `collect_validation_snapshot.sh`
   - Capture a markdown snapshot of key RPC evidence to a local file. Defaults
     to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate
@@ -18,6 +20,8 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
 - `build_release_artifacts.sh`
   - Build local `btcd`, `btcctl`, and `obtc-status` release artifacts with
     `SHA256SUMS` and a `MANIFEST.md`.
+- `firewall_preflight.sh`
+  - Check public P2P reachability and RPC non-exposure for seed/fallback nodes.
 - `seed_preflight.sh`
   - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener). Defaults to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate nodes.
 - `gen_testnet_conf.sh`
@@ -131,6 +135,12 @@ scripts/phase6/build_release_artifacts.sh \
   --version mainnet-candidate-2026-07 \
   --goos linux \
   --goarch amd64
+```
+
+Check seed/fallback firewall exposure:
+
+```bash
+scripts/phase6/firewall_preflight.sh --host seed1.example.com
 ```
 
 ## Common environment overrides

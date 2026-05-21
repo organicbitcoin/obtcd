@@ -1,0 +1,40 @@
+[Unit]
+Description=OBTC mainnet-candidate node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=obtc
+Group=obtc
+WorkingDirectory=/opt/obtcd
+
+# Adjust RPC credentials and peers before use. Keep RPC bound to localhost or a
+# private management address; do not expose 9528 publicly.
+ExecStart=/opt/obtcd/btcd \
+  --obtcmainnet \
+  --datadir=/var/lib/obtcd-mainnet \
+  --listen=0.0.0.0:9527 \
+  --rpclisten=127.0.0.1:9528 \
+  --txindex \
+  --expiryindex \
+  --notls \
+  --rpcuser=replace_me \
+  --rpcpass=replace_me \
+  --addpeer=replace_seed_1:9527 \
+  --addpeer=replace_seed_2:9527 \
+  --addpeer=replace_seed_3:9527
+
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Keep node data writable while protecting the rest of the system.
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/obtcd-mainnet /var/log/obtcd
+
+[Install]
+WantedBy=multi-user.target

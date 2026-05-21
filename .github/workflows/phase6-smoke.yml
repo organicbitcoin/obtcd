@@ -1,0 +1,55 @@
+name: Phase6 operator smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/phase6-smoke.yml"
+      - "scripts/phase6/**"
+      - "docs/mainnet-ops-runbook.md"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/phase6-smoke.yml"
+      - "scripts/phase6/**"
+      - "docs/mainnet-ops-runbook.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Shell and operator helpers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.0"
+
+      - name: Shell syntax
+        run: |
+          bash -n scripts/phase6/run_testnet_node.sh
+          bash -n scripts/phase6/collect_validation_snapshot.sh
+          bash -n scripts/phase6/collect_72h_observation.sh
+          bash -n scripts/phase6/seed_preflight.sh
+          bash -n scripts/phase6/gen_testnet_conf.sh
+          bash -n scripts/phase6/build_release_artifacts.sh
+          bash -n scripts/phase6/firewall_preflight.sh
+
+      - name: Mainnet-candidate helper smoke
+        run: |
+          scripts/phase6/build_release_artifacts.sh --dry-run --version mainnet-candidate-ci
+          scripts/phase6/collect_72h_observation.sh --plan --out /tmp/obtc-mainnet-72h.md
+          scripts/phase6/firewall_preflight.sh --plan --host 127.0.0.1
+          scripts/phase6/gen_testnet_conf.sh \
+            --network=obtcmainnet \
+            --out /tmp/obtc-mainnet.conf \
+            --rpcuser ci \
+            --rpcpass ci \
+            --addpeers seed1.example.com:9527,seed2.example.com:9527
+          grep -q '^obtcmainnet=1$' /tmp/obtc-mainnet.conf
