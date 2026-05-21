@@ -50,6 +50,19 @@ Record the commit:
 git rev-parse HEAD
 ```
 
+Or build a candidate artifact set with checksums and a manifest:
+
+```bash
+scripts/phase6/build_release_artifacts.sh \
+  --version mainnet-candidate-2026-07 \
+  --goos linux \
+  --goarch amd64
+```
+
+The output directory contains `btcd`, `btcctl`, `obtc-status`, `SHA256SUMS`,
+and `MANIFEST.md`. Sign or otherwise publish the manifest verification material
+before a public release.
+
 ## Data Layout
 
 Example layout:
@@ -199,6 +212,19 @@ scripts/phase6/collect_validation_snapshot.sh \
   --rpcserver="$RPC_SERVER" \
   --notls \
   --append /tmp/obtc-mainnet-72h-observation.md
+```
+
+For the full observation window, use the scheduled collector:
+
+```bash
+scripts/phase6/collect_72h_observation.sh \
+  --network obtcmainnet \
+  --notls \
+  --rpcuser="$RPC_USER" \
+  --rpcpass="$RPC_PASS" \
+  --rpcserver="$RPC_SERVER" \
+  --new-file \
+  --out /tmp/obtc-mainnet-72h-observation.md
 ```
 
 External P2P check:

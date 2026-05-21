@@ -61,6 +61,7 @@ cmd/btcctl/btcctl
 cmd/obtc-status/obtc-status
 cmd/devnetsim/devnetsim
 devnet-data/
+dist/
 
 .DS_Store
 .aider*

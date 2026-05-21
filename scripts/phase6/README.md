@@ -12,6 +12,12 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
   - Capture a markdown snapshot of key RPC evidence to a local file. Defaults
     to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate
     nodes that use local no-TLS RPC.
+- `collect_72h_observation.sh`
+  - Repeatedly append validation snapshots for a 72h mainnet-candidate
+    observation window. Use `--plan` to verify the schedule without RPC calls.
+- `build_release_artifacts.sh`
+  - Build local `btcd`, `btcctl`, and `obtc-status` release artifacts with
+    `SHA256SUMS` and a `MANIFEST.md`.
 - `seed_preflight.sh`
   - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener). Defaults to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate nodes.
 - `gen_testnet_conf.sh`
@@ -53,6 +59,25 @@ scripts/phase6/collect_validation_snapshot.sh \
   --rpcuser=u \
   --rpcpass=p \
   --append /tmp/obtc-mainnet-72h.md
+```
+
+Plan a 72h observation run:
+
+```bash
+scripts/phase6/collect_72h_observation.sh --plan
+```
+
+Run the observation collector:
+
+```bash
+scripts/phase6/collect_72h_observation.sh \
+  --network=obtcmainnet \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --rpcserver=127.0.0.1:9528 \
+  --new-file \
+  --out /tmp/obtc-mainnet-72h-observation.md
 ```
 
 Run seed-candidate preflight checks:
@@ -99,6 +124,15 @@ scripts/phase6/gen_testnet_conf.sh \
   --addpeers=seed1.example.com:9527,seed2.example.com:9527
 ```
 
+Build release artifacts and checksums:
+
+```bash
+scripts/phase6/build_release_artifacts.sh \
+  --version mainnet-candidate-2026-07 \
+  --goos linux \
+  --goarch amd64
+```
+
 ## Common environment overrides
 
 ```bash
@@ -110,6 +144,7 @@ RPC_LISTEN=127.0.0.1:19528
 RPC_SERVER=127.0.0.1:19528
 ADDPEERS=seed1.example.com:19527,seed2.example.com:19527
 ENABLE_EXPIRYINDEX=1
+OUT_DIR=/tmp/obtc-release-artifacts
 ```
 
 ## Notes
