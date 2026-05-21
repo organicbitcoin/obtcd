@@ -7,12 +7,14 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DEFAULT_BTCCTL="${REPO_ROOT}/cmd/btcctl/btcctl"
 
 BTCCTL_BIN="${BTCCTL_BIN:-${DEFAULT_BTCCTL}}"
+NETWORK="${NETWORK:-obtctestnet}"
 RPC_USER="${RPC_USER:-}"
 RPC_PASS="${RPC_PASS:-}"
-RPC_SERVER="${RPC_SERVER:-127.0.0.1:19528}"
-P2P_PORT="${P2P_PORT:-19527}"
+RPC_SERVER="${RPC_SERVER:-}"
+P2P_PORT="${P2P_PORT:-}"
 MIN_PEERS="${MIN_PEERS:-1}"
 STRICT_EXPIRYINDEX=0
+NOTLS=0
 
 PASS_COUNT=0
 WARN_COUNT=0
@@ -20,36 +22,48 @@ FAIL_COUNT=0
 
 usage() {
     cat <<EOF
-OBTC Phase 6 Seed Preflight Check
+OBTC Seed Preflight Check
 
 Usage:
   $0 --rpcuser <user> --rpcpass <pass> [options]
 
 Options:
+  --network <name>          OBTC network: obtctestnet or obtcmainnet (default: obtctestnet)
+  --network=<name>
   --rpcuser <user>           RPC username (required)
   --rpcuser=<user>
   --rpcpass <pass>           RPC password (required)
   --rpcpass=<pass>
-  --rpcserver <host:port>    RPC endpoint (default: 127.0.0.1:19528)
+  --rpcserver <host:port>    RPC endpoint (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528)
   --rpcserver=<host:port>
   --btcctl <path>            btcctl binary path (default: ./cmd/btcctl/btcctl)
   --btcctl=<path>
-  --p2p-port <port>          expected local P2P listen port (default: 19527)
+  --p2p-port <port>          expected local P2P listen port (default: testnet 19527, mainnet 9527)
   --p2p-port=<port>
   --min-peers <n>            minimum connected peers (default: 1)
   --min-peers=<n>
   --strict-expiryindex       fail if getexpiryindexstats is unavailable
+  --notls                    pass --notls to btcctl
   -h, --help                 show this help
 
 Examples:
   $0 --rpcuser=u --rpcpass=p
   $0 --rpcuser=u --rpcpass=p --rpcserver=10.0.0.8:19528 --min-peers=2
   $0 --rpcuser=u --rpcpass=p --strict-expiryindex
+  $0 --network=obtcmainnet --notls --rpcuser=u --rpcpass=p --strict-expiryindex
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --network)
+            NETWORK="$2"
+            shift 2
+            ;;
+        --network=*)
+            NETWORK="${1#*=}"
+            shift
+            ;;
         --rpcuser)
             RPC_USER="$2"
             shift 2
@@ -102,6 +116,10 @@ while [[ $# -gt 0 ]]; do
             STRICT_EXPIRYINDEX=1
             shift
             ;;
+        --notls)
+            NOTLS=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -113,6 +131,21 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+case "${NETWORK}" in
+    obtctestnet)
+        RPC_SERVER="${RPC_SERVER:-127.0.0.1:19528}"
+        P2P_PORT="${P2P_PORT:-19527}"
+        ;;
+    obtcmainnet)
+        RPC_SERVER="${RPC_SERVER:-127.0.0.1:9528}"
+        P2P_PORT="${P2P_PORT:-9527}"
+        ;;
+    *)
+        echo "[ERROR] --network must be obtctestnet or obtcmainnet" >&2
+        exit 1
+        ;;
+esac
 
 if [[ -z "${RPC_USER}" || -z "${RPC_PASS}" ]]; then
     echo "[ERROR] --rpcuser and --rpcpass are required" >&2
@@ -137,12 +170,17 @@ if ! [[ "${MIN_PEERS}" =~ ^[0-9]+$ ]]; then
 fi
 
 run_rpc() {
-    "${BTCCTL_BIN}" \
-        --obtctestnet \
-        "--rpcuser=${RPC_USER}" \
-        "--rpcpass=${RPC_PASS}" \
-        "--rpcserver=${RPC_SERVER}" \
-        "$@"
+    local args=(
+        "--${NETWORK}"
+        "--rpcuser=${RPC_USER}"
+        "--rpcpass=${RPC_PASS}"
+        "--rpcserver=${RPC_SERVER}"
+    )
+    if [[ ${NOTLS} -eq 1 ]]; then
+        args+=(--notls)
+    fi
+
+    "${BTCCTL_BIN}" "${args[@]}" "$@"
 }
 
 pass() {
@@ -239,7 +277,7 @@ check_port_listener() {
 }
 
 main() {
-    echo "[INFO] Running seed preflight checks against ${RPC_SERVER}"
+    echo "[INFO] Running ${NETWORK} seed preflight checks against ${RPC_SERVER}"
 
     local chain_info
     if ! chain_info="$(run_rpc getblockchaininfo 2>&1)"; then

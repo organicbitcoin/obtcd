@@ -207,6 +207,19 @@ External P2P check:
 nc -vz <node-host> 9527
 ```
 
+Local preflight check:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --network obtcmainnet \
+  --notls \
+  --rpcuser="$RPC_USER" \
+  --rpcpass="$RPC_PASS" \
+  --rpcserver="$RPC_SERVER" \
+  --p2p-port=9527 \
+  --strict-expiryindex
+```
+
 RPC exposure check from an external host should fail unless that host is
 explicitly allowlisted:
 

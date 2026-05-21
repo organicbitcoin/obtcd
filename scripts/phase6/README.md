@@ -13,9 +13,9 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
     to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate
     nodes that use local no-TLS RPC.
 - `seed_preflight.sh`
-  - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener).
+  - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener). Defaults to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate nodes.
 - `gen_testnet_conf.sh`
-  - Generate a minimal `btcd` testnet config template for seed/observer nodes.
+  - Generate a minimal `btcd` config template for OBTC testnet or mainnet-candidate seed/observer nodes.
 
 ## Quick start
 
@@ -67,6 +67,19 @@ scripts/phase6/seed_preflight.sh \
 
 Use `--strict-expiryindex` for observer/validator roles that must expose expiry RPC.
 
+For mainnet-candidate:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --network=obtcmainnet \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --rpcserver=127.0.0.1:9528 \
+  --p2p-port=9527 \
+  --strict-expiryindex
+```
+
 Generate a baseline config file:
 
 ```bash
@@ -74,6 +87,16 @@ scripts/phase6/gen_testnet_conf.sh \
   --rpcuser=u \
   --rpcpass=p \
   --addpeers=seed1.example.com:19527,seed2.example.com:19527
+```
+
+For mainnet-candidate:
+
+```bash
+scripts/phase6/gen_testnet_conf.sh \
+  --network=obtcmainnet \
+  --rpcuser=u \
+  --rpcpass=p \
+  --addpeers=seed1.example.com:9527,seed2.example.com:9527
 ```
 
 ## Common environment overrides
