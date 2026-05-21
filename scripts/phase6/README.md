@@ -9,7 +9,9 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
 - `systemd/obtcd-testnet.service`
   - Example `systemd` unit for long-running seed/observer nodes.
 - `collect_validation_snapshot.sh`
-  - Capture a markdown snapshot of key RPC evidence to a local file.
+  - Capture a markdown snapshot of key RPC evidence to a local file. Defaults
+    to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate
+    nodes that use local no-TLS RPC.
 - `seed_preflight.sh`
   - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener).
 - `gen_testnet_conf.sh`
@@ -40,6 +42,17 @@ scripts/phase6/collect_validation_snapshot.sh \
   --rpcuser=u \
   --rpcpass=p \
   --append /tmp/obtc-phase6-validation.md
+```
+
+For mainnet-candidate:
+
+```bash
+scripts/phase6/collect_validation_snapshot.sh \
+  --network=obtcmainnet \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --append /tmp/obtc-mainnet-72h.md
 ```
 
 Run seed-candidate preflight checks:

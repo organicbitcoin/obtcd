@@ -13,6 +13,7 @@ mining, or development practices that are still shared with btcd.
 
 * [Getting Started](getting-started.md)
 * [OBTC Mainnet Join Runbook](mainnet-join.md)
+* [OBTC Mainnet Operations Runbook](mainnet-ops-runbook.md)
 * [OBTC Testnet Join Guide](testnet-join.md)
 * [Network Parameters](network-parameters.md)
 * [OBTC Mainnet Parameters](mainnet-params.md)

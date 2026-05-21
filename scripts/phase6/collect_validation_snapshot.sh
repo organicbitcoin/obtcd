@@ -7,36 +7,49 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DEFAULT_BTCCTL="${REPO_ROOT}/cmd/btcctl/btcctl"
 
 BTCCTL_BIN="${BTCCTL_BIN:-${DEFAULT_BTCCTL}}"
+NETWORK="${NETWORK:-obtctestnet}"
 RPC_USER="${RPC_USER:-}"
 RPC_PASS="${RPC_PASS:-}"
-RPC_SERVER="${RPC_SERVER:-127.0.0.1:19528}"
+RPC_SERVER="${RPC_SERVER:-}"
 OUT_FILE=""
 APPEND_FILE=""
+NOTLS=0
 
 usage() {
     cat <<EOF
-Collect a Phase 6 validation snapshot from an OBTC testnet node.
+Collect a validation snapshot from an OBTC node.
 
 Usage:
   $0 --rpcuser <user> --rpcpass <pass> [options]
 
 Options:
+  --network <name>         OBTC network: obtctestnet or obtcmainnet (default: obtctestnet)
   --rpcuser <user>          RPC username (required)
   --rpcpass <pass>          RPC password (required)
-  --rpcserver <host:port>   RPC endpoint (default: 127.0.0.1:19528)
+  --rpcserver <host:port>   RPC endpoint (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528)
   --btcctl <path>           btcctl binary path (default: ./cmd/btcctl/btcctl)
   --out <file>              write snapshot markdown to this file
   --append <file>           append snapshot markdown to this file
+  --notls                   pass --notls to btcctl
   -h, --help                show this help
 
 Examples:
   $0 --rpcuser=u --rpcpass=p --out /tmp/obtc-phase6-validation-snapshot.md
   $0 --rpcuser=u --rpcpass=p --append /tmp/obtc-phase6-validation.md
+  $0 --network=obtcmainnet --notls --rpcuser=u --rpcpass=p --append /tmp/obtc-mainnet-72h.md
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --network)
+            NETWORK="$2"
+            shift 2
+            ;;
+        --network=*)
+            NETWORK="${1#*=}"
+            shift
+            ;;
         --rpcuser)
             RPC_USER="$2"
             shift 2
@@ -85,6 +98,10 @@ while [[ $# -gt 0 ]]; do
             APPEND_FILE="${1#*=}"
             shift
             ;;
+        --notls)
+            NOTLS=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -96,6 +113,19 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+case "${NETWORK}" in
+    obtctestnet)
+        RPC_SERVER="${RPC_SERVER:-127.0.0.1:19528}"
+        ;;
+    obtcmainnet)
+        RPC_SERVER="${RPC_SERVER:-127.0.0.1:9528}"
+        ;;
+    *)
+        echo "[ERROR] --network must be obtctestnet or obtcmainnet" >&2
+        exit 1
+        ;;
+esac
 
 if [[ -z "${RPC_USER}" || -z "${RPC_PASS}" ]]; then
     echo "[ERROR] --rpcuser and --rpcpass are required" >&2
@@ -115,12 +145,17 @@ if [[ -n "${OUT_FILE}" && -n "${APPEND_FILE}" ]]; then
 fi
 
 run_rpc() {
-    "${BTCCTL_BIN}" \
-        --obtctestnet \
-        "--rpcuser=${RPC_USER}" \
-        "--rpcpass=${RPC_PASS}" \
-        "--rpcserver=${RPC_SERVER}" \
-        "$@"
+    local args=(
+        "--${NETWORK}"
+        "--rpcuser=${RPC_USER}"
+        "--rpcpass=${RPC_PASS}"
+        "--rpcserver=${RPC_SERVER}"
+    )
+    if [[ ${NOTLS} -eq 1 ]]; then
+        args+=(--notls)
+    fi
+
+    "${BTCCTL_BIN}" "${args[@]}" "$@"
 }
 
 safe_rpc() {
@@ -178,6 +213,7 @@ render_snapshot() {
     cat <<EOF
 ## Phase 6 Snapshot (${ts})
 
+- Network: ${NETWORK}
 - RPC server: ${RPC_SERVER}
 - Peer count: ${peer_count}
 - Expiry index RPC: ${expiry_status}
