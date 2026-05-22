@@ -167,7 +167,7 @@ write_manifest() {
         echo "## Verification"
         echo
         echo '```bash'
-        echo "cd ${ARTIFACT_DIR}"
+        echo "# Run from this artifact directory."
         echo "shasum -a 256 -c SHA256SUMS"
         echo '```'
         echo
