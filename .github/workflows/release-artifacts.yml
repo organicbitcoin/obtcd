@@ -1,0 +1,98 @@
+name: OBTC release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release name/tag used in artifact paths"
+        required: true
+        default: "mainnet-candidate-2026-07"
+      goos:
+        description: "Target GOOS"
+        required: true
+        default: "linux"
+      goarch:
+        description: "Target GOARCH"
+        required: true
+        default: "amd64"
+  pull_request:
+    paths:
+      - ".github/workflows/release-artifacts.yml"
+      - "scripts/phase6/build_release_artifacts.sh"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/release-artifacts.yml"
+      - "scripts/phase6/build_release_artifacts.sh"
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: 1.24.0
+  RELEASE_VERSION: ${{ github.event.inputs.version || 'mainnet-candidate-ci' }}
+  TARGET_GOOS: ${{ github.event.inputs.goos || 'linux' }}
+  TARGET_GOARCH: ${{ github.event.inputs.goarch || 'amd64' }}
+
+jobs:
+  build-artifacts:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Validate inputs
+        run: |
+          case "${RELEASE_VERSION}" in
+            ""|*[!A-Za-z0-9._-]*)
+              echo "RELEASE_VERSION must contain only letters, numbers, dot, underscore, or dash"
+              exit 1
+              ;;
+          esac
+
+          case "${TARGET_GOOS}/${TARGET_GOARCH}" in
+            linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64)
+              ;;
+            *)
+              echo "Unsupported release artifact target: ${TARGET_GOOS}/${TARGET_GOARCH}"
+              exit 1
+              ;;
+          esac
+
+      - name: Build and verify artifacts
+        id: build
+        run: |
+          scripts/phase6/build_release_artifacts.sh \
+            --version "${RELEASE_VERSION}" \
+            --goos "${TARGET_GOOS}" \
+            --goarch "${TARGET_GOARCH}"
+
+          artifact_dir="$(find dist -mindepth 1 -maxdepth 1 -type d -name "${RELEASE_VERSION}-*-${TARGET_GOOS}-${TARGET_GOARCH}" -print -quit)"
+          if [ -z "${artifact_dir}" ]; then
+            echo "artifact directory not found"
+            exit 1
+          fi
+
+          (
+            cd "${artifact_dir}"
+            shasum -a 256 -c SHA256SUMS
+          )
+
+          artifact_name="obtcd-${RELEASE_VERSION}-${TARGET_GOOS}-${TARGET_GOARCH}-${GITHUB_SHA:0:12}"
+          echo "artifact_dir=${artifact_dir}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.build.outputs.artifact_name }}
+          path: ${{ steps.build.outputs.artifact_dir }}
+          if-no-files-found: error
+          retention-days: 30

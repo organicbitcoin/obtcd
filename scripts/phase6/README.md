@@ -137,6 +137,10 @@ scripts/phase6/build_release_artifacts.sh \
   --goarch amd64
 ```
 
+The `OBTC release artifacts` GitHub Actions workflow can run the same build
+manually and uploads the generated directory after `SHA256SUMS` verification.
+Use it to stage operator artifacts before attaching the final release evidence.
+
 Check seed/fallback firewall exposure:
 
 ```bash
