@@ -40,8 +40,9 @@ const (
 	// ObtcMainNetForkHeight is the OBTC mainnet fork height.
 	ObtcMainNetForkHeight int32 = 950000
 
-	// ObtcTestNetForkHeight is the OBTC testnet fork height.
-	ObtcTestNetForkHeight int32 = 2800000
+	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
+	// independent chain, not a fork of Bitcoin testnet3 history.
+	ObtcTestNetForkHeight int32 = 0
 
 	// ObtcRegTestForkHeight is the OBTC regtest fork height.
 	ObtcRegTestForkHeight int32 = 100
@@ -145,21 +146,24 @@ var ObtcTestNetParams = Params{
 	Net:         wire.ObtcTestNet,
 	DefaultPort: "19527",
 
-	GenesisBlock: &testNet3GenesisBlock,
-	GenesisHash:  &testNet3GenesisHash,
+	GenesisBlock: &obtcTestNetGenesisBlock,
+	GenesisHash:  &obtcTestNetGenesisHash,
 
-	PowLimit:         testNet3PowLimit,
-	PowLimitBits:     0x1d00ffff,
-	PoWNoRetargeting: false,
+	PowLimit:            regressionPowLimit,
+	PowLimitBits:        0x207fffff,
+	PoWNoRetargeting:    true,
+	ReduceMinDifficulty: false,
+	GenerateSupported:   true,
 
-	BIP0034Height:            21111,
-	BIP0065Height:            581885,
-	BIP0066Height:            330776,
-	CoinbaseMaturity:         100,
+	BIP0034Height:            1,
+	BIP0065Height:            1,
+	BIP0066Height:            1,
+	CoinbaseMaturity:         20,
 	SubsidyReductionInterval: 210000,
 	TargetTimespan:           time.Hour * 24 * 14,
 	TargetTimePerBlock:       time.Minute * 10,
 	RetargetAdjustmentFactor: 4,
+	Checkpoints:              []Checkpoint{},
 
 	Bech32HRPSegwit:         "obtct",
 	PubKeyHashAddrID:        0x71,
@@ -373,17 +377,17 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 
 	case wire.ObtcTestNet:
 		return &ExpiryParams{
-			WindowBlocks:                   1008,
+			WindowBlocks:                   144,
 			ListBatchLimit:                 5000,
 			StartScanHeight:                0,
-			EnableAtHeight:                 ObtcTestNetForkHeight + 100,
-			ReapConsensusAtHeight:          ObtcTestNetForkHeight + 120,
-			ReplayProtectionAtHeight:       ObtcTestNetForkHeight + 130,
+			EnableAtHeight:                 100,
+			ReapConsensusAtHeight:          120,
+			ReplayProtectionAtHeight:       130,
 			ReapMaxInputs:                  500,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
-			ExpiryCommitmentEnableAtHeight: ObtcTestNetForkHeight + 100,
+			ExpiryCommitmentEnableAtHeight: 100,
 		}
 
 	case wire.ObtcRegNet:

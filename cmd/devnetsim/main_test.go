@@ -9,7 +9,18 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 )
+
+func TestResolveNetworkSupportsOBTCTestnet(t *testing.T) {
+	net, err := resolveNetwork("obtctestnet")
+	if err != nil {
+		t.Fatalf("resolveNetwork: %v", err)
+	}
+	if net != &chaincfg.ObtcTestNetParams {
+		t.Fatalf("expected OBTC testnet params, got %s", net.Name)
+	}
+}
 
 func TestNewSpamRandomizerUsesBaseValueAsMissingBound(t *testing.T) {
 	randomizer, err := newSpamRandomizer(120_000, 80_000, 0, false, 123)

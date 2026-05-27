@@ -137,6 +137,8 @@ type chainStatus struct {
 	HeaderLag            int32   `json:"header_lag"`
 	BestBlockHash        string  `json:"best_block_hash"`
 	Difficulty           float64 `json:"difficulty"`
+	MedianTimeUnix       int64   `json:"median_time_unix"`
+	TipAgeSeconds        int64   `json:"tip_age_seconds"`
 	InitialBlockDownload bool    `json:"initial_block_download"`
 	VerificationProgress float64 `json:"verification_progress"`
 }
@@ -243,6 +245,8 @@ func (c *statusCollector) Snapshot(ctx context.Context) (*statusSnapshot, error)
 			HeaderLag:            chainInfo.Headers - chainInfo.Blocks,
 			BestBlockHash:        chainInfo.BestBlockHash,
 			Difficulty:           chainInfo.Difficulty,
+			MedianTimeUnix:       chainInfo.MedianTime,
+			TipAgeSeconds:        maxInt64(0, time.Now().UTC().Unix()-chainInfo.MedianTime),
 			InitialBlockDownload: chainInfo.InitialBlockDownload,
 			VerificationProgress: chainInfo.VerificationProgress,
 		},

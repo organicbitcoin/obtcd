@@ -6,6 +6,7 @@ package chaincfg
 
 import (
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/wire"
 )
@@ -270,6 +271,44 @@ func TestOBTCPortsUnique(t *testing.T) {
 	}
 }
 
+func TestOBTCTestNetPublicParams(t *testing.T) {
+	params := &ObtcTestNetParams
+	if *params.GenesisHash == *TestNet3Params.GenesisHash {
+		t.Fatalf("OBTC testnet must not share Bitcoin testnet3 genesis")
+	}
+	if params.GenesisBlock.BlockHash() != *params.GenesisHash {
+		t.Fatalf("OBTC testnet genesis hash mismatch: block=%s params=%s",
+			params.GenesisBlock.BlockHash(), params.GenesisHash)
+	}
+	if params.TargetTimePerBlock != 10*time.Minute {
+		t.Fatalf("expected 10m target block time, got %s", params.TargetTimePerBlock)
+	}
+	if params.CoinbaseMaturity != 20 {
+		t.Fatalf("expected coinbase maturity 20, got %d", params.CoinbaseMaturity)
+	}
+	if !params.GenerateSupported {
+		t.Fatalf("OBTC testnet must support controlled generate RPC")
+	}
+	if !params.PoWNoRetargeting {
+		t.Fatalf("OBTC testnet should keep controlled public-testnet PoW stable")
+	}
+
+	expiryParams := GetExpiryParams(params)
+	if expiryParams == nil {
+		t.Fatal("expected OBTC testnet expiry params")
+	}
+	if expiryParams.WindowBlocks != 144 {
+		t.Fatalf("expected 144-block expiry window, got %d", expiryParams.WindowBlocks)
+	}
+	if expiryParams.EnableAtHeight != 100 ||
+		expiryParams.ExpiryCommitmentEnableAtHeight != 100 ||
+		expiryParams.ReapConsensusAtHeight != 120 ||
+		expiryParams.ReplayProtectionAtHeight != 130 {
+
+		t.Fatalf("unexpected public testnet activation heights: %+v", expiryParams)
+	}
+}
+
 // BenchmarkIsOBTC benchmarks the IsOBTC function performance.
 func BenchmarkIsOBTC(b *testing.B) {
 	params := &ObtcMainNetParams
@@ -345,10 +384,10 @@ func TestIsPostOBTCFork(t *testing.T) {
 			expectPost: true,
 		},
 		{
-			name:       "OBTC TestNet before fork",
+			name:       "OBTC TestNet at genesis",
 			params:     &ObtcTestNetParams,
-			height:     ObtcTestNetForkHeight - 1,
-			expectPost: false,
+			height:     ObtcTestNetForkHeight,
+			expectPost: true,
 		},
 		{
 			name:       "OBTC TestNet after fork",
@@ -382,9 +421,9 @@ func TestOBTCForkHeightValues(t *testing.T) {
 		t.Errorf("MainNet fork height %d seems unreasonable for Q2 2026 target", ObtcMainNetForkHeight)
 	}
 
-	// TestNet fork height should be positive
-	if ObtcTestNetForkHeight <= 0 {
-		t.Errorf("TestNet fork height %d should be positive", ObtcTestNetForkHeight)
+	// TestNet is an independent chain, so its OBTC rules are active from genesis.
+	if ObtcTestNetForkHeight != 0 {
+		t.Errorf("TestNet fork height %d should be 0", ObtcTestNetForkHeight)
 	}
 
 	// RegTest fork height should be low for development

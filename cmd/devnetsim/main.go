@@ -109,6 +109,8 @@ func resolveNetwork(name string) (*chaincfg.Params, error) {
 		return &chaincfg.SimNetParams, nil
 	case "obtcregtest", "obtc-regtest":
 		return &chaincfg.ObtcRegTestParams, nil
+	case "obtctestnet", "obtc-testnet":
+		return &chaincfg.ObtcTestNetParams, nil
 	default:
 		return nil, fmt.Errorf("unsupported network %q", name)
 	}
@@ -123,7 +125,7 @@ func addCommonFlags(fs *flag.FlagSet, cfg *cliConfig, includeRPC bool) {
 		fs.StringVar(&cfg.mirrorRPCUser, "mirror-rpcuser", "obtc", "secondary RPC username")
 		fs.StringVar(&cfg.mirrorRPCPass, "mirror-rpcpass", "obtcpass", "secondary RPC password")
 	}
-	fs.StringVar(&cfg.network, "network", "simnet", "network: simnet|obtcregtest")
+	fs.StringVar(&cfg.network, "network", "simnet", "network: simnet|obtcregtest|obtctestnet")
 	fs.StringVar(&cfg.stateFile, "statefile", defaultStateFile(), "wallet state file")
 	fs.StringVar(&cfg.seedTag, "seed-tag", "primary", "deterministic wallet namespace")
 }
@@ -969,7 +971,7 @@ func printUsage() {
 	fmt.Println("Usage: devnetsim <command> [flags]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  miningaddr  Print the deterministic simnet mining address")
+	fmt.Println("  miningaddr  Print the deterministic network mining address")
 	fmt.Println("  newaddr     Allocate and print a new deterministic wallet address")
 	fmt.Println("  status      Show wallet and mempool state")
 	fmt.Println("  prepare     Pre-build confirmed UTXOs for later traffic")

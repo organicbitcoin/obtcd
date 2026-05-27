@@ -27,6 +27,11 @@ type config struct {
 	Refresh             time.Duration `long:"refresh" description:"Auto-refresh interval for the HTML page" default:"15s"`
 	RPCTimeout          time.Duration `long:"rpctimeout" description:"Timeout for upstream btcd RPC calls" default:"5s"`
 	Devnet              bool          `long:"devnet" description:"Serve the local Devnet dashboard instead of a single-node status page"`
+	TestnetLab          bool          `long:"testnet-lab" description:"Serve the public testnet lab dashboard from a manifest"`
+	LabManifest         string        `long:"lab-manifest" description:"Path to the public testnet lab manifest file" default:"./testnet-lab.json"`
+	LabScript           string        `long:"lab-script" description:"Path to the local public testnet lab action script" default:"./scripts/testnet-lab.sh"`
+	LabActionTimeout    time.Duration `long:"lab-action-timeout" description:"Timeout for local public testnet lab actions" default:"2m"`
+	LabLogTailLines     int           `long:"lab-log-tail-lines" description:"Recent log lines scanned per lab log source" default:"400"`
 	DevnetManifest      string        `long:"devnet-manifest" description:"Path to the generated Devnet manifest file" default:"./devnet-data/manifest.json"`
 	DevnetScript        string        `long:"devnet-script" description:"Path to the Devnet control script" default:"./scripts/devnet-up.sh"`
 	DevnetNodes         int           `long:"devnet-nodes" description:"Expected Devnet node count when the manifest is missing" default:"3"`
@@ -138,12 +143,24 @@ func loadConfig() (*config, error) {
 	if cfg.DevnetActionTimeout <= 0 {
 		return nil, fmt.Errorf("--devnet-action-timeout must be positive")
 	}
+	if cfg.LabActionTimeout <= 0 {
+		return nil, fmt.Errorf("--lab-action-timeout must be positive")
+	}
+	if cfg.LabLogTailLines <= 0 {
+		return nil, fmt.Errorf("--lab-log-tail-lines must be positive")
+	}
 	if cfg.DevnetNodes < 2 || cfg.DevnetNodes > 5 {
 		return nil, fmt.Errorf("--devnet-nodes must be between 2 and 5")
+	}
+	if cfg.Devnet && cfg.TestnetLab {
+		return nil, fmt.Errorf("--devnet and --testnet-lab cannot be used together")
 	}
 
 	if cfg.Devnet && !cfg.ObtcMainNet && !cfg.ObtcTestNet && !cfg.ObtcRegTest {
 		cfg.ObtcRegTest = true
+	}
+	if cfg.TestnetLab && !cfg.ObtcMainNet && !cfg.ObtcRegTest {
+		cfg.ObtcTestNet = true
 	}
 	if cfg.Devnet {
 		cfg.NoTLS = true
@@ -176,5 +193,7 @@ func loadConfig() (*config, error) {
 	cfg.RPCCert = cleanAndExpandPath(cfg.RPCCert)
 	cfg.DevnetManifest = cleanAndExpandPath(cfg.DevnetManifest)
 	cfg.DevnetScript = cleanAndExpandPath(cfg.DevnetScript)
+	cfg.LabManifest = cleanAndExpandPath(cfg.LabManifest)
+	cfg.LabScript = cleanAndExpandPath(cfg.LabScript)
 	return cfg, nil
 }

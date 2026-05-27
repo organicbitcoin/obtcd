@@ -17,7 +17,20 @@ func main() {
 	}
 
 	var handler http.Handler
-	if cfg.Devnet {
+	if cfg.TestnetLab {
+		server, err := newTestnetLabServer(cfg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		handler = server.routes()
+
+		log.Printf("Starting obtc-status Testnet Lab dashboard on http://%s", cfg.Listen)
+		log.Printf("Lab manifest: %s", cfg.LabManifest)
+		log.Printf("Lab script: %s", cfg.LabScript)
+		log.Printf("JSON endpoint: http://%s/status", cfg.Listen)
+		log.Printf("Alerts endpoint: http://%s/alerts", cfg.Listen)
+		log.Printf("Health endpoint: http://%s/healthz", cfg.Listen)
+	} else if cfg.Devnet {
 		server, err := newDevnetServer(cfg)
 		if err != nil {
 			log.Fatal(err)

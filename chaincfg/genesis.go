@@ -143,6 +143,34 @@ var testNet3GenesisBlock = wire.MsgBlock{
 	Transactions: []*wire.MsgTx{&genesisCoinbaseTx},
 }
 
+// obtcTestNetGenesisHash is the hash of the first block in the independent
+// OBTC public test network.
+var obtcTestNetGenesisHash = chainhash.Hash([chainhash.HashSize]byte{
+	0x63, 0xa9, 0xb2, 0x2a, 0xb5, 0x97, 0x7c, 0x80,
+	0xcb, 0x8e, 0x59, 0xbd, 0xcc, 0xef, 0x36, 0x9d,
+	0xf0, 0x18, 0x73, 0x84, 0x1e, 0xd4, 0x70, 0x5d,
+	0xcd, 0xb7, 0x94, 0x81, 0x27, 0x98, 0xdf, 0x5f,
+})
+
+// obtcTestNetGenesisMerkleRoot is the hash of the first transaction in the
+// independent OBTC public test network genesis block.
+var obtcTestNetGenesisMerkleRoot = genesisMerkleRoot
+
+// obtcTestNetGenesisBlock defines the genesis block for the independent OBTC
+// public test network. It intentionally does not share Bitcoin testnet3
+// history; mainnet fork rehearsal is handled by separate parameters.
+var obtcTestNetGenesisBlock = wire.MsgBlock{
+	Header: wire.BlockHeader{
+		Version:    1,
+		PrevBlock:  chainhash.Hash{},
+		MerkleRoot: obtcTestNetGenesisMerkleRoot,
+		Timestamp:  time.Date(2026, 5, 27, 0, 0, 0, 0, time.UTC),
+		Bits:       0x207fffff,
+		Nonce:      0,
+	},
+	Transactions: []*wire.MsgTx{&genesisCoinbaseTx},
+}
+
 // testNet4GenesisTx is the transaction for the genesis blocks for test network (version 4).
 var testNet4GenesisTx = wire.MsgTx{
 	Version: 1,
