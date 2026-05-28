@@ -792,6 +792,41 @@ validate_obtc_command() {
     validate_obtc_state "manual"
 }
 
+validate_reap_cycle_command() {
+    require_devnet_running
+
+    if ! is_obtc_network; then
+        print_warning "REAP cycle validation skipped for non-OBTC network: ${NETWORK}"
+        return 0
+    fi
+
+    validate_obtc_state "pre-reap-cycle"
+
+    local pre_mine_height pre_mine_reap_picked pre_mine_marker_hash
+    pre_mine_height="$(btcctl_node "$PRIMARY_NODE_INDEX" getblockcount)"
+    pre_mine_reap_picked="$(current_reap_picked)"
+    pre_mine_marker_hash="$(btcctl_node "$PRIMARY_NODE_INDEX" getreapplan | json_get marker_hash)"
+
+    if [ -z "$pre_mine_reap_picked" ] || [ "$pre_mine_reap_picked" -le 0 ]; then
+        print_error "REAP cycle validation requires at least one pending REAP candidate"
+        return 1
+    fi
+
+    print_status "Validating REAP cycle: height=${pre_mine_height} picked=${pre_mine_reap_picked} marker=${pre_mine_marker_hash}"
+    mine_blocks 1
+
+    local best_hash mined_height
+    best_hash="$(btcctl_node "$PRIMARY_NODE_INDEX" getbestblockhash)"
+    mined_height="$(btcctl_node "$PRIMARY_NODE_INDEX" getblockcount)"
+    if [ "$(latest_block_has_reap_marker "$best_hash")" != "true" ]; then
+        print_error "REAP cycle validation failed: block ${best_hash} has no REAP marker"
+        return 1
+    fi
+
+    validate_obtc_state "post-reap-cycle"
+    print_success "REAP cycle validated: pending=${pre_mine_reap_picked} block_height=${mined_height} block_hash=${best_hash}"
+}
+
 replay_audit_command() {
     require_devnet_running
     ./scripts/validation/devnet_replay_audit.sh "$@"
@@ -1083,6 +1118,7 @@ show_help() {
     echo "  miner <on|off>            Toggle continuous CPU mining on node1"
     echo "  mempool                   Show mempool info on every node"
     echo "  audit-replay [flags]      Replay-audit blocks on node1 via scripts/validation/devnet_replay_audit.sh"
+    echo "  validate-reap-cycle       Mine one pending REAP candidate block and require a REAP marker"
     echo "  prepare [utxos] [value]   Pre-build primary spendable UTXOs"
     echo "  prepare-peer [u] [value]  Fund a second deterministic peer wallet"
     echo "  spam [devnetsim flags]    Inject transactions from the primary wallet"
@@ -1162,6 +1198,10 @@ main() {
 
         validate-obtc)
             validate_obtc_command
+            ;;
+
+        validate-reap-cycle)
+            validate_reap_cycle_command
             ;;
 
         audit-replay)
