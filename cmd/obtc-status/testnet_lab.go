@@ -468,7 +468,7 @@ func (s *testnetLabServer) collectWallet(ctx context.Context, wallet labWallet) 
 			Status string `json:"status"`
 		} `json:"items"`
 	}
-	params := []interface{}{map[string]interface{}{"limit": 100}}
+	params := []interface{}{100}
 	if err := caller.Call(ctx, "obtc.getexpiry", params, &expiry); err != nil {
 		snapshot.Warnings = append(snapshot.Warnings, "obtc.getexpiry failed: "+err.Error())
 	} else {
