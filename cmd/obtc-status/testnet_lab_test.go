@@ -66,6 +66,24 @@ func TestEvaluateLabAlertsDetectsCriticalConditions(t *testing.T) {
 	}
 }
 
+func TestEvaluateLabAlertsDetectsWalletSyncLag(t *testing.T) {
+	snapshot := &testnetLabSnapshot{
+		Summary: labSummary{BestHeight: 120},
+		UserWallets: []labWalletSnapshot{
+			{
+				Wallet:  labWallet{Name: "w-passive"},
+				Healthy: true,
+				Blocks:  118,
+			},
+		},
+	}
+
+	alerts := evaluateLabAlerts(snapshot, &labManifest{})
+	if !hasLabAlert(alerts, "wallet_sync_lag") {
+		t.Fatalf("expected wallet_sync_lag alert, got %+v", alerts)
+	}
+}
+
 func TestSummarizeLabLogDetectsPatterns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "service.log")
 	if err := os.WriteFile(path, []byte("ok\nWARN slow peer\nERROR rpc failed\npanic: boom\n[INF] GRPC: loopyWriter exiting with error: transport closed by client\n[ERR] RPCS: Websocket receive error from 127.0.0.1:60676: websocket: close 1006 unexpected EOF\n"), 0o600); err != nil {
@@ -472,6 +490,8 @@ func labTestRPCResult(t *testing.T, method string) interface{} {
 		}
 	case "getinfo":
 		return map[string]interface{}{"blocks": 120}
+	case "getblockcount":
+		return 120
 	case "getbalance":
 		return 1.25
 	case "obtc.getexpiry":

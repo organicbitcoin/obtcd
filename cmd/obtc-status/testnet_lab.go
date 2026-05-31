@@ -833,8 +833,11 @@ func (s *testnetLabServer) collectWallet(ctx context.Context, wallet labWallet) 
 		return snapshot
 	}
 	snapshot.Healthy = true
-	if blocks, ok := numberAsFloat64(info["blocks"]); ok {
-		snapshot.Blocks = int32(blocks)
+	var blocks int32
+	if err := caller.Call(ctx, "getblockcount", nil, &blocks); err != nil {
+		snapshot.Warnings = append(snapshot.Warnings, "getblockcount failed: "+err.Error())
+	} else {
+		snapshot.Blocks = blocks
 	}
 
 	var balance float64
@@ -1251,6 +1254,10 @@ func evaluateLabAlerts(snapshot *testnetLabSnapshot, manifest *labManifest) []la
 		if !wallet.Healthy {
 			alerts = append(alerts, criticalAlert("wallet_unavailable", name, wallet.Error))
 			continue
+		}
+		if lag := snapshot.Summary.BestHeight - wallet.Blocks; lag > 0 {
+			alerts = append(alerts, warningAlert("wallet_sync_lag", name,
+				fmt.Sprintf("wallet processed height lags node tip by %d blocks", lag)))
 		}
 		for _, warning := range wallet.Warnings {
 			alerts = append(alerts, warningAlert("wallet_warning", name, warning))
