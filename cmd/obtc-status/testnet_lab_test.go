@@ -78,6 +78,19 @@ func TestSummarizeLabLogDetectsPatterns(t *testing.T) {
 	}
 }
 
+func TestSummarizeLabLogForModeDefersMissingOnDemandLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "not-fetched.log")
+	summary := summarizeLabLogForMode(labLog{Name: "remote", Path: path}, 10, true)
+	if !summary.Deferred || summary.Error != "" {
+		t.Fatalf("expected missing on-demand log to be deferred: %+v", summary)
+	}
+
+	summary = summarizeLabLogForMode(labLog{Name: "remote", Path: path}, 10, false)
+	if summary.Deferred || summary.Error == "" {
+		t.Fatalf("expected missing eager log to remain unavailable: %+v", summary)
+	}
+}
+
 func TestReadLabManifestDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "lab.json")
 	if err := os.WriteFile(path, []byte(`{"nodes":[]}`), 0o600); err != nil {

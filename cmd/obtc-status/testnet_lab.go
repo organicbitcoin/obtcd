@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -99,6 +100,7 @@ type labWalletSnapshot struct {
 
 type labLogSummary struct {
 	Log           labLog `json:"log"`
+	Deferred      bool   `json:"deferred,omitempty"`
 	ScannedLines  int    `json:"scanned_lines"`
 	WarningCount  int    `json:"warning_count"`
 	ErrorCount    int    `json:"error_count"`
@@ -721,7 +723,8 @@ func (s *testnetLabServer) collectSnapshot(ctx context.Context) (*testnetLabSnap
 	snapshot.MinerWallets = s.collectWallets(ctx, manifest.MinerWallets)
 	snapshot.UserWallets = s.collectWallets(ctx, manifest.UserWallets)
 	for _, logSpec := range manifest.Logs {
-		snapshot.Logs = append(snapshot.Logs, summarizeLabLog(logSpec, s.logTailLines))
+		snapshot.Logs = append(snapshot.Logs, summarizeLabLogForMode(
+			logSpec, s.logTailLines, s.deferMissingLogs()))
 	}
 
 	snapshot.Alerts = evaluateLabAlerts(snapshot, manifest)
@@ -797,7 +800,8 @@ func (s *testnetLabServer) collectLogSummaries() ([]labLogSummary, error) {
 	}
 	logs := make([]labLogSummary, 0, len(manifest.Logs))
 	for _, logSpec := range manifest.Logs {
-		logs = append(logs, summarizeLabLog(logSpec, s.logTailLines))
+		logs = append(logs, summarizeLabLogForMode(
+			logSpec, s.logTailLines, s.deferMissingLogs()))
 	}
 	sort.Slice(logs, func(i, j int) bool {
 		return logs[i].Log.Name < logs[j].Log.Name
@@ -1321,6 +1325,22 @@ func summarizeLabLog(spec labLog, maxLines int) labLogSummary {
 		}
 	}
 	return summary
+}
+
+func summarizeLabLogForMode(spec labLog, maxLines int, deferMissing bool) labLogSummary {
+	summary := summarizeLabLog(spec, maxLines)
+	if !deferMissing || summary.Error == "" {
+		return summary
+	}
+	if _, err := os.Stat(spec.Path); errors.Is(err, os.ErrNotExist) {
+		summary.Error = ""
+		summary.Deferred = true
+	}
+	return summary
+}
+
+func (s *testnetLabServer) deferMissingLogs() bool {
+	return strings.TrimSpace(os.Getenv("OBTC_LAB_LOG_FETCH_SPEC")) != ""
 }
 
 func isBenignLabLogLine(lower string) bool {
