@@ -50,8 +50,13 @@ func TestStatusCollectorSnapshot(t *testing.T) {
 				Headers:              123,
 				BestBlockHash:        "best",
 				Difficulty:           1.5,
+				MedianTime:           1000,
 				InitialBlockDownload: false,
 				VerificationProgress: 0.99,
+			},
+			"getblockheader": btcjson.GetBlockHeaderVerboseResult{
+				Hash: "best",
+				Time: 2000,
 			},
 			"getpeerinfo": []btcjson.GetPeerInfoResult{
 				{Inbound: true},
@@ -99,6 +104,9 @@ func TestStatusCollectorSnapshot(t *testing.T) {
 
 	if snapshot.Chain.HeaderLag != 3 {
 		t.Fatalf("expected header lag 3, got %d", snapshot.Chain.HeaderLag)
+	}
+	if snapshot.Chain.MedianTimeUnix != 1000 || snapshot.Chain.TipTimeUnix != 2000 {
+		t.Fatalf("unexpected chain time summary: %+v", snapshot.Chain)
 	}
 	if snapshot.Peers.Count != 3 || snapshot.Peers.Inbound != 1 ||
 		snapshot.Peers.Outbound != 2 || snapshot.Peers.SyncPeer != 1 {

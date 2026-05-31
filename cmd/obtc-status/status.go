@@ -138,6 +138,7 @@ type chainStatus struct {
 	BestBlockHash        string  `json:"best_block_hash"`
 	Difficulty           float64 `json:"difficulty"`
 	MedianTimeUnix       int64   `json:"median_time_unix"`
+	TipTimeUnix          int64   `json:"tip_time_unix"`
 	TipAgeSeconds        int64   `json:"tip_age_seconds"`
 	InitialBlockDownload bool    `json:"initial_block_download"`
 	VerificationProgress float64 `json:"verification_progress"`
@@ -235,6 +236,16 @@ func (c *statusCollector) Snapshot(ctx context.Context) (*statusSnapshot, error)
 		return nil, err
 	}
 
+	tipTimeUnix := chainInfo.MedianTime
+	if chainInfo.BestBlockHash != "" {
+		var header btcjson.GetBlockHeaderVerboseResult
+		if err := c.rpc.Call(ctx, "getblockheader", []interface{}{
+			chainInfo.BestBlockHash, true,
+		}, &header); err == nil && header.Time > 0 {
+			tipTimeUnix = header.Time
+		}
+	}
+
 	snapshot := &statusSnapshot{
 		GeneratedAt: time.Now().UTC(),
 		RPCServer:   c.rpcServer,
@@ -246,7 +257,8 @@ func (c *statusCollector) Snapshot(ctx context.Context) (*statusSnapshot, error)
 			BestBlockHash:        chainInfo.BestBlockHash,
 			Difficulty:           chainInfo.Difficulty,
 			MedianTimeUnix:       chainInfo.MedianTime,
-			TipAgeSeconds:        maxInt64(0, time.Now().UTC().Unix()-chainInfo.MedianTime),
+			TipTimeUnix:          tipTimeUnix,
+			TipAgeSeconds:        maxInt64(0, time.Now().UTC().Unix()-tipTimeUnix),
 			InitialBlockDownload: chainInfo.InitialBlockDownload,
 			VerificationProgress: chainInfo.VerificationProgress,
 		},

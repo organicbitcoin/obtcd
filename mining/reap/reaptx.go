@@ -38,6 +38,9 @@ func IsLikelyREAPTx(tx *wire.MsgTx) bool {
 
 // ExtractMarkerPayload parses OP_RETURN marker payload from script.
 func ExtractMarkerPayload(pkScript []byte) (string, bool) {
+	if len(pkScript) == 0 || pkScript[0] != txscript.OP_RETURN {
+		return "", false
+	}
 	data, err := txscript.PushedData(pkScript)
 	if err != nil || len(data) < 1 {
 		return "", false

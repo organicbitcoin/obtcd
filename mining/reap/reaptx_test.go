@@ -52,4 +52,10 @@ func TestExtractMarkerPayload(t *testing.T) {
 	if ok || p != "" {
 		t.Fatalf("expected invalid marker script")
 	}
+
+	s, _ = txscript.NewScriptBuilder().AddData([]byte("REAP:1:2:x")).Script()
+	p, ok = ExtractMarkerPayload(s)
+	if ok || p != "" {
+		t.Fatalf("expected non-OP_RETURN push script to be invalid")
+	}
 }

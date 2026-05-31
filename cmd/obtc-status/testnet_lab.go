@@ -7,19 +7,25 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/mining/reap"
 )
 
 const (
@@ -120,6 +126,79 @@ type labAlert struct {
 	Message  string `json:"message"`
 }
 
+type labExpiryIndexDetail struct {
+	Node                   labNode                        `json:"node"`
+	Chain                  chainStatus                    `json:"chain"`
+	Stats                  btcjson.ExpiryIndexStatsResult `json:"stats"`
+	ReapPlan               reapPlanStatus                 `json:"reap_plan"`
+	StartHeight            int32                          `json:"start_height"`
+	EndHeight              int32                          `json:"end_height"`
+	Limit                  int                            `json:"limit"`
+	Returned               int                            `json:"returned"`
+	TotalResults           int                            `json:"total_results"`
+	NextCursor             string                         `json:"next_cursor,omitempty"`
+	PreviewPicked          int                            `json:"preview_picked"`
+	PreviewMaxInputs       int                            `json:"preview_max_inputs"`
+	PreviewWeightBudget    int64                          `json:"preview_weight_budget"`
+	ScanOrderDescription   string                         `json:"scan_order_description"`
+	StrictOrderDescription string                         `json:"strict_order_description"`
+	Rows                   []*labExpiryIndexRow           `json:"rows"`
+	StrictRows             []*labExpiryIndexRow           `json:"strict_rows"`
+	NetworkParams          *btcjson.ExpiryParamsResult    `json:"network_params,omitempty"`
+}
+
+type labExpiryIndexRow struct {
+	ScanRank        int    `json:"scan_rank"`
+	StrictRank      int    `json:"strict_rank"`
+	Picked          bool   `json:"picked"`
+	EligibleNow     bool   `json:"eligible_now"`
+	OutPoint        string `json:"outpoint"`
+	TxID            string `json:"txid"`
+	Vout            uint32 `json:"vout"`
+	AmountSat       int64  `json:"amount_sat"`
+	ExpiryHeight    uint64 `json:"expiry_height"`
+	CreateHeight    uint64 `json:"create_height"`
+	BlocksToExpiry  int64  `json:"blocks_to_expiry"`
+	SelectorHashHex string `json:"selector_hash_hex"`
+}
+
+type labReapDetail struct {
+	Node           labNode        `json:"node"`
+	Chain          chainStatus    `json:"chain"`
+	Plan           reapPlanStatus `json:"plan"`
+	HistoryCount   int            `json:"history_count"`
+	HistoryScanned int            `json:"history_scanned"`
+	History        []labReapBlock `json:"history"`
+}
+
+type labReapBlock struct {
+	Height  int64       `json:"height"`
+	Hash    string      `json:"hash"`
+	Time    int64       `json:"time"`
+	ReapTxs []labReapTx `json:"reap_txs"`
+}
+
+type labReapTx struct {
+	TxID                 string `json:"txid"`
+	Inputs               int    `json:"inputs"`
+	Outputs              int    `json:"outputs"`
+	Weight               int32  `json:"weight"`
+	MarkerPayload        string `json:"marker_payload"`
+	RefundOutputTotalSat int64  `json:"refund_output_total_sat"`
+}
+
+type labCommitmentDetail struct {
+	Node                 labNode                `json:"node"`
+	Chain                chainStatus            `json:"chain"`
+	ExpiryIndex          expiryIndexStatus      `json:"expiry_index"`
+	ExpiryCommitment     expiryCommitmentStatus `json:"expiry_commitment"`
+	ReapPlan             reapPlanStatus         `json:"reap_plan"`
+	NextHeight           int32                  `json:"next_height"`
+	ExpiryIndexLag       int32                  `json:"expiry_index_lag"`
+	CommitmentLag        int32                  `json:"commitment_lag"`
+	CommitmentTipMatches bool                   `json:"commitment_tip_matches"`
+}
+
 type testnetLabSnapshot struct {
 	GeneratedAt  time.Time           `json:"generated_at"`
 	Network      string              `json:"network"`
@@ -167,6 +246,12 @@ func (s *testnetLabServer) routes() http.Handler {
 	mux.HandleFunc("/status", s.handleJSON)
 	mux.HandleFunc("/alerts", s.handleAlerts)
 	mux.HandleFunc("/logs", s.handleLogs)
+	mux.HandleFunc("/expiryindex", s.handleLabExpiryIndexHTML)
+	mux.HandleFunc("/expiryindex.json", s.handleLabExpiryIndexJSON)
+	mux.HandleFunc("/reap", s.handleLabReapHTML)
+	mux.HandleFunc("/reap.json", s.handleLabReapJSON)
+	mux.HandleFunc("/commitment", s.handleLabCommitmentHTML)
+	mux.HandleFunc("/commitment.json", s.handleLabCommitmentJSON)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/action", s.handleAction)
 	return mux
@@ -216,23 +301,261 @@ func (s *testnetLabServer) handleAlerts(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *testnetLabServer) handleLogs(w http.ResponseWriter, r *http.Request) {
-	snapshot, err := s.snapshotWithTimeout(r.Context())
+	logs, err := s.collectLogSummaries()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	writeIndentedJSON(w, snapshot.Logs)
+	writeIndentedJSON(w, logs)
+}
+
+func (s *testnetLabServer) handleLabExpiryIndexHTML(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/expiryindex" {
+		http.NotFound(w, r)
+		return
+	}
+	manifest, warnings, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	view := struct {
+		RefreshSeconds int
+		Nodes          []labNode
+		SelectedNode   string
+		StartValue     string
+		EndValue       string
+		LimitValue     string
+		Result         *labExpiryIndexDetail
+		Warnings       []string
+		Error          string
+	}{
+		RefreshSeconds: maxInt(1, int(s.refresh/time.Second)),
+		Nodes:          manifest.Nodes,
+		SelectedNode:   selectedLabNodeName(manifest.Nodes, r.URL.Query().Get("node")),
+		StartValue:     strings.TrimSpace(r.URL.Query().Get("start")),
+		EndValue:       strings.TrimSpace(r.URL.Query().Get("end")),
+		LimitValue:     strings.TrimSpace(r.URL.Query().Get("limit")),
+		Warnings:       warnings,
+	}
+
+	if view.SelectedNode == "" {
+		view.Error = "no lab nodes configured"
+	} else {
+		ctx, cancel := context.WithTimeout(r.Context(), maxDuration(s.timeout, 30*time.Second))
+		defer cancel()
+		node, err := findLabNode(manifest.Nodes, view.SelectedNode)
+		if err != nil {
+			view.Error = err.Error()
+		} else if result, err := s.loadLabExpiryIndexDetail(ctx, node, view.StartValue, view.EndValue, view.LimitValue); err != nil {
+			view.Error = err.Error()
+		} else {
+			view.Result = result
+			if view.StartValue == "" {
+				view.StartValue = strconv.FormatInt(int64(result.StartHeight), 10)
+			}
+			if view.EndValue == "" {
+				view.EndValue = strconv.FormatInt(int64(result.EndHeight), 10)
+			}
+			if view.LimitValue == "" {
+				view.LimitValue = strconv.Itoa(result.Limit)
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := testnetLabExpiryIndexTemplate.Execute(w, view); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *testnetLabServer) handleLabExpiryIndexJSON(w http.ResponseWriter, r *http.Request) {
+	manifest, _, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	selectedNode := selectedLabNodeName(manifest.Nodes, r.URL.Query().Get("node"))
+	node, err := findLabNode(manifest.Nodes, selectedNode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), maxDuration(s.timeout, 30*time.Second))
+	defer cancel()
+	result, err := s.loadLabExpiryIndexDetail(
+		ctx, node,
+		strings.TrimSpace(r.URL.Query().Get("start")),
+		strings.TrimSpace(r.URL.Query().Get("end")),
+		strings.TrimSpace(r.URL.Query().Get("limit")),
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	writeIndentedJSON(w, result)
+}
+
+func (s *testnetLabServer) handleLabReapHTML(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/reap" {
+		http.NotFound(w, r)
+		return
+	}
+	manifest, warnings, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	countValue := strings.TrimSpace(r.URL.Query().Get("count"))
+	if countValue == "" {
+		countValue = "144"
+	}
+	view := struct {
+		RefreshSeconds int
+		Nodes          []labNode
+		SelectedNode   string
+		CountValue     string
+		Result         *labReapDetail
+		Warnings       []string
+		Error          string
+	}{
+		RefreshSeconds: maxInt(1, int(s.refresh/time.Second)),
+		Nodes:          manifest.Nodes,
+		SelectedNode:   selectedLabNodeName(manifest.Nodes, r.URL.Query().Get("node")),
+		CountValue:     countValue,
+		Warnings:       warnings,
+	}
+
+	if view.SelectedNode == "" {
+		view.Error = "no lab nodes configured"
+	} else {
+		count, countErr := parseReapHistoryCount(countValue)
+		if countErr != nil {
+			view.Error = countErr.Error()
+		} else {
+			ctx, cancel := context.WithTimeout(r.Context(), maxDuration(s.timeout, 30*time.Second))
+			defer cancel()
+			node, err := findLabNode(manifest.Nodes, view.SelectedNode)
+			if err != nil {
+				view.Error = err.Error()
+			} else if result, err := s.loadLabReapDetail(ctx, node, count); err != nil {
+				view.Error = err.Error()
+			} else {
+				view.Result = result
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := testnetLabReapTemplate.Execute(w, view); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *testnetLabServer) handleLabReapJSON(w http.ResponseWriter, r *http.Request) {
+	manifest, _, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	selectedNode := selectedLabNodeName(manifest.Nodes, r.URL.Query().Get("node"))
+	node, err := findLabNode(manifest.Nodes, selectedNode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	countValue := strings.TrimSpace(r.URL.Query().Get("count"))
+	if countValue == "" {
+		countValue = "144"
+	}
+	count, err := parseReapHistoryCount(countValue)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), maxDuration(s.timeout, 30*time.Second))
+	defer cancel()
+	result, err := s.loadLabReapDetail(ctx, node, count)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	writeIndentedJSON(w, result)
+}
+
+func (s *testnetLabServer) handleLabCommitmentHTML(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/commitment" {
+		http.NotFound(w, r)
+		return
+	}
+	manifest, warnings, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	view := struct {
+		RefreshSeconds int
+		Nodes          []labNode
+		SelectedNode   string
+		Result         *labCommitmentDetail
+		Warnings       []string
+		Error          string
+	}{
+		RefreshSeconds: maxInt(1, int(s.refresh/time.Second)),
+		Nodes:          manifest.Nodes,
+		SelectedNode:   selectedLabNodeName(manifest.Nodes, r.URL.Query().Get("node")),
+		Warnings:       warnings,
+	}
+
+	if view.SelectedNode == "" {
+		view.Error = "no lab nodes configured"
+	} else {
+		ctx, cancel := context.WithTimeout(r.Context(), maxDuration(s.timeout, 30*time.Second))
+		defer cancel()
+		node, err := findLabNode(manifest.Nodes, view.SelectedNode)
+		if err != nil {
+			view.Error = err.Error()
+		} else if result, err := s.loadLabCommitmentDetail(ctx, node); err != nil {
+			view.Error = err.Error()
+		} else {
+			view.Result = result
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := testnetLabCommitmentTemplate.Execute(w, view); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *testnetLabServer) handleLabCommitmentJSON(w http.ResponseWriter, r *http.Request) {
+	manifest, _, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	selectedNode := selectedLabNodeName(manifest.Nodes, r.URL.Query().Get("node"))
+	node, err := findLabNode(manifest.Nodes, selectedNode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), maxDuration(s.timeout, 30*time.Second))
+	defer cancel()
+	result, err := s.loadLabCommitmentDetail(ctx, node)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	writeIndentedJSON(w, result)
 }
 
 func (s *testnetLabServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	snapshot, err := s.snapshotWithTimeout(r.Context())
-	if err != nil {
+	if _, _, err := readLabManifest(s.manifestPath); err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	if snapshot.Summary.CriticalAlerts > 0 {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(w, "critical alerts active\n")
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -314,6 +637,15 @@ func resolveLabAction(action string, form map[string][]string) (string, []string
 		return "health-check", []string{"health-check"}, nil
 	case "capture-evidence":
 		return "capture-evidence", []string{"capture-evidence"}, nil
+	case "fetch-logs":
+		lines := strings.TrimSpace(firstFormValue(form, "lines"))
+		if lines == "" {
+			lines = "200"
+		}
+		if !isSafeLabNumber(lines) {
+			return "", nil, fmt.Errorf("invalid log line count")
+		}
+		return "fetch-logs", []string{"fetch-logs", lines}, nil
 	case "renewall-dry-run":
 		wallet := strings.TrimSpace(firstFormValue(form, "wallet"))
 		if !isSafeLabToken(wallet) {
@@ -383,32 +715,11 @@ func (s *testnetLabServer) collectSnapshot(ctx context.Context) (*testnetLabSnap
 		},
 	}
 
-	var minHeight, maxHeight int32
-	for _, node := range manifest.Nodes {
-		nodeSnapshot := s.collectNode(ctx, node)
-		if nodeSnapshot.Healthy && nodeSnapshot.Snapshot != nil {
-			height := nodeSnapshot.Snapshot.Chain.Blocks
-			if snapshot.Summary.HealthyNodes == 0 || height < minHeight {
-				minHeight = height
-			}
-			if snapshot.Summary.HealthyNodes == 0 || height > maxHeight {
-				maxHeight = height
-			}
-			snapshot.Summary.HealthyNodes++
-		}
-		snapshot.Nodes = append(snapshot.Nodes, nodeSnapshot)
-	}
-	if snapshot.Summary.HealthyNodes > 0 {
-		snapshot.Summary.BestHeight = maxHeight
-		snapshot.Summary.HeightSpread = maxHeight - minHeight
-	}
-
-	for _, wallet := range manifest.MinerWallets {
-		snapshot.MinerWallets = append(snapshot.MinerWallets, s.collectWallet(ctx, wallet))
-	}
-	for _, wallet := range manifest.UserWallets {
-		snapshot.UserWallets = append(snapshot.UserWallets, s.collectWallet(ctx, wallet))
-	}
+	snapshot.Nodes = s.collectNodes(ctx, manifest.Nodes)
+	snapshot.Summary.HealthyNodes, snapshot.Summary.BestHeight,
+		snapshot.Summary.HeightSpread = labNodeHeightSummary(snapshot.Nodes)
+	snapshot.MinerWallets = s.collectWallets(ctx, manifest.MinerWallets)
+	snapshot.UserWallets = s.collectWallets(ctx, manifest.UserWallets)
 	for _, logSpec := range manifest.Logs {
 		snapshot.Logs = append(snapshot.Logs, summarizeLabLog(logSpec, s.logTailLines))
 	}
@@ -424,6 +735,74 @@ func (s *testnetLabServer) collectSnapshot(ctx context.Context) (*testnetLabSnap
 	}
 	sortLabSnapshot(snapshot)
 	return snapshot, nil
+}
+
+func (s *testnetLabServer) collectNodes(ctx context.Context, nodes []labNode) []labNodeSnapshot {
+	snapshots := make([]labNodeSnapshot, len(nodes))
+	var wg sync.WaitGroup
+	for i, node := range nodes {
+		wg.Add(1)
+		go func(i int, node labNode) {
+			defer wg.Done()
+			nodeCtx, cancel := context.WithTimeout(ctx, s.timeout)
+			defer cancel()
+			snapshots[i] = s.collectNode(nodeCtx, node)
+		}(i, node)
+	}
+	wg.Wait()
+	return snapshots
+}
+
+func labNodeHeightSummary(nodes []labNodeSnapshot) (healthy int, bestHeight, heightSpread int32) {
+	var minHeight int32
+	for _, node := range nodes {
+		if !node.Healthy || node.Snapshot == nil {
+			continue
+		}
+		height := node.Snapshot.Chain.Blocks
+		if healthy == 0 || height < minHeight {
+			minHeight = height
+		}
+		if healthy == 0 || height > bestHeight {
+			bestHeight = height
+		}
+		healthy++
+	}
+	if healthy > 0 {
+		heightSpread = bestHeight - minHeight
+	}
+	return healthy, bestHeight, heightSpread
+}
+
+func (s *testnetLabServer) collectWallets(ctx context.Context, wallets []labWallet) []labWalletSnapshot {
+	snapshots := make([]labWalletSnapshot, len(wallets))
+	var wg sync.WaitGroup
+	for i, wallet := range wallets {
+		wg.Add(1)
+		go func(i int, wallet labWallet) {
+			defer wg.Done()
+			walletCtx, cancel := context.WithTimeout(ctx, s.timeout)
+			defer cancel()
+			snapshots[i] = s.collectWallet(walletCtx, wallet)
+		}(i, wallet)
+	}
+	wg.Wait()
+	return snapshots
+}
+
+func (s *testnetLabServer) collectLogSummaries() ([]labLogSummary, error) {
+	manifest, _, err := readLabManifest(s.manifestPath)
+	if err != nil {
+		return nil, err
+	}
+	logs := make([]labLogSummary, 0, len(manifest.Logs))
+	for _, logSpec := range manifest.Logs {
+		logs = append(logs, summarizeLabLog(logSpec, s.logTailLines))
+	}
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].Log.Name < logs[j].Log.Name
+	})
+	return logs, nil
 }
 
 func (s *testnetLabServer) collectNode(ctx context.Context, node labNode) labNodeSnapshot {
@@ -487,6 +866,289 @@ func (s *testnetLabServer) collectWallet(ctx context.Context, wallet labWallet) 
 
 	sort.Strings(snapshot.Warnings)
 	return snapshot
+}
+
+func (s *testnetLabServer) loadLabExpiryIndexDetail(ctx context.Context, node labNode, startRaw, endRaw, limitRaw string) (*labExpiryIndexDetail, error) {
+	caller := s.labNodeCaller(node)
+	status, err := (&statusCollector{rpc: caller, rpcServer: node.RPCServer}).Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var stats btcjson.ExpiryIndexStatsResult
+	if err := caller.Call(ctx, "getexpiryindexstats", nil, &stats); err != nil {
+		return nil, err
+	}
+
+	defaultStart := status.Chain.Blocks
+	defaultEnd := defaultStart
+	if stats.NetworkParams != nil && stats.NetworkParams.WindowBlocks > 0 {
+		window := stats.NetworkParams.WindowBlocks
+		if window > uint64(^uint32(0)>>1) {
+			window = uint64(^uint32(0) >> 1)
+		}
+		defaultEnd += int32(window)
+	}
+
+	startHeight, err := parseExpiryHeight(startRaw, defaultStart)
+	if err != nil {
+		return nil, err
+	}
+	endHeight, err := parseExpiryHeight(endRaw, defaultEnd)
+	if err != nil {
+		return nil, err
+	}
+	if endHeight < startHeight {
+		return nil, fmt.Errorf("end height must be greater than or equal to start height")
+	}
+	limit, err := parseExpiryLimit(limitRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	var result btcjson.ListExpiringResult
+	if err := caller.Call(ctx, "listexpiring", []interface{}{
+		startHeight, endHeight, limit,
+	}, &result); err != nil {
+		return nil, err
+	}
+
+	rows := make([]*labExpiryIndexRow, 0, len(result.ExpiringUTXOs))
+	for idx, utxo := range result.ExpiringUTXOs {
+		outpoint := fmt.Sprintf("%s:%d", utxo.TxID, utxo.Vout)
+		selectorHash := utxo.TxID
+		if op, err := parseResultOutPoint(utxo.TxID, utxo.Vout); err == nil {
+			outpoint = formatOutPoint(op)
+			selectorHash = hex.EncodeToString(op.Hash[:])
+		}
+		rows = append(rows, &labExpiryIndexRow{
+			ScanRank:        idx + 1,
+			OutPoint:        outpoint,
+			TxID:            utxo.TxID,
+			Vout:            utxo.Vout,
+			AmountSat:       utxo.AmountSat,
+			ExpiryHeight:    utxo.ExpiryHeight,
+			CreateHeight:    utxo.CreateHeight,
+			BlocksToExpiry:  utxo.BlocksToExpiry,
+			SelectorHashHex: selectorHash,
+		})
+	}
+
+	strictRows := append([]*labExpiryIndexRow(nil), rows...)
+	sort.Slice(strictRows, func(i, j int) bool {
+		a := strictRows[i]
+		b := strictRows[j]
+		if a.ExpiryHeight != b.ExpiryHeight {
+			return a.ExpiryHeight < b.ExpiryHeight
+		}
+		if a.AmountSat != b.AmountSat {
+			return a.AmountSat < b.AmountSat
+		}
+		if a.SelectorHashHex != b.SelectorHashHex {
+			return a.SelectorHashHex < b.SelectorHashHex
+		}
+		return a.Vout < b.Vout
+	})
+
+	params, err := diagnosticsNetworkParams(s.cfg)
+	if err != nil {
+		return nil, err
+	}
+	reapParams := reap.DefaultREAPParamsForNet(params, reap.SortModeStrict)
+	nextHeight := int64(status.Chain.Blocks) + 1
+	picked := 0
+	for idx, row := range strictRows {
+		row.StrictRank = idx + 1
+		row.EligibleNow = int64(row.ExpiryHeight) <= nextHeight
+		if !row.EligibleNow {
+			continue
+		}
+		nextWeight := reap.EstimateBlueprintWeight(picked + 1)
+		if picked < reapParams.MaxInputs && (reapParams.WeightBudget <= 0 || nextWeight <= reapParams.WeightBudget) {
+			row.Picked = true
+			picked++
+		}
+	}
+
+	detail := &labExpiryIndexDetail{
+		Node:                   node,
+		Chain:                  status.Chain,
+		Stats:                  stats,
+		ReapPlan:               status.ReapPlan,
+		StartHeight:            result.StartHeight,
+		EndHeight:              result.EndHeight,
+		Limit:                  limit,
+		Returned:               len(rows),
+		TotalResults:           result.TotalResults,
+		PreviewPicked:          picked,
+		PreviewMaxInputs:       reapParams.MaxInputs,
+		PreviewWeightBudget:    reapParams.WeightBudget,
+		ScanOrderDescription:   "expiry_height -> canonical txid string -> vout",
+		StrictOrderDescription: "expiry_height -> amount_sat -> raw hash bytes -> vout",
+		Rows:                   rows,
+		StrictRows:             strictRows,
+		NetworkParams:          stats.NetworkParams,
+	}
+	if result.NextHeight != nil && result.NextOutpoint != nil {
+		detail.NextCursor = fmt.Sprintf("next_height=%d, start_after=%s", *result.NextHeight, *result.NextOutpoint)
+	}
+	return detail, nil
+}
+
+func (s *testnetLabServer) loadLabReapDetail(ctx context.Context, node labNode, count int) (*labReapDetail, error) {
+	caller := s.labNodeCaller(node)
+	status, err := (&statusCollector{rpc: caller, rpcServer: node.RPCServer}).Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	bestHeight := int64(status.Chain.Blocks)
+	startHeight := bestHeight - int64(count) + 1
+	if startHeight < 0 {
+		startHeight = 0
+	}
+
+	detail := &labReapDetail{
+		Node:           node,
+		Chain:          status.Chain,
+		Plan:           status.ReapPlan,
+		HistoryCount:   count,
+		HistoryScanned: int(bestHeight - startHeight + 1),
+		History:        []labReapBlock{},
+	}
+	for height := bestHeight; height >= startHeight; height-- {
+		var hash string
+		if err := caller.Call(ctx, "getblockhash", []interface{}{height}, &hash); err != nil {
+			return nil, err
+		}
+		var block btcjson.GetBlockVerboseTxResult
+		if err := caller.Call(ctx, "getblock", []interface{}{hash, 2}, &block); err != nil {
+			return nil, err
+		}
+		reapTxs := labReapTxsFromBlock(labBlockRawTxs(block))
+		if len(reapTxs) == 0 {
+			continue
+		}
+		detail.History = append(detail.History, labReapBlock{
+			Height:  block.Height,
+			Hash:    block.Hash,
+			Time:    block.Time,
+			ReapTxs: reapTxs,
+		})
+	}
+	return detail, nil
+}
+
+func labBlockRawTxs(block btcjson.GetBlockVerboseTxResult) []btcjson.TxRawResult {
+	if len(block.RawTx) > 0 {
+		return block.RawTx
+	}
+	return block.Tx
+}
+
+func (s *testnetLabServer) loadLabCommitmentDetail(ctx context.Context, node labNode) (*labCommitmentDetail, error) {
+	caller := s.labNodeCaller(node)
+	status, err := (&statusCollector{rpc: caller, rpcServer: node.RPCServer}).Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	detail := &labCommitmentDetail{
+		Node:             node,
+		Chain:            status.Chain,
+		ExpiryIndex:      status.ExpiryIndex,
+		ExpiryCommitment: status.ExpiryCommitment,
+		ReapPlan:         status.ReapPlan,
+		NextHeight:       status.Chain.Blocks + 1,
+		CommitmentTipMatches: status.ExpiryCommitment.TipHash != "" &&
+			status.ExpiryCommitment.TipHash == status.Chain.BestBlockHash,
+	}
+	if status.ExpiryIndex.Available {
+		detail.ExpiryIndexLag = status.Chain.Blocks - status.ExpiryIndex.TipHeight
+	}
+	if status.ExpiryCommitment.Available {
+		detail.CommitmentLag = status.Chain.Blocks - status.ExpiryCommitment.TipHeight
+	}
+	return detail, nil
+}
+
+func labReapTxsFromBlock(txs []btcjson.TxRawResult) []labReapTx {
+	var results []labReapTx
+	for _, tx := range txs {
+		payload, markerIndex, ok := labReapMarkerPayload(tx)
+		if !ok || !strings.HasPrefix(payload, "REAP:") {
+			continue
+		}
+		refundTotal := int64(0)
+		for idx, out := range tx.Vout {
+			if idx == markerIndex {
+				continue
+			}
+			refundTotal += btcToSat(out.Value)
+		}
+		inputs := 0
+		for _, in := range tx.Vin {
+			if !in.IsCoinBase() {
+				inputs++
+			}
+		}
+		results = append(results, labReapTx{
+			TxID:                 tx.Txid,
+			Inputs:               inputs,
+			Outputs:              len(tx.Vout),
+			Weight:               tx.Weight,
+			MarkerPayload:        payload,
+			RefundOutputTotalSat: refundTotal,
+		})
+	}
+	return results
+}
+
+func labReapMarkerPayload(tx btcjson.TxRawResult) (string, int, bool) {
+	for idx, out := range tx.Vout {
+		rawScript, err := hex.DecodeString(out.ScriptPubKey.Hex)
+		if err != nil {
+			continue
+		}
+		payload, ok := reap.ExtractMarkerPayload(rawScript)
+		if ok {
+			return payload, idx, true
+		}
+	}
+	return "", -1, false
+}
+
+func btcToSat(value float64) int64 {
+	return int64(math.Round(value * 1e8))
+}
+
+func (s *testnetLabServer) labNodeCaller(node labNode) *jsonRPCCaller {
+	user := resolveSecret(node.RPCUser, node.RPCUserEnv)
+	pass := resolveSecret(node.RPCPass, node.RPCPassEnv)
+	return newRawJSONRPCCaller(node.RPCServer, user, pass, s.timeout, node.UseTLS)
+}
+
+func selectedLabNodeName(nodes []labNode, raw string) string {
+	selected := strings.TrimSpace(raw)
+	if selected != "" {
+		return selected
+	}
+	if len(nodes) == 0 {
+		return ""
+	}
+	return nodes[0].Name
+}
+
+func findLabNode(nodes []labNode, name string) (labNode, error) {
+	if strings.TrimSpace(name) == "" {
+		return labNode{}, fmt.Errorf("node is required")
+	}
+	for _, node := range nodes {
+		if node.Name == name {
+			return node, nil
+		}
+	}
+	return labNode{}, fmt.Errorf("node %q not found", name)
 }
 
 func readLabManifest(path string) (*labManifest, []string, error) {
@@ -639,6 +1301,9 @@ func summarizeLabLog(spec labLog, maxLines int) labLogSummary {
 	summary.ScannedLines = len(lines)
 	for _, line := range lines {
 		lower := strings.ToLower(line)
+		if isBenignLabLogLine(lower) {
+			continue
+		}
 		switch {
 		case strings.Contains(lower, "panic") ||
 			strings.Contains(lower, "fatal") ||
@@ -656,6 +1321,12 @@ func summarizeLabLog(spec labLog, maxLines int) labLogSummary {
 		}
 	}
 	return summary
+}
+
+func isBenignLabLogLine(lower string) bool {
+	return strings.Contains(lower, "transport closed by client") ||
+		(strings.Contains(lower, "websocket receive error") &&
+			strings.Contains(lower, "unexpected eof"))
 }
 
 func readRecentLogLines(path string, maxLines int) ([]string, error) {
@@ -840,7 +1511,11 @@ var testnetLabTemplate = template.Must(template.New("testnet-lab").Parse(`<!doct
     <a href="/status">JSON</a>
     <a href="/alerts">Alerts</a>
     <a href="/logs">Logs</a>
+    <a href="/expiryindex">ExpiryIndex</a>
+    <a href="/reap">REAP</a>
+    <a href="/commitment">Commitment</a>
     <form method="post" action="/action"><input type="hidden" name="action" value="refresh"><button type="submit">Refresh</button></form>
+    <form method="post" action="/action"><input type="hidden" name="action" value="fetch-logs"><input type="hidden" name="lines" value="200"><button type="submit">Fetch Logs</button></form>
   </div>
 
   <h2>Summary</h2>
@@ -867,14 +1542,16 @@ var testnetLabTemplate = template.Must(template.New("testnet-lab").Parse(`<!doct
 
   <h2>Nodes</h2>
   <table>
-    <tr><th>Name</th><th>Role</th><th>Healthy</th><th>Height</th><th>Peers</th><th>ExpiryIndex</th><th>REAP Picked</th><th>Error</th></tr>
+    <tr><th>Name</th><th>Role</th><th>Healthy</th><th>Height</th><th>Peers</th><th>ExpiryIndex</th><th>Commitment</th><th>REAP Picked</th><th>Details</th><th>Error</th></tr>
     {{range .Snapshot.Nodes}}
     <tr>
       <td>{{.Node.Name}}</td><td>{{.Node.Role}}</td><td>{{.Healthy}}</td>
       <td>{{if .Snapshot}}{{.Snapshot.Chain.Blocks}}{{end}}</td>
       <td>{{if .Snapshot}}{{.Snapshot.Peers.Count}}{{end}}</td>
       <td>{{if .Snapshot}}{{if .Snapshot.ExpiryIndex.Available}}{{if .Snapshot.ExpiryIndex.Disabled}}disabled{{else}}active tip {{.Snapshot.ExpiryIndex.TipHeight}}{{end}}{{else}}n/a{{end}}{{end}}</td>
+      <td>{{if .Snapshot}}{{if .Snapshot.ExpiryCommitment.Available}}{{if .Snapshot.ExpiryCommitment.Active}}active{{else}}inactive{{end}} tip {{.Snapshot.ExpiryCommitment.TipHeight}}{{else}}n/a{{end}}{{end}}</td>
       <td>{{if .Snapshot}}{{.Snapshot.ReapPlan.Picked}}{{end}}</td>
+      <td><a href="/expiryindex?node={{.Node.Name}}">expiry</a> <a href="/reap?node={{.Node.Name}}">reap</a> <a href="/commitment?node={{.Node.Name}}">commitment</a></td>
       <td>{{.Error}}</td>
     </tr>
     {{end}}
@@ -908,6 +1585,204 @@ var testnetLabTemplate = template.Must(template.New("testnet-lab").Parse(`<!doct
     <td>{{printf "%.8f" .Balance}}</td><td>{{.ExpiryItems}}</td><td>{{.ExpiringItems}}</td><td>{{.ExpiredItems}}</td>
     <td>{{.Error}}{{range .Warnings}}<div class="warning">{{.}}</div>{{end}}</td>
   </tr>
+{{end}}
+</table>
+{{end}}`))
+
+var testnetLabExpiryIndexTemplate = template.Must(template.New("testnet-lab-expiryindex").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="{{.RefreshSeconds}}">
+  <title>OBTC Testnet Lab ExpiryIndex</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; color: #1f2937; }
+    h1, h2 { margin-bottom: 0.4rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid #d1d5db; padding: 0.45rem; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    code { background: #f3f4f6; padding: 0.1rem 0.3rem; word-break: break-all; }
+    input, select, button { padding: 0.35rem; }
+    .critical { color: #b91c1c; font-weight: 700; }
+    .warning { color: #b45309; }
+    .ok { color: #047857; }
+    .toolbar, form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>ExpiryIndex Detail</h1>
+  <div class="toolbar">
+    <a href="/">Overview</a>
+    <a href="/expiryindex.json?node={{.SelectedNode}}&start={{.StartValue}}&end={{.EndValue}}&limit={{.LimitValue}}">JSON</a>
+    <a href="/reap?node={{.SelectedNode}}">REAP</a>
+    <a href="/commitment?node={{.SelectedNode}}">Commitment</a>
+  </div>
+  <form method="get" action="/expiryindex">
+    <label>Node <select name="node">{{range .Nodes}}<option value="{{.Name}}" {{if eq .Name $.SelectedNode}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <label>Start <input name="start" value="{{.StartValue}}" size="8"></label>
+    <label>End <input name="end" value="{{.EndValue}}" size="8"></label>
+    <label>Limit <input name="limit" value="{{.LimitValue}}" size="6"></label>
+    <button type="submit">Refresh</button>
+  </form>
+  {{range .Warnings}}<p class="warning">{{.}}</p>{{end}}
+  {{if .Error}}<p class="critical">{{.Error}}</p>{{end}}
+  {{with .Result}}
+  <h2>Index State</h2>
+  <table>
+    <tr><th>Node</th><td>{{.Node.Name}}</td><th>Height</th><td>{{.Chain.Blocks}}</td></tr>
+    <tr><th>Disabled</th><td>{{.Stats.Disabled}}</td><th>Tip Height</th><td>{{.Stats.TipHeight}}</td></tr>
+    <tr><th>Total UTXOs</th><td>{{.Stats.TotalUTXOs}}</td><th>Total Expiry Keys</th><td>{{.Stats.TotalExpiryKeys}}</td></tr>
+    {{with .NetworkParams}}<tr><th>Window Blocks</th><td>{{.WindowBlocks}}</td><th>Batch Limit</th><td>{{.ListBatchLimit}}</td></tr>
+    <tr><th>Start Scan Height</th><td>{{.StartScanHeight}}</td><th>Enable At Height</th><td>{{.EnableAtHeight}}</td></tr>{{end}}
+    <tr><th>Range</th><td>{{.StartHeight}} - {{.EndHeight}}</td><th>Returned / Total</th><td>{{.Returned}} / {{.TotalResults}}</td></tr>
+    <tr><th>Next Cursor</th><td colspan="3">{{.NextCursor}}</td></tr>
+  </table>
+
+  <h2>REAP Strict Preview</h2>
+  <table>
+    <tr><th>Next Block</th><td>{{.ReapPlan.Height}}</td><th>Plan Picked</th><td>{{.ReapPlan.Picked}}</td></tr>
+    <tr><th>Preview Picked</th><td>{{.PreviewPicked}}</td><th>Max Inputs</th><td>{{.PreviewMaxInputs}}</td></tr>
+    <tr><th>Weight Budget</th><td>{{.PreviewWeightBudget}}</td><th>Strict Order</th><td>{{.StrictOrderDescription}}</td></tr>
+  </table>
+
+  <h2>ExpiryIndex / RPC Order</h2>
+  {{template "expiry-table" .Rows}}
+  <h2>REAP Strict Order</h2>
+  {{template "expiry-table" .StrictRows}}
+  {{end}}
+</body>
+</html>
+{{define "expiry-table"}}
+<table>
+  <tr><th>Scan</th><th>Strict</th><th>Picked</th><th>Eligible Now</th><th>Outpoint</th><th>Amount Sat</th><th>Create</th><th>Expiry</th><th>Blocks To Expiry</th></tr>
+  {{range .}}
+  <tr>
+    <td>{{.ScanRank}}</td><td>{{.StrictRank}}</td><td>{{.Picked}}</td><td>{{.EligibleNow}}</td>
+    <td><code>{{.OutPoint}}</code></td><td>{{.AmountSat}}</td><td>{{.CreateHeight}}</td><td>{{.ExpiryHeight}}</td><td>{{.BlocksToExpiry}}</td>
+  </tr>
   {{end}}
 </table>
 {{end}}`))
+
+var testnetLabReapTemplate = template.Must(template.New("testnet-lab-reap").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="{{.RefreshSeconds}}">
+  <title>OBTC Testnet Lab REAP</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; color: #1f2937; }
+    h1, h2 { margin-bottom: 0.4rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid #d1d5db; padding: 0.45rem; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    code { background: #f3f4f6; padding: 0.1rem 0.3rem; word-break: break-all; }
+    input, select, button { padding: 0.35rem; }
+    .critical { color: #b91c1c; font-weight: 700; }
+    .warning { color: #b45309; }
+    .ok { color: #047857; }
+    .toolbar, form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>REAP Detail</h1>
+  <div class="toolbar">
+    <a href="/">Overview</a>
+    <a href="/reap.json?node={{.SelectedNode}}&count={{.CountValue}}">JSON</a>
+    <a href="/expiryindex?node={{.SelectedNode}}">ExpiryIndex</a>
+    <a href="/commitment?node={{.SelectedNode}}">Commitment</a>
+  </div>
+  <form method="get" action="/reap">
+    <label>Node <select name="node">{{range .Nodes}}<option value="{{.Name}}" {{if eq .Name $.SelectedNode}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <label>Recent Blocks <input name="count" value="{{.CountValue}}" size="6"></label>
+    <button type="submit">Refresh</button>
+  </form>
+  {{range .Warnings}}<p class="warning">{{.}}</p>{{end}}
+  {{if .Error}}<p class="critical">{{.Error}}</p>{{end}}
+  {{with .Result}}
+  <h2>Current REAP Plan</h2>
+  <table>
+    <tr><th>Node</th><td>{{.Node.Name}}</td><th>Chain Height</th><td>{{.Chain.Blocks}}</td></tr>
+    <tr><th>Next Height</th><td>{{.Plan.Height}}</td><th>Active</th><td>{{.Plan.Active}}</td></tr>
+    <tr><th>Enabled</th><td>{{.Plan.Enabled}}</td><th>Picked</th><td>{{.Plan.Picked}}</td></tr>
+    <tr><th>Tax Total</th><td>{{.Plan.TaxTotal}}</td><th>Refund Total</th><td>{{.Plan.RefundTotal}}</td></tr>
+    <tr><th>Estimated Weight</th><td>{{.Plan.EstWeight}}</td><th>Marker Hash</th><td><code>{{.Plan.MarkerHash}}</code></td></tr>
+    <tr><th>Reason</th><td colspan="3">{{.Plan.Reason}}</td></tr>
+  </table>
+
+  <h2>Recent REAP Blocks</h2>
+  <p>Scanned {{.HistoryScanned}} recent blocks.</p>
+  {{if .History}}
+    {{range .History}}
+    <h3>Height {{.Height}}</h3>
+    <table>
+      <tr><th>Hash</th><td colspan="5"><code>{{.Hash}}</code></td></tr>
+      <tr><th>TxID</th><th>Inputs</th><th>Outputs</th><th>Weight</th><th>Refund Outputs Sat</th><th>Marker Payload</th></tr>
+      {{range .ReapTxs}}
+      <tr><td><code>{{.TxID}}</code></td><td>{{.Inputs}}</td><td>{{.Outputs}}</td><td>{{.Weight}}</td><td>{{.RefundOutputTotalSat}}</td><td><code>{{.MarkerPayload}}</code></td></tr>
+      {{end}}
+    </table>
+    {{end}}
+  {{else}}<p>No REAP transactions found in the scanned range.</p>{{end}}
+  {{end}}
+</body>
+</html>`))
+
+var testnetLabCommitmentTemplate = template.Must(template.New("testnet-lab-commitment").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="{{.RefreshSeconds}}">
+  <title>OBTC Testnet Lab Commitment</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; color: #1f2937; }
+    h1, h2 { margin-bottom: 0.4rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid #d1d5db; padding: 0.45rem; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    code { background: #f3f4f6; padding: 0.1rem 0.3rem; word-break: break-all; }
+    select, button { padding: 0.35rem; }
+    .critical { color: #b91c1c; font-weight: 700; }
+    .warning { color: #b45309; }
+    .ok { color: #047857; }
+    .toolbar, form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Expiry Commitment Detail</h1>
+  <div class="toolbar">
+    <a href="/">Overview</a>
+    <a href="/commitment.json?node={{.SelectedNode}}">JSON</a>
+    <a href="/expiryindex?node={{.SelectedNode}}">ExpiryIndex</a>
+    <a href="/reap?node={{.SelectedNode}}">REAP</a>
+  </div>
+  <form method="get" action="/commitment">
+    <label>Node <select name="node">{{range .Nodes}}<option value="{{.Name}}" {{if eq .Name $.SelectedNode}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <button type="submit">Refresh</button>
+  </form>
+  {{range .Warnings}}<p class="warning">{{.}}</p>{{end}}
+  {{if .Error}}<p class="critical">{{.Error}}</p>{{end}}
+  {{with .Result}}
+  <h2>Commitment State</h2>
+  <table>
+    <tr><th>Node</th><td>{{.Node.Name}}</td><th>Chain Height</th><td>{{.Chain.Blocks}}</td></tr>
+    <tr><th>Best Block</th><td colspan="3"><code>{{.Chain.BestBlockHash}}</code></td></tr>
+    <tr><th>Enabled</th><td>{{.ExpiryCommitment.Enabled}}</td><th>Available</th><td>{{.ExpiryCommitment.Available}}</td></tr>
+    <tr><th>Active</th><td>{{.ExpiryCommitment.Active}}</td><th>Active At Next Height</th><td>{{.ExpiryCommitment.ActiveAtNextHeight}}</td></tr>
+    <tr><th>Tip Height</th><td>{{.ExpiryCommitment.TipHeight}}</td><th>Commitment Lag</th><td>{{.CommitmentLag}}</td></tr>
+    <tr><th>Enable At Height</th><td>{{.ExpiryCommitment.EnableAtHeight}}</td><th>Next Height</th><td>{{.NextHeight}}</td></tr>
+    <tr><th>Tip Hash Matches Chain</th><td>{{.CommitmentTipMatches}}</td><th>Tip Hash</th><td><code>{{.ExpiryCommitment.TipHash}}</code></td></tr>
+    <tr><th>Root</th><td colspan="3"><code>{{.ExpiryCommitment.Root}}</code></td></tr>
+    <tr><th>Error</th><td colspan="3">{{.ExpiryCommitment.Error}}</td></tr>
+  </table>
+
+  <h2>Related State</h2>
+  <table>
+    <tr><th>ExpiryIndex Available</th><td>{{.ExpiryIndex.Available}}</td><th>Disabled</th><td>{{.ExpiryIndex.Disabled}}</td></tr>
+    <tr><th>ExpiryIndex Tip</th><td>{{.ExpiryIndex.TipHeight}}</td><th>ExpiryIndex Lag</th><td>{{.ExpiryIndexLag}}</td></tr>
+    <tr><th>Total UTXOs</th><td>{{.ExpiryIndex.TotalUTXOs}}</td><th>Total Expiry Keys</th><td>{{.ExpiryIndex.TotalExpiryKeys}}</td></tr>
+    <tr><th>REAP Active</th><td>{{.ReapPlan.Active}}</td><th>REAP Picked</th><td>{{.ReapPlan.Picked}}</td></tr>
+  </table>
+  {{end}}
+</body>
+</html>`))
