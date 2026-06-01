@@ -32,7 +32,8 @@ func IsAuxPowVersion(version int32) bool {
 type AuxPow struct {
 	CoinbaseTx MsgTx
 	// ParentBlockHash is the legacy CMerkleTx hashBlock field.  It is retained
-	// for Namecoin-style wire compatibility but is not used for validation.
+	// for Namecoin-style wire compatibility but normalized to zero during
+	// decoding and encoding because it is redundant and never validated.
 	ParentBlockHash      chainhash.Hash
 	CoinbaseMerkleBranch []chainhash.Hash
 	CoinbaseBranchMask   uint32
@@ -114,9 +115,11 @@ func (aux *AuxPow) BtcDecode(r io.Reader, pver uint32, enc MessageEncoding) erro
 	if err := aux.CoinbaseTx.btcDecode(r, pver, enc, buf, scriptBuf[:]); err != nil {
 		return err
 	}
-	if err := readElement(r, &aux.ParentBlockHash); err != nil {
+	var ignoredParentBlockHash chainhash.Hash
+	if err := readElement(r, &ignoredParentBlockHash); err != nil {
 		return err
 	}
+	aux.ParentBlockHash = chainhash.Hash{}
 
 	var err error
 	aux.CoinbaseMerkleBranch, err = readAuxPowBranch(r, pver, buf,
@@ -148,7 +151,8 @@ func (aux *AuxPow) BtcEncode(w io.Writer, pver uint32, enc MessageEncoding) erro
 	if err := aux.CoinbaseTx.btcEncode(w, pver, enc, buf); err != nil {
 		return err
 	}
-	if err := writeElement(w, &aux.ParentBlockHash); err != nil {
+	var zeroParentBlockHash chainhash.Hash
+	if err := writeElement(w, &zeroParentBlockHash); err != nil {
 		return err
 	}
 	if err := writeAuxPowBranch(w, pver, buf, aux.CoinbaseMerkleBranch,

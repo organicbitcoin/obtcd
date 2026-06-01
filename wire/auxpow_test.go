@@ -26,19 +26,17 @@ func testAuxPowTx(script []byte) MsgTx {
 }
 
 func testAuxPowProof() *AuxPow {
-	parentHash := chainhash.DoubleHashH([]byte("parent"))
 	coinbaseBranch := chainhash.DoubleHashH([]byte("coinbase-branch"))
 	chainBranch := chainhash.DoubleHashH([]byte("chain-branch"))
 	return &AuxPow{
 		CoinbaseTx:           testAuxPowTx([]byte{0xfa, 0xbe, 0x6d, 0x6d, 1, 2, 3}),
-		ParentBlockHash:      parentHash,
 		CoinbaseMerkleBranch: []chainhash.Hash{coinbaseBranch},
 		CoinbaseBranchMask:   0,
 		ChainMerkleBranch:    []chainhash.Hash{chainBranch},
 		ChainBranchMask:      1,
 		ParentHeader: BlockHeader{
 			Version:   1,
-			PrevBlock: parentHash,
+			PrevBlock: chainhash.DoubleHashH([]byte("parent")),
 			Bits:      0x1d00ffff,
 			Timestamp: time.Unix(1_700_000_000, 0),
 			Nonce:     42,
@@ -64,6 +62,41 @@ func TestAuxPowWireRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(&decoded, auxPow) {
 		t.Fatalf("decoded AuxPoW mismatch:\ngot  %s\nwant %s",
 			spew.Sdump(&decoded), spew.Sdump(auxPow))
+	}
+}
+
+func TestAuxPowNormalizesLegacyParentHash(t *testing.T) {
+	auxPow := testAuxPowProof()
+	var encoded bytes.Buffer
+	if err := auxPow.BtcEncode(&encoded, ProtocolVersion, WitnessEncoding); err != nil {
+		t.Fatalf("BtcEncode: %v", err)
+	}
+
+	payload := encoded.Bytes()
+	parentHashStart := auxPow.CoinbaseTx.SerializeSize()
+	for i := parentHashStart; i < parentHashStart+chainhash.HashSize; i++ {
+		payload[i] = 0x42
+	}
+
+	var decoded AuxPow
+	if err := decoded.BtcDecode(bytes.NewReader(payload), ProtocolVersion,
+		WitnessEncoding); err != nil {
+
+		t.Fatalf("BtcDecode: %v", err)
+	}
+	if decoded.ParentBlockHash != (chainhash.Hash{}) {
+		t.Fatalf("legacy parent hash was retained: %s", decoded.ParentBlockHash)
+	}
+
+	encoded.Reset()
+	if err := decoded.BtcEncode(&encoded, ProtocolVersion, WitnessEncoding); err != nil {
+		t.Fatalf("normalized BtcEncode: %v", err)
+	}
+	payload = encoded.Bytes()
+	for _, b := range payload[parentHashStart : parentHashStart+chainhash.HashSize] {
+		if b != 0 {
+			t.Fatal("legacy parent hash was not serialized as zero")
+		}
 	}
 }
 

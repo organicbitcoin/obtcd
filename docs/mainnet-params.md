@@ -112,7 +112,7 @@ activation height is `ObtcMainNetForkHeight + 2016`.
 | Parent BTC block acceptance | not required by OBTC consensus |
 | Coinbase commitment prefix | required `fabe6d6d` merged-mining header |
 | Coinbase commitment root | chain merkle root in reversed byte order |
-| Serialized parent hash field | retained for compatibility, ignored by consensus |
+| Serialized parent hash field | retained for compatibility, normalized to zero, ignored by consensus |
 | First OBTC block difficulty | reset to `0x1d00ffff` |
 | Bootstrap DAA | ASERT, 10 minute spacing, 1 hour half-life, anchor `974001` |
 | Normal DAA | ASERT, 10 minute spacing, 48 hour half-life, anchor `976016` |

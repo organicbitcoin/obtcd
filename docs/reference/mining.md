@@ -64,3 +64,5 @@ existing AuxPoW pool integrations.
 Pool coinbase commitments must use the `fabe6d6d` merged-mining header followed
 by the chain merkle root in reversed byte order, then the little-endian merkle
 tree size and nonce. OBTC does not accept the legacy headerless commitment form.
+The redundant legacy parent-hash field in submitted AuxPoW payloads is accepted
+but normalized to zero when blocks are encoded again.
