@@ -196,6 +196,15 @@ func TestChainSvrMiningInfoResults(t *testing.T) {
 				NetworkHashPS: 89790618491361,
 			},
 		},
+		{
+			name:   "mining info with auxpow metadata",
+			result: `{"auxpow":true,"auxpowchainid":20260,"auxpowstartheight":974001}`,
+			expected: btcjson.GetMiningInfoResult{
+				AuxPow:            true,
+				AuxPowChainID:     20260,
+				AuxPowStartHeight: 974001,
+			},
+		},
 	}
 
 	t.Logf("Running %d tests", len(tests))
@@ -213,6 +222,33 @@ func TestChainSvrMiningInfoResults(t *testing.T) {
 				test.expected)
 			continue
 		}
+	}
+}
+
+func TestCreateAuxBlockResult(t *testing.T) {
+	t.Parallel()
+
+	result := `{"hash":"00","chainid":20260,"previousblockhash":"11",` +
+		`"coinbasevalue":5000000000,"bits":"1d00ffff","height":974001,` +
+		`"target":"00000000ffff","_target":"00000000ffff"}`
+	expected := btcjson.CreateAuxBlockResult{
+		Hash:              "00",
+		ChainID:           20260,
+		PreviousBlockHash: "11",
+		CoinbaseValue:     5000000000,
+		Bits:              "1d00ffff",
+		Height:            974001,
+		Target:            "00000000ffff",
+		LegacyTarget:      "00000000ffff",
+	}
+
+	var auxBlockResult btcjson.CreateAuxBlockResult
+	if err := json.Unmarshal([]byte(result), &auxBlockResult); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if auxBlockResult != expected {
+		t.Fatalf("unexpected unmarshalled data - got %+v, want %+v",
+			auxBlockResult, expected)
 	}
 }
 

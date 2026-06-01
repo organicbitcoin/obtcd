@@ -38,3 +38,29 @@ cgminer -o https://127.0.0.1:19528 -u rpcuser -p rpcpassword
 
 For OBTC mainnet-candidate, use port `9528` unless the node was started with a
 custom `--rpclisten`.
+
+## OBTC Mainnet-Candidate AuxPoW
+
+OBTC mainnet-candidate enables Bitcoin-format AuxPoW from provisional height
+`974001` with chain ID `20260`. Pools can request work with:
+
+```bash
+btcctl --obtcmainnet createauxblock <obtc_address>
+```
+
+Submit the serialized AuxPoW proof with:
+
+```bash
+btcctl --obtcmainnet submitauxblock <hash> <auxpow>
+```
+
+`getauxblock` is available as a compatibility wrapper. Ordinary OBTC PoW blocks
+remain valid after AuxPoW starts.
+
+Work responses include both `target` and the Namecoin-compatible `_target`
+alias. Both contain the full target in the reversed byte order expected by
+existing AuxPoW pool integrations.
+
+Pool coinbase commitments must use the `fabe6d6d` merged-mining header followed
+by the chain merkle root in reversed byte order, then the little-endian merkle
+tree size and nonce. OBTC does not accept the legacy headerless commitment form.

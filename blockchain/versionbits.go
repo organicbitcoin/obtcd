@@ -282,6 +282,14 @@ func (c deploymentChecker) ForceActive(node *blockNode) bool {
 //
 // This function MUST be called with the chain state lock held (for writes).
 func (b *BlockChain) calcNextBlockVersion(prevNode *blockNode) (int32, error) {
+	nextHeight := int32(0)
+	if prevNode != nil {
+		nextHeight = prevNode.height + 1
+	}
+	if chaincfg.IsAuxPowEnabled(b.chainParams, nextHeight) {
+		return chaincfg.ObtcBlockVersion(false), nil
+	}
+
 	// Set the appropriate bits for each actively defined rule deployment
 	// that is either in the process of being voted on, or locked in for the
 	// activation at the next threshold window change.

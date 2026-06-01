@@ -246,6 +246,10 @@ const (
 	// ErrMultipleReapTx indicates a block contains more than one REAP
 	// system transaction once REAP block hardening is active.
 	ErrMultipleReapTx
+
+	// ErrInvalidAuxPow indicates a block has an invalid AuxPoW proof or
+	// uses AuxPoW before the network permits it.
+	ErrInvalidAuxPow
 )
 
 // Map of ErrorCode values back to their constant names for pretty printing.
@@ -298,6 +302,7 @@ var errorCodeStrings = map[ErrorCode]string{
 	ErrBadExpiryCommitmentFormat:    "ErrBadExpiryCommitmentFormat",
 	ErrBadExpiryCommitmentMismatch:  "ErrBadExpiryCommitmentMismatch",
 	ErrMultipleReapTx:               "ErrMultipleReapTx",
+	ErrInvalidAuxPow:                "ErrInvalidAuxPow",
 }
 
 // String returns the ErrorCode as a human-readable name.

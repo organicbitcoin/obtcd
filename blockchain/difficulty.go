@@ -12,6 +12,93 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
+const asertRadix = int64(1 << 16)
+
+func calcASERTRequiredDifficulty(anchor HeaderCtx, nextHeight int32,
+	newBlockTime time.Time, targetSpacing, halfLife time.Duration,
+	powLimit *big.Int) (uint32, error) {
+
+	if anchor == nil {
+		return 0, AssertError("missing ASERT anchor")
+	}
+	if halfLife <= 0 || targetSpacing <= 0 {
+		return 0, AssertError("invalid ASERT timing parameters")
+	}
+
+	timeDiff := newBlockTime.Unix() - anchor.Timestamp()
+	heightDiff := int64(nextHeight - anchor.Height())
+	targetSpacingSeconds := int64(targetSpacing / time.Second)
+	halfLifeSeconds := int64(halfLife / time.Second)
+	exponent := ((timeDiff - heightDiff*targetSpacingSeconds) *
+		asertRadix) / halfLifeSeconds
+
+	shifts := exponent >> 16
+	frac := uint64(exponent - shifts*asertRadix)
+	factor := uint64(asertRadix) +
+		((195766423245049*frac +
+			971821376*frac*frac +
+			5127*frac*frac*frac +
+			(1 << 47)) >> 48)
+
+	newTarget := CompactToBig(anchor.Bits())
+	newTarget.Mul(newTarget, new(big.Int).SetUint64(factor))
+	if shifts < 0 {
+		newTarget.Rsh(newTarget, uint(-shifts))
+	} else {
+		newTarget.Lsh(newTarget, uint(shifts))
+	}
+	newTarget.Rsh(newTarget, 16)
+	if newTarget.Sign() <= 0 {
+		newTarget.SetInt64(1)
+	}
+	if newTarget.Cmp(powLimit) > 0 {
+		newTarget.Set(powLimit)
+	}
+
+	return BigToCompact(newTarget), nil
+}
+
+func calcAuxPowNextRequiredDifficulty(lastNode HeaderCtx, newBlockTime time.Time,
+	c ChainCtx) (uint32, bool, error) {
+
+	params := c.ChainParams()
+	if params.AuxPowChainID == 0 || params.AuxPowStartHeight < 0 ||
+		params.AuxPowForkResetBits == 0 {
+
+		return 0, false, nil
+	}
+
+	nextHeight := lastNode.Height() + 1
+	if nextHeight < params.AuxPowStartHeight {
+		return 0, false, nil
+	}
+	if nextHeight == params.AuxPowStartHeight {
+		return params.AuxPowForkResetBits, true, nil
+	}
+
+	anchorHeight := params.AuxPowStartHeight
+	halfLife := params.AuxPowBootstrapHalfLife
+	if params.AuxPowBootstrapEndHeight >= params.AuxPowStartHeight &&
+		nextHeight > params.AuxPowBootstrapEndHeight {
+
+		anchorHeight = params.AuxPowBootstrapEndHeight
+		halfLife = params.AuxPowNormalHalfLife
+	}
+
+	distance := lastNode.Height() - anchorHeight
+	if distance < 0 {
+		return 0, true, AssertError("ASERT anchor is ahead of previous block")
+	}
+	anchor := lastNode.RelativeAncestorCtx(distance)
+	bits, err := calcASERTRequiredDifficulty(anchor, nextHeight, newBlockTime,
+		params.TargetTimePerBlock, halfLife, params.PowLimit)
+	if err != nil {
+		return 0, true, err
+	}
+
+	return bits, true, nil
+}
+
 // HashToBig converts a chainhash.Hash into a big.Int that can be used to
 // perform math comparisons.
 func HashToBig(hash *chainhash.Hash) *big.Int {
@@ -145,6 +232,12 @@ func calcNextRequiredDifficulty(lastNode HeaderCtx, newBlockTime time.Time,
 	// Genesis block.
 	if lastNode == nil {
 		return c.ChainParams().PowLimitBits, nil
+	}
+
+	if difficulty, ok, err := calcAuxPowNextRequiredDifficulty(
+		lastNode, newBlockTime, c,
+	); ok || err != nil {
+		return difficulty, err
 	}
 
 	// Return the previous block's difficulty requirements if this block

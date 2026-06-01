@@ -42,6 +42,7 @@ type TxLoc struct {
 // response to a getdata message (MsgGetData) for a given block hash.
 type MsgBlock struct {
 	Header       BlockHeader
+	AuxPow       *AuxPow
 	Transactions []*MsgTx
 }
 
@@ -49,6 +50,7 @@ type MsgBlock struct {
 func (msg *MsgBlock) Copy() *MsgBlock {
 	block := &MsgBlock{
 		Header:       msg.Header,
+		AuxPow:       msg.AuxPow.Copy(),
 		Transactions: make([]*MsgTx, len(msg.Transactions)),
 	}
 
@@ -82,6 +84,15 @@ func (msg *MsgBlock) BtcDecode(r io.Reader, pver uint32, enc MessageEncoding) er
 	err := readBlockHeaderBuf(r, pver, &msg.Header, buf)
 	if err != nil {
 		return err
+	}
+
+	msg.AuxPow = nil
+	if IsAuxPowVersion(msg.Header.Version) {
+		auxPow := AuxPow{}
+		if err := auxPow.BtcDecode(r, pver, enc); err != nil {
+			return err
+		}
+		msg.AuxPow = &auxPow
 	}
 
 	txCount, err := ReadVarIntBuf(r, pver, buf)
@@ -160,6 +171,15 @@ func (msg *MsgBlock) DeserializeTxLoc(r *bytes.Buffer) ([]TxLoc, error) {
 		return nil, err
 	}
 
+	msg.AuxPow = nil
+	if IsAuxPowVersion(msg.Header.Version) {
+		auxPow := AuxPow{}
+		if err := auxPow.BtcDecode(r, 0, WitnessEncoding); err != nil {
+			return nil, err
+		}
+		msg.AuxPow = &auxPow
+	}
+
 	txCount, err := ReadVarIntBuf(r, 0, buf)
 	if err != nil {
 		return nil, err
@@ -206,6 +226,19 @@ func (msg *MsgBlock) BtcEncode(w io.Writer, pver uint32, enc MessageEncoding) er
 	err := writeBlockHeaderBuf(w, pver, &msg.Header, buf)
 	if err != nil {
 		return err
+	}
+
+	if IsAuxPowVersion(msg.Header.Version) {
+		if msg.AuxPow == nil {
+			return messageError("MsgBlock.BtcEncode",
+				"auxpow version bit set without auxpow proof")
+		}
+		if err := msg.AuxPow.BtcEncode(w, pver, enc); err != nil {
+			return err
+		}
+	} else if msg.AuxPow != nil {
+		return messageError("MsgBlock.BtcEncode",
+			"auxpow proof provided without auxpow version bit")
 	}
 
 	err = WriteVarIntBuf(w, pver, uint64(len(msg.Transactions)), buf)
@@ -258,6 +291,9 @@ func (msg *MsgBlock) SerializeSize() int {
 	// Block header bytes + Serialized varint size for the number of
 	// transactions.
 	n := blockHeaderLen + VarIntSerializeSize(uint64(len(msg.Transactions)))
+	if IsAuxPowVersion(msg.Header.Version) && msg.AuxPow != nil {
+		n += msg.AuxPow.SerializeSize()
+	}
 
 	for _, tx := range msg.Transactions {
 		n += tx.SerializeSize()
@@ -272,6 +308,9 @@ func (msg *MsgBlock) SerializeSizeStripped() int {
 	// Block header bytes + Serialized varint size for the number of
 	// transactions.
 	n := blockHeaderLen + VarIntSerializeSize(uint64(len(msg.Transactions)))
+	if IsAuxPowVersion(msg.Header.Version) && msg.AuxPow != nil {
+		n += msg.AuxPow.SerializeSizeStripped()
+	}
 
 	for _, tx := range msg.Transactions {
 		n += tx.SerializeSizeStripped()

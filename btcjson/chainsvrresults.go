@@ -738,6 +738,22 @@ type GetMiningInfoResult struct {
 	NetworkHashPS      float64 `json:"networkhashps"`
 	PooledTx           uint64  `json:"pooledtx"`
 	TestNet            bool    `json:"testnet"`
+	AuxPow             bool    `json:"auxpow,omitempty"`
+	AuxPowChainID      uint32  `json:"auxpowchainid,omitempty"`
+	AuxPowStartHeight  int32   `json:"auxpowstartheight,omitempty"`
+}
+
+// CreateAuxBlockResult models the data returned by createauxblock and
+// getauxblock when requesting AuxPoW work.
+type CreateAuxBlockResult struct {
+	Hash              string `json:"hash"`
+	ChainID           uint32 `json:"chainid"`
+	PreviousBlockHash string `json:"previousblockhash"`
+	CoinbaseValue     int64  `json:"coinbasevalue"`
+	Bits              string `json:"bits"`
+	Height            int32  `json:"height"`
+	Target            string `json:"target"`
+	LegacyTarget      string `json:"_target"`
 }
 
 // GetWorkResult models the data from the getwork command.

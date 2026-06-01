@@ -35,6 +35,34 @@ var helpDescsEnUS = map[string]string{
 	"addnode-addr":      "IP address and port of the peer to operate on",
 	"addnode-subcmd":    "'add' to add a persistent peer, 'remove' to remove a persistent peer, or 'onetry' to try a single connection to a peer",
 
+	// CreateAuxBlockCmd help.
+	"createauxblock--synopsis": "Creates an AuxPoW block template for merged mining.",
+	"createauxblock-address":   "Optional address to pay the generated coinbase to.",
+
+	// SubmitAuxBlockCmd help.
+	"submitauxblock--synopsis": "Submits AuxPoW proof data for a previously created AuxPoW block.",
+	"submitauxblock-hash":      "Hash of the AuxPoW block returned by createauxblock.",
+	"submitauxblock-auxpow":    "Hex-encoded serialized AuxPoW proof.",
+	"submitauxblock--result0":  "Whether the AuxPoW block was accepted.",
+
+	// GetAuxBlockCmd help.
+	"getauxblock--synopsis":   "Compatibility wrapper for AuxPoW mining. With no parameters it creates work; with hash and auxpow it submits work.",
+	"getauxblock-hash":        "Optional hash of the AuxPoW block to submit.",
+	"getauxblock-auxpow":      "Optional hex-encoded serialized AuxPoW proof to submit.",
+	"getauxblock--condition0": "No hash or auxpow provided.",
+	"getauxblock--condition1": "Hash and auxpow provided.",
+	"getauxblock--result1":    "Whether the AuxPoW block was accepted.",
+
+	// CreateAuxBlockResult help.
+	"createauxblockresult-hash":              "Hash of the AuxPoW child block to commit in the parent coinbase.",
+	"createauxblockresult-chainid":           "AuxPoW chain ID for this network.",
+	"createauxblockresult-previousblockhash": "Previous child-chain block hash.",
+	"createauxblockresult-coinbasevalue":     "Value of the child-chain coinbase transaction in satoshis.",
+	"createauxblockresult-bits":              "Compact difficulty bits for the child-chain block.",
+	"createauxblockresult-height":            "Height of the child-chain block.",
+	"createauxblockresult-target":            "Full target for the child-chain block in pool-compatible reversed byte order.",
+	"createauxblockresult-_target":           "Namecoin-compatible alias for target.",
+
 	// NodeCmd help.
 	"node--synopsis":     "Attempts to add or remove a peer.",
 	"node-subcmd":        "'disconnect' to remove all matching non-persistent peers, 'remove' to remove a persistent peer, or 'connect' to connect to a peer",
@@ -450,6 +478,9 @@ var helpDescsEnUS = map[string]string{
 	"getmininginforesult-networkhashps":      "Estimated network hashes per second for the most recent blocks",
 	"getmininginforesult-pooledtx":           "Number of transactions in the memory pool",
 	"getmininginforesult-testnet":            "Whether or not server is using testnet",
+	"getmininginforesult-auxpow":             "Whether AuxPoW metadata is configured for this network",
+	"getmininginforesult-auxpowchainid":      "AuxPoW chain ID configured for this network",
+	"getmininginforesult-auxpowstartheight":  "First height at which AuxPoW blocks are accepted",
 
 	// GetMiningInfoCmd help.
 	"getmininginfo--synopsis": "Returns a JSON object containing mining-related information.",
@@ -824,6 +855,7 @@ var helpDescsEnUS = map[string]string{
 // pointer to the type (or nil to indicate no return value).
 var rpcResultTypes = map[string][]interface{}{
 	"addnode":                nil,
+	"createauxblock":         {(*btcjson.CreateAuxBlockResult)(nil)},
 	"createrawtransaction":   {(*string)(nil)},
 	"debuglevel":             {(*string)(nil), (*string)(nil)},
 	"decoderawtransaction":   {(*btcjson.TxRawDecodeResult)(nil)},
@@ -831,6 +863,7 @@ var rpcResultTypes = map[string][]interface{}{
 	"estimatefee":            {(*float64)(nil)},
 	"generate":               {(*[]string)(nil)},
 	"getaddednodeinfo":       {(*[]string)(nil), (*[]btcjson.GetAddedNodeInfoResult)(nil)},
+	"getauxblock":            {(*btcjson.CreateAuxBlockResult)(nil), (*bool)(nil)},
 	"getbestblock":           {(*btcjson.GetBestBlockResult)(nil)},
 	"getbestblockhash":       {(*string)(nil)},
 	"getblock":               {(*string)(nil), (*btcjson.GetBlockVerboseResult)(nil)},
@@ -868,6 +901,7 @@ var rpcResultTypes = map[string][]interface{}{
 	"setgenerate":            nil,
 	"signmessagewithprivkey": {(*string)(nil)},
 	"stop":                   {(*string)(nil)},
+	"submitauxblock":         {(*bool)(nil)},
 	"submitblock":            {nil, (*string)(nil)},
 	"uptime":                 {(*int64)(nil)},
 	"validateaddress":        {(*btcjson.ValidateAddressChainResult)(nil)},

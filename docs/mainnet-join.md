@@ -1,6 +1,6 @@
 # OBTC Mainnet Join Runbook
 
-> Status: draft for `mainnet-candidate-2026-07`
+> Status: draft for `mainnet-candidate-2026-10`
 
 This runbook describes how to start and validate an OBTC mainnet-candidate node
 with the current `obtcd` codebase. It is not a production mainnet launch
@@ -19,12 +19,18 @@ Before using this runbook, review [OBTC Mainnet Parameters](mainnet-params.md).
 | Node RPC port | `9528` |
 | Bech32 HRP | `obtc` |
 | Wire magic | `0x4F425443` |
-| Fork height | `950000` |
-| OBTC activation height | `952016` |
+| Fork anchor | `974000` provisional |
+| First OBTC-independent block | `974001` |
+| OBTC activation height | `976016` |
+| AuxPoW chain ID | `20260` |
 
 The code still contains the placeholder DNS seed `seed.obtc.example.com`.
 Mainnet-candidate bootstrap should therefore use explicit peers until final DNS
 seed or fallback-node policy is published.
+
+Fork anchor `974000` is provisional. Recalculate the final public value during
+release freeze using current Bitcoin height, miner readiness, seed readiness,
+and testnet results.
 
 ## Build
 
@@ -39,7 +45,7 @@ go build -o ./obtc-status ./cmd/obtc-status
 Run focused parameter checks before starting a public node:
 
 ```bash
-go test ./chaincfg ./wire ./cmd/btcctl ./cmd/obtc-status
+go test . ./chaincfg ./wire ./blockchain ./mining ./btcjson ./cmd/btcctl ./cmd/obtc-status
 ```
 
 ## Start A Mainnet-Candidate Node
@@ -111,6 +117,24 @@ Run the status page locally:
   --listen=127.0.0.1:8080
 ```
 
+Check mining and AuxPoW metadata:
+
+```bash
+./btcctl --obtcmainnet --rpcserver=127.0.0.1:9528 \
+  --rpcuser=<rpc_user> --rpcpass=<rpc_pass> --notls getmininginfo
+```
+
+After height `974001`, merged-mining pools can request work with:
+
+```bash
+./btcctl --obtcmainnet --rpcserver=127.0.0.1:9528 \
+  --rpcuser=<rpc_user> --rpcpass=<rpc_pass> --notls createauxblock <obtc_address>
+```
+
+`submitauxblock <hash> <auxpow>` submits the serialized AuxPoW proof for the
+hash returned by `createauxblock`. Ordinary OBTC PoW blocks remain valid after
+the fork; AuxPoW is an additional accepted proof format.
+
 ## Seed Node Criteria
 
 A public seed or fallback node candidate should meet the following minimum
@@ -159,6 +183,8 @@ Track these items before promoting this draft to a final public join guide:
 * [ ] Replace `seed.obtc.example.com`, or document that DNS seed is intentionally
   unused for the candidate release. See
   <https://github.com/organicbitcoin/obtcd/issues/2>.
+* [ ] Recalculate and freeze the final fork anchor; current code uses
+  provisional `974000`.
 * [ ] Publish the initial `--addpeer` or `--connect` peer list.
 * [ ] Confirm at least 3 long-lived seed/fallback nodes across independent
   regions or providers.

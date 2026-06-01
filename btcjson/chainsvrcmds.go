@@ -563,6 +563,42 @@ func NewGetMempoolInfoCmd() *GetMempoolInfoCmd {
 	return &GetMempoolInfoCmd{}
 }
 
+// CreateAuxBlockCmd defines the createauxblock JSON-RPC command.
+type CreateAuxBlockCmd struct {
+	Address *string
+}
+
+// NewCreateAuxBlockCmd returns a new instance which can be used to issue a
+// createauxblock JSON-RPC command.
+func NewCreateAuxBlockCmd(address *string) *CreateAuxBlockCmd {
+	return &CreateAuxBlockCmd{Address: address}
+}
+
+// SubmitAuxBlockCmd defines the submitauxblock JSON-RPC command.
+type SubmitAuxBlockCmd struct {
+	Hash   string
+	AuxPow string
+}
+
+// NewSubmitAuxBlockCmd returns a new instance which can be used to issue a
+// submitauxblock JSON-RPC command.
+func NewSubmitAuxBlockCmd(hash, auxPow string) *SubmitAuxBlockCmd {
+	return &SubmitAuxBlockCmd{Hash: hash, AuxPow: auxPow}
+}
+
+// GetAuxBlockCmd defines the getauxblock compatibility JSON-RPC command.  With
+// no parameters it creates AuxPoW work; with hash and auxpow it submits work.
+type GetAuxBlockCmd struct {
+	Hash   *string
+	AuxPow *string
+}
+
+// NewGetAuxBlockCmd returns a new instance which can be used to issue a
+// getauxblock JSON-RPC command.
+func NewGetAuxBlockCmd(hash, auxPow *string) *GetAuxBlockCmd {
+	return &GetAuxBlockCmd{Hash: hash, AuxPow: auxPow}
+}
+
 // GetMiningInfoCmd defines the getmininginfo JSON-RPC command.
 type GetMiningInfoCmd struct{}
 
@@ -1107,11 +1143,13 @@ func init() {
 
 	MustRegisterCmd("addnode", (*AddNodeCmd)(nil), flags)
 	MustRegisterCmd("createrawtransaction", (*CreateRawTransactionCmd)(nil), flags)
+	MustRegisterCmd("createauxblock", (*CreateAuxBlockCmd)(nil), flags)
 	MustRegisterCmd("decoderawtransaction", (*DecodeRawTransactionCmd)(nil), flags)
 	MustRegisterCmd("decodescript", (*DecodeScriptCmd)(nil), flags)
 	MustRegisterCmd("deriveaddresses", (*DeriveAddressesCmd)(nil), flags)
 	MustRegisterCmd("fundrawtransaction", (*FundRawTransactionCmd)(nil), flags)
 	MustRegisterCmd("getaddednodeinfo", (*GetAddedNodeInfoCmd)(nil), flags)
+	MustRegisterCmd("getauxblock", (*GetAuxBlockCmd)(nil), flags)
 	MustRegisterCmd("getbestblockhash", (*GetBestBlockHashCmd)(nil), flags)
 	MustRegisterCmd("getblock", (*GetBlockCmd)(nil), flags)
 	MustRegisterCmd("getblockchaininfo", (*GetBlockChainInfoCmd)(nil), flags)
@@ -1153,6 +1191,7 @@ func init() {
 	MustRegisterCmd("searchrawtransactions", (*SearchRawTransactionsCmd)(nil), flags)
 	MustRegisterCmd("sendrawtransaction", (*SendRawTransactionCmd)(nil), flags)
 	MustRegisterCmd("submitpackage", (*JsonSubmitPackageCmd)(nil), flags)
+	MustRegisterCmd("submitauxblock", (*SubmitAuxBlockCmd)(nil), flags)
 	MustRegisterCmd("setgenerate", (*SetGenerateCmd)(nil), flags)
 	MustRegisterCmd("signmessagewithprivkey", (*SignMessageWithPrivKeyCmd)(nil), flags)
 	MustRegisterCmd("stop", (*StopCmd)(nil), flags)

@@ -44,6 +44,30 @@ func TestChainSvrCmds(t *testing.T) {
 			unmarshalled: &btcjson.AddNodeCmd{Addr: "127.0.0.1", SubCmd: btcjson.ANRemove},
 		},
 		{
+			name: "createauxblock",
+			newCmd: func() (interface{}, error) {
+				return btcjson.NewCmd("createauxblock")
+			},
+			staticCmd: func() interface{} {
+				return btcjson.NewCreateAuxBlockCmd(nil)
+			},
+			marshalled:   `{"jsonrpc":"1.0","method":"createauxblock","params":[],"id":1}`,
+			unmarshalled: &btcjson.CreateAuxBlockCmd{},
+		},
+		{
+			name: "createauxblock optional address",
+			newCmd: func() (interface{}, error) {
+				return btcjson.NewCmd("createauxblock", "obtc1address")
+			},
+			staticCmd: func() interface{} {
+				return btcjson.NewCreateAuxBlockCmd(btcjson.String("obtc1address"))
+			},
+			marshalled: `{"jsonrpc":"1.0","method":"createauxblock","params":["obtc1address"],"id":1}`,
+			unmarshalled: &btcjson.CreateAuxBlockCmd{
+				Address: btcjson.String("obtc1address"),
+			},
+		},
+		{
 			name: "createrawtransaction",
 			newCmd: func() (interface{}, error) {
 				return btcjson.NewCmd("createrawtransaction", `[{"txid":"123","vout":1}]`,
@@ -289,6 +313,32 @@ func TestChainSvrCmds(t *testing.T) {
 			unmarshalled: &btcjson.GetAddedNodeInfoCmd{
 				DNS:  true,
 				Node: btcjson.String("127.0.0.1"),
+			},
+		},
+		{
+			name: "getauxblock create",
+			newCmd: func() (interface{}, error) {
+				return btcjson.NewCmd("getauxblock")
+			},
+			staticCmd: func() interface{} {
+				return btcjson.NewGetAuxBlockCmd(nil, nil)
+			},
+			marshalled:   `{"jsonrpc":"1.0","method":"getauxblock","params":[],"id":1}`,
+			unmarshalled: &btcjson.GetAuxBlockCmd{},
+		},
+		{
+			name: "getauxblock submit",
+			newCmd: func() (interface{}, error) {
+				return btcjson.NewCmd("getauxblock", "blockhash", "auxpow")
+			},
+			staticCmd: func() interface{} {
+				return btcjson.NewGetAuxBlockCmd(
+					btcjson.String("blockhash"), btcjson.String("auxpow"))
+			},
+			marshalled: `{"jsonrpc":"1.0","method":"getauxblock","params":["blockhash","auxpow"],"id":1}`,
+			unmarshalled: &btcjson.GetAuxBlockCmd{
+				Hash:   btcjson.String("blockhash"),
+				AuxPow: btcjson.String("auxpow"),
 			},
 		},
 		{
@@ -1354,6 +1404,20 @@ func TestChainSvrCmds(t *testing.T) {
 				Options: &btcjson.SubmitBlockOptions{
 					WorkID: "12345",
 				},
+			},
+		},
+		{
+			name: "submitauxblock",
+			newCmd: func() (interface{}, error) {
+				return btcjson.NewCmd("submitauxblock", "blockhash", "auxpow")
+			},
+			staticCmd: func() interface{} {
+				return btcjson.NewSubmitAuxBlockCmd("blockhash", "auxpow")
+			},
+			marshalled: `{"jsonrpc":"1.0","method":"submitauxblock","params":["blockhash","auxpow"],"id":1}`,
+			unmarshalled: &btcjson.SubmitAuxBlockCmd{
+				Hash:   "blockhash",
+				AuxPow: "auxpow",
 			},
 		},
 		{

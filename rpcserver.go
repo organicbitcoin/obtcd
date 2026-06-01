@@ -76,6 +76,10 @@ const (
 	// in the memory pool.
 	gbtRegenerateSeconds = 60
 
+	// maxAuxWorkItems is the maximum number of outstanding AuxPoW work
+	// templates cached by block hash.
+	maxAuxWorkItems = 256
+
 	// maxProtocolVersion is the max protocol version the server supports.
 	maxProtocolVersion = 70002
 
@@ -138,6 +142,7 @@ type commandHandler func(*rpcServer, interface{}, <-chan struct{}) (interface{},
 var rpcHandlers map[string]commandHandler
 var rpcHandlersBeforeInit = map[string]commandHandler{
 	"addnode":                handleAddNode,
+	"createauxblock":         handleCreateAuxBlock,
 	"createrawtransaction":   handleCreateRawTransaction,
 	"debuglevel":             handleDebugLevel,
 	"decoderawtransaction":   handleDecodeRawTransaction,
@@ -145,6 +150,7 @@ var rpcHandlersBeforeInit = map[string]commandHandler{
 	"estimatefee":            handleEstimateFee,
 	"generate":               handleGenerate,
 	"getaddednodeinfo":       handleGetAddedNodeInfo,
+	"getauxblock":            handleGetAuxBlock,
 	"getbestblock":           handleGetBestBlock,
 	"getbestblockhash":       handleGetBestBlockHash,
 	"getblock":               handleGetBlock,
@@ -182,6 +188,7 @@ var rpcHandlersBeforeInit = map[string]commandHandler{
 	"setgenerate":            handleSetGenerate,
 	"signmessagewithprivkey": handleSignMessageWithPrivKey,
 	"stop":                   handleStop,
+	"submitauxblock":         handleSubmitAuxBlock,
 	"submitblock":            handleSubmitBlock,
 	"uptime":                 handleUptime,
 	"validateaddress":        handleValidateAddress,
@@ -360,6 +367,11 @@ type gbtWorkState struct {
 	timeSource    blockchain.MedianTimeSource
 }
 
+type auxWorkState struct {
+	sync.Mutex
+	templates map[chainhash.Hash]*wire.MsgBlock
+}
+
 // newGbtWorkState returns a new instance of a gbtWorkState with all internal
 // fields initialized and ready to use.
 func newGbtWorkState(timeSource blockchain.MedianTimeSource) *gbtWorkState {
@@ -367,6 +379,36 @@ func newGbtWorkState(timeSource blockchain.MedianTimeSource) *gbtWorkState {
 		notifyMap:  make(map[chainhash.Hash]map[int64]chan struct{}),
 		timeSource: timeSource,
 	}
+}
+
+func newAuxWorkState() *auxWorkState {
+	return &auxWorkState{
+		templates: make(map[chainhash.Hash]*wire.MsgBlock),
+	}
+}
+
+func (state *auxWorkState) store(hash *chainhash.Hash, block *wire.MsgBlock) {
+	state.Lock()
+	defer state.Unlock()
+
+	if len(state.templates) >= maxAuxWorkItems {
+		for oldHash := range state.templates {
+			delete(state.templates, oldHash)
+			break
+		}
+	}
+	state.templates[*hash] = block.Copy()
+}
+
+func (state *auxWorkState) lookup(hash *chainhash.Hash) *wire.MsgBlock {
+	state.Lock()
+	defer state.Unlock()
+
+	block := state.templates[*hash]
+	if block == nil {
+		return nil
+	}
+	return block.Copy()
 }
 
 // handleUnimplemented is the handler for commands that should ultimately be
@@ -2428,6 +2470,11 @@ func handleGetMiningInfo(s *rpcServer, cmd interface{}, closeChan <-chan struct{
 		PooledTx:           uint64(s.cfg.TxMemPool.Count()),
 		TestNet:            cfg.TestNet3 || cfg.TestNet4,
 	}
+	if s.cfg.ChainParams.AuxPowChainID != 0 {
+		result.AuxPow = true
+		result.AuxPowChainID = s.cfg.ChainParams.AuxPowChainID
+		result.AuxPowStartHeight = s.cfg.ChainParams.AuxPowStartHeight
+	}
 	return &result, nil
 }
 
@@ -3622,6 +3669,180 @@ func handleStop(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (inter
 	return "btcd stopping.", nil
 }
 
+func auxBlockPayAddress(s *rpcServer, encodedAddr *string) (btcutil.Address, error) {
+	if encodedAddr == nil {
+		if len(cfg.miningAddrs) == 0 {
+			return nil, nil
+		}
+		return cfg.miningAddrs[rand.Intn(len(cfg.miningAddrs))], nil
+	}
+
+	addr, err := btcutil.DecodeAddress(*encodedAddr, s.cfg.ChainParams)
+	if err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInvalidAddressOrKey,
+			Message: "Invalid address or key: " + err.Error(),
+		}
+	}
+	if !addr.IsForNet(s.cfg.ChainParams) {
+		return nil, &btcjson.RPCError{
+			Code: btcjson.ErrRPCInvalidAddressOrKey,
+			Message: "Invalid address: " + *encodedAddr +
+				" is for the wrong network",
+		}
+	}
+
+	return addr, nil
+}
+
+func auxBlockCoinbaseValue(block *wire.MsgBlock) int64 {
+	if len(block.Transactions) == 0 {
+		return 0
+	}
+
+	var value int64
+	for _, txOut := range block.Transactions[0].TxOut {
+		value += txOut.Value
+	}
+	return value
+}
+
+func auxBlockTarget(bits uint32) string {
+	targetBytes := blockchain.CompactToBig(bits).Bytes()
+	serializedTarget := make([]byte, chainhash.HashSize)
+	copy(serializedTarget[len(serializedTarget)-len(targetBytes):], targetBytes)
+	for i, j := 0, len(serializedTarget)-1; i < j; i, j = i+1, j-1 {
+		serializedTarget[i], serializedTarget[j] = serializedTarget[j], serializedTarget[i]
+	}
+	return hex.EncodeToString(serializedTarget)
+}
+
+func createAuxBlock(s *rpcServer, encodedAddr *string) (interface{}, error) {
+	payAddr, err := auxBlockPayAddress(s, encodedAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	template, err := s.cfg.Generator.NewBlockTemplate(payAddr)
+	if err != nil {
+		return nil, internalRPCError("Failed to create new block "+
+			"template: "+err.Error(), "")
+	}
+	if !chaincfg.IsAuxPowEnabled(s.cfg.ChainParams, template.Height) {
+		return nil, &btcjson.RPCError{
+			Code: btcjson.ErrRPCInvalidParameter,
+			Message: fmt.Sprintf("AuxPoW is not enabled for next block "+
+				"height %d", template.Height),
+		}
+	}
+
+	block := template.Block.Copy()
+	block.Header.Version = chaincfg.ObtcBlockVersion(true)
+	hash := block.BlockHash()
+	s.auxWorkState.store(&hash, block)
+	target := auxBlockTarget(block.Header.Bits)
+
+	return &btcjson.CreateAuxBlockResult{
+		Hash:              hash.String(),
+		ChainID:           s.cfg.ChainParams.AuxPowChainID,
+		PreviousBlockHash: block.Header.PrevBlock.String(),
+		CoinbaseValue:     auxBlockCoinbaseValue(block),
+		Bits:              fmt.Sprintf("%08x", block.Header.Bits),
+		Height:            template.Height,
+		Target:            target,
+		LegacyTarget:      target,
+	}, nil
+}
+
+func decodeAuxPowHex(hexStr string) (*wire.AuxPow, error) {
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr
+	}
+	serializedAuxPow, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return nil, rpcDecodeHexError(hexStr)
+	}
+
+	r := bytes.NewReader(serializedAuxPow)
+	auxPow := wire.AuxPow{}
+	if err := auxPow.BtcDecode(r, 0, wire.WitnessEncoding); err != nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCDeserialization,
+			Message: "AuxPoW decode failed: " + err.Error(),
+		}
+	}
+	if r.Len() != 0 {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCDeserialization,
+			Message: "AuxPoW decode failed: trailing data",
+		}
+	}
+
+	return &auxPow, nil
+}
+
+func submitAuxBlock(s *rpcServer, blockHash, auxPowHex string) (interface{}, error) {
+	hash, err := chainhash.NewHashFromStr(blockHash)
+	if err != nil {
+		return nil, rpcDecodeHexError(blockHash)
+	}
+
+	msgBlock := s.auxWorkState.lookup(hash)
+	if msgBlock == nil {
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInvalidParameter,
+			Message: "unknown AuxPoW block hash",
+		}
+	}
+
+	auxPow, err := decodeAuxPowHex(auxPowHex)
+	if err != nil {
+		return nil, err
+	}
+	msgBlock.Header.Version = chaincfg.ObtcBlockVersion(true)
+	msgBlock.AuxPow = auxPow
+	if gotHash := msgBlock.BlockHash(); !gotHash.IsEqual(hash) {
+		return nil, internalRPCError("AuxPoW work hash changed before submit", "")
+	}
+
+	_, err = s.cfg.SyncMgr.SubmitBlock(btcutil.NewBlock(msgBlock), blockchain.BFNone)
+	if err != nil {
+		rpcsLog.Infof("Rejected AuxPoW block %s: %v", hash, err)
+		return false, nil
+	}
+
+	rpcsLog.Infof("Accepted AuxPoW block %s", hash)
+	return true, nil
+}
+
+// handleCreateAuxBlock implements the createauxblock command.
+func handleCreateAuxBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	c := cmd.(*btcjson.CreateAuxBlockCmd)
+	return createAuxBlock(s, c.Address)
+}
+
+// handleSubmitAuxBlock implements the submitauxblock command.
+func handleSubmitAuxBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	c := cmd.(*btcjson.SubmitAuxBlockCmd)
+	return submitAuxBlock(s, c.Hash, c.AuxPow)
+}
+
+// handleGetAuxBlock implements the getauxblock compatibility command.
+func handleGetAuxBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	c := cmd.(*btcjson.GetAuxBlockCmd)
+	switch {
+	case c.Hash == nil && c.AuxPow == nil:
+		return createAuxBlock(s, nil)
+	case c.Hash != nil && c.AuxPow != nil:
+		return submitAuxBlock(s, *c.Hash, *c.AuxPow)
+	default:
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCInvalidParams.Code,
+			Message: "getauxblock expects either zero parameters or hash and auxpow",
+		}
+	}
+}
+
 // handleSubmitBlock implements the submitblock command.
 func handleSubmitBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	c := cmd.(*btcjson.SubmitBlockCmd)
@@ -4426,6 +4647,7 @@ type rpcServer struct {
 	statusLock             sync.RWMutex
 	wg                     sync.WaitGroup
 	gbtWorkState           *gbtWorkState
+	auxWorkState           *auxWorkState
 	helpCacher             *helpCacher
 	requestProcessShutdown chan struct{}
 	quit                   chan int
@@ -5268,6 +5490,7 @@ func newRPCServer(config *rpcserverConfig) (*rpcServer, error) {
 		cfg:                    *config,
 		statusLines:            make(map[int]string),
 		gbtWorkState:           newGbtWorkState(config.TimeSource),
+		auxWorkState:           newAuxWorkState(),
 		helpCacher:             newHelpCacher(),
 		requestProcessShutdown: make(chan struct{}),
 		quit:                   make(chan int),

@@ -257,6 +257,30 @@ type Params struct {
 	// GenerateSupported specifies whether or not CPU mining is allowed.
 	GenerateSupported bool
 
+	// AuxPowChainID identifies this chain within merged-mining commitments.
+	// A value of zero means AuxPoW is disabled for the network.
+	AuxPowChainID uint32
+
+	// AuxPowStartHeight is the first height at which AuxPoW blocks are
+	// permitted.  A negative value means AuxPoW is disabled for the network.
+	AuxPowStartHeight int32
+
+	// AuxPowBootstrapEndHeight is the final height of the post-fork bootstrap
+	// difficulty adjustment epoch.  A value less than AuxPowStartHeight means
+	// the bootstrap epoch is disabled.
+	AuxPowBootstrapEndHeight int32
+
+	// AuxPowForkResetBits is the required difficulty for the first
+	// OBTC-independent block after the Bitcoin fork anchor.
+	AuxPowForkResetBits uint32
+
+	// AuxPowBootstrapHalfLife is the ASERT half-life during the bootstrap
+	// difficulty epoch.
+	AuxPowBootstrapHalfLife time.Duration
+
+	// AuxPowNormalHalfLife is the ASERT half-life after the bootstrap epoch.
+	AuxPowNormalHalfLife time.Duration
+
 	// Checkpoints ordered from oldest to newest.
 	Checkpoints []Checkpoint
 

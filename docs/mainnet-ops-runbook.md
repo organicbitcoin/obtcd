@@ -1,6 +1,6 @@
 # OBTC Mainnet Operations Runbook
 
-> Status: draft for `mainnet-candidate-2026-07`
+> Status: draft for `mainnet-candidate-2026-10`
 
 This runbook covers the operator setup for OBTC mainnet-candidate seed and
 observer nodes. It complements [OBTC Mainnet Join Runbook](mainnet-join.md) and
@@ -54,7 +54,7 @@ Or build a candidate artifact set with checksums and a manifest:
 
 ```bash
 scripts/phase6/build_release_artifacts.sh \
-  --version mainnet-candidate-2026-07 \
+  --version mainnet-candidate-2026-10 \
   --goos linux \
   --goarch amd64
 ```
@@ -278,7 +278,7 @@ Record one row at start and then at least every 12 hours.
 | T+72h | seed-1 |  |  |  |  |  |  |  |  |
 
 For pre-activation periods, REAP production and backlog metrics are
-`N/A (pre-activation)` unless the chain has reached activation height `952016`.
+`N/A (pre-activation)` unless the chain has reached activation height `976016`.
 
 ## Fresh Sync Evidence
 

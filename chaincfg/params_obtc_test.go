@@ -416,9 +416,22 @@ func TestIsPostOBTCFork(t *testing.T) {
 
 // TestOBTCForkHeightValues verifies fork heights are reasonable.
 func TestOBTCForkHeightValues(t *testing.T) {
-	// MainNet fork height should be in a reasonable range for Q2 2026
+	if ObtcMainNetForkHeight != 974000 {
+		t.Fatalf("expected provisional mainnet fork height 974000, got %d",
+			ObtcMainNetForkHeight)
+	}
+	if ObtcMainNetFirstBlockHeight != 974001 {
+		t.Fatalf("expected first OBTC mainnet block height 974001, got %d",
+			ObtcMainNetFirstBlockHeight)
+	}
+	if ObtcMainNetActivationHeight != 976016 {
+		t.Fatalf("expected mainnet activation height 976016, got %d",
+			ObtcMainNetActivationHeight)
+	}
+
+	// MainNet fork height should remain in a reasonable 2026 release range.
 	if ObtcMainNetForkHeight < 900000 || ObtcMainNetForkHeight > 1000000 {
-		t.Errorf("MainNet fork height %d seems unreasonable for Q2 2026 target", ObtcMainNetForkHeight)
+		t.Errorf("MainNet fork height %d seems unreasonable for 2026 target", ObtcMainNetForkHeight)
 	}
 
 	// TestNet is an independent chain, so its OBTC rules are active from genesis.
@@ -429,6 +442,28 @@ func TestOBTCForkHeightValues(t *testing.T) {
 	// RegTest fork height should be low for development
 	if ObtcRegTestForkHeight <= 0 || ObtcRegTestForkHeight > 1000 {
 		t.Errorf("RegTest fork height %d should be low for development", ObtcRegTestForkHeight)
+	}
+}
+
+func TestOBTCAuxPowParams(t *testing.T) {
+	if ObtcMainNetParams.AuxPowChainID != ObtcAuxPowChainID {
+		t.Fatalf("unexpected mainnet AuxPoW chain id: got %d want %d",
+			ObtcMainNetParams.AuxPowChainID, ObtcAuxPowChainID)
+	}
+	if ObtcMainNetParams.AuxPowStartHeight != ObtcMainNetFirstBlockHeight {
+		t.Fatalf("unexpected mainnet AuxPoW start height: got %d want %d",
+			ObtcMainNetParams.AuxPowStartHeight, ObtcMainNetFirstBlockHeight)
+	}
+	if ObtcMainNetParams.AuxPowBootstrapEndHeight != ObtcMainNetActivationHeight {
+		t.Fatalf("unexpected mainnet AuxPoW bootstrap end height: got %d want %d",
+			ObtcMainNetParams.AuxPowBootstrapEndHeight, ObtcMainNetActivationHeight)
+	}
+	if ObtcTestNetParams.AuxPowChainID != 0 || ObtcTestNetParams.AuxPowStartHeight >= 0 {
+		t.Fatalf("public OBTC testnet AuxPoW params changed: chainid=%d start=%d",
+			ObtcTestNetParams.AuxPowChainID, ObtcTestNetParams.AuxPowStartHeight)
+	}
+	if IsAuxPowEnabled(&ObtcTestNetParams, ObtcTestNetForkHeight) {
+		t.Fatalf("public OBTC testnet should not enable AuxPoW")
 	}
 }
 
@@ -512,7 +547,7 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 				t.Fatalf("expected StartScanHeight to begin at genesis, got %d", p.StartScanHeight)
 			}
 			if tc.params.Net == ObtcMainNetParams.Net {
-				want := ObtcMainNetForkHeight + 2016
+				want := ObtcMainNetActivationHeight
 				if p.EnableAtHeight != want {
 					t.Fatalf("expected mainnet EnableAtHeight %d, got %d", want, p.EnableAtHeight)
 				}

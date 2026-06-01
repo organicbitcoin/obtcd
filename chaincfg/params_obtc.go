@@ -37,8 +37,22 @@ type ExpiryParams struct {
 
 // Fork heights for OBTC networks.
 const (
-	// ObtcMainNetForkHeight is the OBTC mainnet fork height.
-	ObtcMainNetForkHeight int32 = 950000
+	// ObtcMainNetForkHeight is the provisional OBTC mainnet Bitcoin fork
+	// anchor.  Recalculate this value during release freeze based on the
+	// current Bitcoin height, miner readiness, and public test results.
+	ObtcMainNetForkHeight int32 = 974000
+
+	// ObtcMainNetFirstBlockHeight is the first OBTC-independent mainnet
+	// block after the Bitcoin fork anchor.
+	ObtcMainNetFirstBlockHeight int32 = ObtcMainNetForkHeight + 1
+
+	// ObtcMainNetActivationHeight is the height at which OBTC mainnet expiry,
+	// REAP, replay protection, and expiry commitments become mandatory.
+	ObtcMainNetActivationHeight int32 = ObtcMainNetForkHeight + 2016
+
+	// ObtcAuxPowChainID identifies OBTC in AuxPoW merged-mining
+	// commitments.  It intentionally matches the OBTC BIP44 coin type.
+	ObtcAuxPowChainID uint32 = 20260
 
 	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
 	// independent chain, not a fork of Bitcoin testnet3 history.
@@ -76,6 +90,12 @@ var ObtcMainNetParams = Params{
 	ReduceMinDifficulty:      false,
 	MinDiffReductionTime:     0,
 	GenerateSupported:        true,
+	AuxPowChainID:            ObtcAuxPowChainID,
+	AuxPowStartHeight:        ObtcMainNetFirstBlockHeight,
+	AuxPowBootstrapEndHeight: ObtcMainNetActivationHeight,
+	AuxPowForkResetBits:      0x1d00ffff,
+	AuxPowBootstrapHalfLife:  time.Hour,
+	AuxPowNormalHalfLife:     time.Hour * 48,
 
 	Checkpoints: []Checkpoint{},
 
@@ -154,6 +174,7 @@ var ObtcTestNetParams = Params{
 	PoWNoRetargeting:    true,
 	ReduceMinDifficulty: false,
 	GenerateSupported:   true,
+	AuxPowStartHeight:   -1,
 
 	BIP0034Height:            1,
 	BIP0065Height:            1,
@@ -233,6 +254,7 @@ var ObtcRegTestParams = Params{
 	PoWNoRetargeting:         true,
 	ReduceMinDifficulty:      false,
 	GenerateSupported:        true,
+	AuxPowStartHeight:        -1,
 	CoinbaseMaturity:         100,
 	BIP0034Height:            100000000,
 	BIP0065Height:            1351,
@@ -329,6 +351,26 @@ func IsPostOBTCFork(params *Params, height int32) bool {
 	return height >= forkHeight
 }
 
+// IsAuxPowEnabled reports whether AuxPoW blocks are permitted at the provided
+// height for the network.
+func IsAuxPowEnabled(params *Params, height int32) bool {
+	return params != nil &&
+		params.AuxPowChainID != 0 &&
+		params.AuxPowStartHeight >= 0 &&
+		height >= params.AuxPowStartHeight
+}
+
+// ObtcBlockVersion returns the post-fork OBTC block version.  The chain ID is
+// embedded to make merged-mining commitments unambiguous; AuxPoW blocks also
+// set the legacy AuxPoW version flag.
+func ObtcBlockVersion(auxPow bool) int32 {
+	version := int32((ObtcAuxPowChainID << 16) | 4)
+	if auxPow {
+		version |= wire.AuxPowVersionFlag
+	}
+	return version
+}
+
 // GetOBTCReplayProtectionHeight returns the height at which OBTC replay-
 // protected sighash domain enforcement becomes active for the given network.
 // Returns -1 when the network is not OBTC or does not define the activation.
@@ -360,19 +402,18 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 
 	switch params.Net {
 	case wire.ObtcMainNet:
-		mainnetActivationHeight := ObtcMainNetForkHeight + 2016
 		return &ExpiryParams{
 			WindowBlocks:                   362880,
 			ListBatchLimit:                 10000,
 			StartScanHeight:                0,
-			EnableAtHeight:                 mainnetActivationHeight,
-			ReapConsensusAtHeight:          mainnetActivationHeight,
-			ReplayProtectionAtHeight:       mainnetActivationHeight,
+			EnableAtHeight:                 ObtcMainNetActivationHeight,
+			ReapConsensusAtHeight:          ObtcMainNetActivationHeight,
+			ReplayProtectionAtHeight:       ObtcMainNetActivationHeight,
 			ReapMaxInputs:                  256,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
-			ExpiryCommitmentEnableAtHeight: mainnetActivationHeight,
+			ExpiryCommitmentEnableAtHeight: ObtcMainNetActivationHeight,
 		}
 
 	case wire.ObtcTestNet:

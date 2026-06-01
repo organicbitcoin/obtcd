@@ -444,7 +444,11 @@ func CheckBlockHeaderSanity(header *wire.BlockHeader, powLimit *big.Int,
 	// Ensure the proof of work bits in the block header is in min/max range
 	// and the block hash is less than the target value described by the
 	// bits.
-	err := checkProofOfWork(header, powLimit, flags)
+	powFlags := flags
+	if wire.IsAuxPowVersion(header.Version) {
+		powFlags |= BFNoPoWCheck
+	}
+	err := checkProofOfWork(header, powLimit, powFlags)
 	if err != nil {
 		return err
 	}
@@ -483,6 +487,12 @@ func checkBlockSanity(block *btcutil.Block, powLimit *big.Int, timeSource Median
 	err := CheckBlockHeaderSanity(header, powLimit, timeSource, flags)
 	if err != nil {
 		return err
+	}
+	if wire.IsAuxPowVersion(header.Version) && msgBlock.AuxPow == nil {
+		return ruleError(ErrInvalidAuxPow, "auxpow block is missing auxpow proof")
+	}
+	if !wire.IsAuxPowVersion(header.Version) && msgBlock.AuxPow != nil {
+		return ruleError(ErrInvalidAuxPow, "non-auxpow block includes auxpow proof")
 	}
 
 	// A block must have at least one transaction.
@@ -695,6 +705,16 @@ func CheckBlockHeaderContext(header *wire.BlockHeader, prevNode HeaderCtx,
 	blockHeight := prevNode.Height() + 1
 
 	params := c.ChainParams()
+	if wire.IsAuxPowVersion(header.Version) {
+		if !chaincfg.IsAuxPowEnabled(params, blockHeight) {
+			return ruleError(ErrInvalidAuxPow, "auxpow block before activation height")
+		}
+		if auxPowVersionChainID(header.Version) != params.AuxPowChainID {
+			str := fmt.Sprintf("auxpow block chain id %d does not match expected %d",
+				auxPowVersionChainID(header.Version), params.AuxPowChainID)
+			return ruleError(ErrInvalidAuxPow, str)
+		}
+	}
 
 	fastAdd := flags&BFFastAdd == BFFastAdd
 	if !fastAdd {
@@ -824,6 +844,15 @@ func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode
 		return err
 	}
 
+	blockHeight := prevNode.height + 1
+	if wire.IsAuxPowVersion(header.Version) {
+		if err := validateAuxPow(block, b.chainParams, blockHeight, flags); err != nil {
+			return err
+		}
+	} else if block.MsgBlock().AuxPow != nil {
+		return ruleError(ErrInvalidAuxPow, "non-auxpow block includes auxpow proof")
+	}
+
 	fastAdd := flags&BFFastAdd == BFFastAdd
 	if !fastAdd {
 		// Obtain the latest state of the deployed CSV soft-fork in
@@ -844,8 +873,6 @@ func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode
 
 		// The height of this block is one more than the referenced
 		// previous block.
-		blockHeight := prevNode.height + 1
-
 		// Ensure all transactions in the block are finalized.
 		for _, tx := range block.Transactions() {
 			if !IsFinalizedTransaction(tx, blockHeight,

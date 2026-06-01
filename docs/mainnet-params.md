@@ -82,27 +82,56 @@ Version-bits deployments:
 
 | Field | Value |
 |---|---|
-| OBTC mainnet fork height | `950000` |
-| Mainnet activation height | `952016` |
+| OBTC mainnet fork anchor | `974000` provisional |
+| First OBTC-independent block | `974001` |
+| Mainnet activation height | `976016` |
 | Expiry index start scan height | `0` |
-| Expiry enforcement height | `952016` |
-| REAP consensus height | `952016` |
-| Replay protection height | `952016` |
-| Expiry commitment mandatory height | `952016` |
+| Expiry enforcement height | `976016` |
+| REAP consensus height | `976016` |
+| Replay protection height | `976016` |
+| Expiry commitment mandatory height | `976016` |
 | Expiry window | `362880` blocks |
 | Expiry scan list batch limit | `10000` |
 | REAP max inputs | `256` |
 | REAP tax | `30 / 100` |
 | REAP dust threshold | `720` satoshis |
 
-The activation height is `ObtcMainNetForkHeight + 2016`, matching the current
-implementation.
+The fork anchor is a mainnet-candidate engineering value, not a final public
+launch commitment. Recalculate it during release freeze using current Bitcoin
+height, miner readiness, seed readiness, and public testnet results. The
+activation height is `ObtcMainNetForkHeight + 2016`.
+
+## AuxPoW And Difficulty
+
+| Field | Value |
+|---|---|
+| AuxPoW parent format | Bitcoin-style SHA-256d block header |
+| AuxPoW chain ID | `20260` |
+| AuxPoW start height | `974001` |
+| Mixed mining | ordinary PoW and AuxPoW both accepted after `974001` |
+| Parent BTC block acceptance | not required by OBTC consensus |
+| Coinbase commitment prefix | required `fabe6d6d` merged-mining header |
+| Coinbase commitment root | chain merkle root in reversed byte order |
+| Serialized parent hash field | retained for compatibility, ignored by consensus |
+| First OBTC block difficulty | reset to `0x1d00ffff` |
+| Bootstrap DAA | ASERT, 10 minute spacing, 1 hour half-life, anchor `974001` |
+| Normal DAA | ASERT, 10 minute spacing, 48 hour half-life, anchor `976016` |
+| AuxPoW RPCs | `createauxblock`, `submitauxblock`, `getauxblock` |
+| AuxPoW RPC target fields | `target` and Namecoin-compatible `_target`, reversed byte order |
+
+Public `ObtcTestNetParams` keeps AuxPoW disabled so existing public testnet
+testing behavior is unchanged.
+
+OBTC intentionally requires the `fabe6d6d` merged-mining header. It does not
+accept the legacy Namecoin fallback form where the root appears near the start
+of the coinbase without the header. Pools must use the explicit header form.
 
 ## Operational Notes
 
 * Keep P2P on `9527`.
 * Bind RPC to a private interface, normally `127.0.0.1:9528`.
 * Treat the DNS seed placeholder as a release blocker.
+* Treat fork height `974000` as provisional until release freeze.
 * Use explicit `--addpeer` or `--connect` entries until seed infrastructure is
   final.
 * Keep this document synchronized when changing `ObtcMainNetParams`, wire
@@ -114,5 +143,5 @@ implementation.
 rg -n "ObtcMainNetParams|ObtcMainNet|9527|9528|seed.obtc.example.com|HDCoinType|PrivateKeyID" \
   chaincfg wire params.go cmd
 
-go test ./chaincfg ./wire ./cmd/btcctl ./cmd/obtc-status
+go test . ./chaincfg ./wire ./blockchain ./mining ./btcjson ./cmd/btcctl ./cmd/obtc-status
 ```
