@@ -25,6 +25,24 @@ const reapTxVersion = 3
 // from an unconfirmed mempool parent rather than a mined block.
 const unminedInputHeight = int32(0x7fffffff)
 
+// ReapPrefixCandidate identifies one expired UTXO in canonical REAP order.
+type ReapPrefixCandidate struct {
+	OutPoint  wire.OutPoint
+	ExpiryKey uint64
+	Amount    int64
+}
+
+// ReapPrefixSource provides the canonical prefix of the globally expired UTXO
+// set for REAP consensus validation.
+type ReapPrefixSource interface {
+	// ReapPrefixTipHeight returns the chain height represented by the source.
+	ReapPrefixTipHeight() (int32, error)
+
+	// ReapPrefixCandidates returns at most limit expired live UTXOs at
+	// blockHeight, ordered by the REAP canonical key.
+	ReapPrefixCandidates(blockHeight int32, limit int) ([]ReapPrefixCandidate, error)
+}
+
 func isLikelyReapTx(tx *wire.MsgTx) bool {
 	if tx == nil || tx.Version != reapTxVersion || len(tx.TxOut) < 1 {
 		return false
@@ -38,6 +56,19 @@ func isLikelyReapTx(tx *wire.MsgTx) bool {
 		return false
 	}
 	return strings.HasPrefix(payload, "REAP:")
+}
+
+func findReapTx(block *btcutil.Block) (*wire.MsgTx, int) {
+	if block == nil {
+		return nil, -1
+	}
+	for i, tx := range block.Transactions()[1:] {
+		msgTx := tx.MsgTx()
+		if isLikelyReapTx(msgTx) {
+			return msgTx, i + 1
+		}
+	}
+	return nil, -1
 }
 
 func extractMarkerPayload(pkScript []byte) (string, bool) {
@@ -160,6 +191,90 @@ func checkReapBlockHardening(block *btcutil.Block, blockHeight int32,
 
 	logOBTCDevf(chainParams,
 		"REAP block hardening ok height=%d reapTxCount=%d", blockHeight, reapCount)
+
+	return nil
+}
+
+func checkReapGlobalPrefix(block *btcutil.Block, blockHeight int32,
+	source ReapPrefixSource, chainParams *chaincfg.Params) error {
+
+	if block == nil || chainParams == nil {
+		return nil
+	}
+
+	expiryParams := chaincfg.GetExpiryParams(chainParams)
+	if expiryParams == nil || blockHeight < expiryParams.ReapConsensusAtHeight {
+		return nil
+	}
+
+	reapTx, txIndex := findReapTx(block)
+	if reapTx == nil {
+		return nil
+	}
+
+	txHash := reapTx.TxHash()
+	inputCount := len(reapTx.TxIn)
+	logOBTCDevf(chainParams,
+		"REAP global prefix check start tx=%s blockHeight=%d txIndex=%d inputCount=%d",
+		txHash, blockHeight, txIndex, inputCount)
+
+	if source == nil {
+		logOBTCDevf(chainParams,
+			"REAP global prefix check failed tx=%s reason=no-source", txHash)
+		return ruleError(ErrBadReapPrefix,
+			"reap prefix source is not configured")
+	}
+
+	tipHeight, err := source.ReapPrefixTipHeight()
+	if err != nil {
+		return err
+	}
+	parentHeight := blockHeight - 1
+	if tipHeight != parentHeight {
+		logOBTCDevf(chainParams,
+			"REAP global prefix check failed tx=%s reason=tip-mismatch sourceTip=%d parentHeight=%d",
+			txHash, tipHeight, parentHeight)
+		return ruleError(ErrBadReapPrefix, fmt.Sprintf(
+			"reap prefix source tip %d does not match parent height %d",
+			tipHeight, parentHeight,
+		))
+	}
+
+	if inputCount == 0 {
+		return nil
+	}
+
+	expected, err := source.ReapPrefixCandidates(blockHeight, inputCount)
+	if err != nil {
+		return err
+	}
+	if len(expected) < inputCount {
+		logOBTCDevf(chainParams,
+			"REAP global prefix check failed tx=%s reason=short-prefix got=%d want=%d",
+			txHash, len(expected), inputCount)
+		return ruleError(ErrBadReapPrefix, fmt.Sprintf(
+			"reap transaction has %d inputs but only %d global expired candidates exist",
+			inputCount, len(expected),
+		))
+	}
+
+	for i, txIn := range reapTx.TxIn {
+		got := txIn.PreviousOutPoint
+		want := expected[i].OutPoint
+		if got != want {
+			logOBTCDevf(chainParams,
+				"REAP global prefix check failed tx=%s reason=prefix-mismatch input=%d got=%s want=%s",
+				txHash, i, got.String(), want.String())
+			return ruleError(ErrBadReapPrefix, fmt.Sprintf(
+				"reap input %d is not the canonical global prefix: got %s want %s",
+				i, got.String(), want.String(),
+			))
+		}
+	}
+
+	logOBTCDevf(chainParams,
+		"REAP global prefix check ok tx=%s blockHeight=%d inputCount=%d",
+		txHash, blockHeight, inputCount)
 
 	return nil
 }

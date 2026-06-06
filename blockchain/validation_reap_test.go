@@ -279,6 +279,102 @@ func TestReapBlockHardeningNoopBeforeActivation(t *testing.T) {
 	}
 }
 
+func TestCheckReapGlobalPrefix(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcRegTestParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params")
+	}
+	height := ep.ReapConsensusAtHeight
+
+	view := NewUtxoViewpoint()
+	opA := addUtxoToView(t, view, 1000, 1)
+	opB := addUtxoToView(t, view, 2000, 2)
+	opC := addUtxoToView(t, view, 3000, 3)
+
+	source := staticReapPrefixSource{
+		tipHeight: height - 1,
+		candidates: []ReapPrefixCandidate{
+			{OutPoint: opA, ExpiryKey: uint64(height), Amount: 1000},
+			{OutPoint: opB, ExpiryKey: uint64(height), Amount: 2000},
+			{OutPoint: opC, ExpiryKey: uint64(height), Amount: 3000},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		tx      *wire.MsgTx
+		source  ReapPrefixSource
+		height  int32
+		wantErr ErrorCode
+	}{
+		{
+			name:   "exact prefix passes",
+			tx:     makeValidReapTx(t, view, height, opA, opB),
+			source: source,
+			height: height,
+		},
+		{
+			name:   "short prefix passes",
+			tx:     makeValidReapTx(t, view, height, opA),
+			source: source,
+			height: height,
+		},
+		{
+			name:    "skips first prefix candidate rejected",
+			tx:      makeValidReapTx(t, view, height, opB),
+			source:  source,
+			height:  height,
+			wantErr: ErrBadReapPrefix,
+		},
+		{
+			name:    "middle replacement rejected",
+			tx:      makeValidReapTx(t, view, height, opA, opC),
+			source:  source,
+			height:  height,
+			wantErr: ErrBadReapPrefix,
+		},
+		{
+			name:    "missing source rejected",
+			tx:      makeValidReapTx(t, view, height, opA),
+			source:  nil,
+			height:  height,
+			wantErr: ErrBadReapPrefix,
+		},
+		{
+			name:   "before activation skipped",
+			tx:     makeValidReapTx(t, view, height-1, opB),
+			source: nil,
+			height: height - 1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := checkReapGlobalPrefix(makeBlockWithTxs(test.tx),
+				test.height, test.source, &chaincfg.ObtcRegTestParams)
+			if test.wantErr == 0 {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+
+			ruleErr, ok := err.(RuleError)
+			if !ok {
+				t.Fatalf("expected RuleError, got %T: %v", err, err)
+			}
+			if ruleErr.ErrorCode != test.wantErr {
+				t.Fatalf("error code: got %v want %v", ruleErr.ErrorCode, test.wantErr)
+			}
+		})
+	}
+
+	if err := checkReapGlobalPrefix(makeBlockWithTxs(wire.NewMsgTx(1)),
+		height, nil, &chaincfg.ObtcRegTestParams); err != nil {
+		t.Fatalf("non-REAP block should not require prefix source: %v", err)
+	}
+}
+
 func TestREAPCanonicalInputOrderEnforced(t *testing.T) {
 	view := NewUtxoViewpoint()
 	highAmount := addUtxoToView(t, view, 2000, 1)

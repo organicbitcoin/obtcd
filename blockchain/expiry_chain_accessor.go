@@ -42,3 +42,10 @@ func (a *ExpiryChainAccessor) FetchSpendJournal(block *btcutil.Block) ([]SpentTx
 func (a *ExpiryChainAccessor) ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) error) error {
 	return a.chain.ForEachUTXO(fn)
 }
+
+// ForEachUTXOWithAmount iterates over all unspent outputs with amount data.
+func (a *ExpiryChainAccessor) ForEachUTXOWithAmount(fn func(outpoint wire.OutPoint,
+	height int32, amount int64) error) error {
+
+	return a.chain.ForEachUTXOWithAmount(fn)
+}

@@ -483,6 +483,13 @@ func setupMinerHarness(t *testing.T, targetHeight int32) *minerHarness {
 		t.Fatalf("create db: %v", err)
 	}
 
+	idx, err := expiryindex.NewExpiryIndex(db, &params)
+	if err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("new expiry index: %v", err)
+	}
+
 	chain, err := blockchain.New(&blockchain.Config{
 		DB:               db,
 		UtxoCacheMaxSize: 64 * 1024 * 1024,
@@ -490,6 +497,7 @@ func setupMinerHarness(t *testing.T, targetHeight int32) *minerHarness {
 		TimeSource:       timeSource,
 		SigCache:         txscript.NewSigCache(1000),
 		HashCache:        txscript.NewHashCache(1000),
+		ReapPrefixSource: idx,
 	})
 	if err != nil {
 		db.Close()
@@ -497,12 +505,6 @@ func setupMinerHarness(t *testing.T, targetHeight int32) *minerHarness {
 		t.Fatalf("new chain: %v", err)
 	}
 
-	idx, err := expiryindex.NewExpiryIndex(db, &params)
-	if err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("new expiry index: %v", err)
-	}
 	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
 		db.Close()
 		os.RemoveAll(tmpDir)

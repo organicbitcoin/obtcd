@@ -43,37 +43,22 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 		"REAP build start nextHeight=%d maxInputs=%d weightBudget=%d scanBatch=%d",
 		nextBlockHeight, p.MaxInputs, p.WeightBudget, p.ScanBatch)
 
-	opSet, err := g.collectExpiredOutpoints(nextBlockHeight, p)
+	candidates, err := g.reapIndex.ReapPrefixCandidates(nextBlockHeight, p.MaxInputs)
 	if err != nil {
 		logOBTCDevf(g.chainParams,
-			"REAP build failed nextHeight=%d reason=collect-expired err=%v", nextBlockHeight, err)
+			"REAP build failed nextHeight=%d reason=prefix-candidates err=%v", nextBlockHeight, err)
 		return nil, 0, err
 	}
-	if len(opSet) == 0 {
+	if len(candidates) == 0 {
 		logOBTCDevf(g.chainParams,
 			"REAP build skipped nextHeight=%d reason=no-expired-outpoints", nextBlockHeight)
 		return nil, 0, nil
 	}
 
-	dummy := wire.NewMsgTx(1)
-	for _, op := range opSet {
-		dummy.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
-	}
-	view, err := g.chain.FetchUtxoView(btcutil.NewTx(dummy))
+	plan, err := reap.SelectPrefixCandidates(context.Background(), nextBlockHeight, candidates, p)
 	if err != nil {
 		logOBTCDevf(g.chainParams,
-			"REAP build failed nextHeight=%d reason=fetch-view err=%v candidateOutpoints=%d",
-			nextBlockHeight, err, len(opSet))
-		return nil, 0, err
-	}
-	logOBTCDevf(g.chainParams,
-		"REAP build fetched utxo view nextHeight=%d candidateOutpoints=%d",
-		nextBlockHeight, len(opSet))
-
-	plan, err := reap.SelectCandidates(context.Background(), nextBlockHeight, g.reapIndex, view, p)
-	if err != nil {
-		logOBTCDevf(g.chainParams,
-			"REAP build failed nextHeight=%d reason=select err=%v", nextBlockHeight, err)
+			"REAP build failed nextHeight=%d reason=select-prefix err=%v", nextBlockHeight, err)
 		return nil, 0, err
 	}
 	if len(plan.Inputs) == 0 {
@@ -82,6 +67,21 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 			nextBlockHeight, plan.Stats.Candidates)
 		return nil, 0, nil
 	}
+
+	dummy := wire.NewMsgTx(1)
+	for _, op := range plan.Inputs {
+		dummy.AddTxIn(&wire.TxIn{PreviousOutPoint: op})
+	}
+	view, err := g.chain.FetchUtxoView(btcutil.NewTx(dummy))
+	if err != nil {
+		logOBTCDevf(g.chainParams,
+			"REAP build failed nextHeight=%d reason=fetch-view err=%v candidateOutpoints=%d",
+			nextBlockHeight, err, len(plan.Inputs))
+		return nil, 0, err
+	}
+	logOBTCDevf(g.chainParams,
+		"REAP build fetched utxo view nextHeight=%d candidateOutpoints=%d",
+		nextBlockHeight, len(plan.Inputs))
 	logOBTCDevf(g.chainParams,
 		"REAP build plan nextHeight=%d candidates=%d picked=%d skipped=%d refund=%d tax=%d estWeight=%d",
 		nextBlockHeight, plan.Stats.Candidates, plan.Stats.Picked, plan.Stats.Skipped,

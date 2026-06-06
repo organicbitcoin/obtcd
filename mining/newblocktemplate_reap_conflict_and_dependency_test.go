@@ -56,6 +56,13 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 		t.Fatalf("create db: %v", err)
 	}
 
+	idx, err := expiryindex.NewExpiryIndex(db, &params)
+	if err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("new expiry index: %v", err)
+	}
+
 	chain, err := blockchain.New(&blockchain.Config{
 		DB:               db,
 		UtxoCacheMaxSize: 64 * 1024 * 1024,
@@ -63,6 +70,7 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 		TimeSource:       timeSource,
 		SigCache:         txscript.NewSigCache(1000),
 		HashCache:        txscript.NewHashCache(1000),
+		ReapPrefixSource: idx,
 	})
 	if err != nil {
 		db.Close()
@@ -70,12 +78,6 @@ func setupBoundaryHarnessAtHeight(t *testing.T, tipHeight int32, needHeights []i
 		t.Fatalf("new chain: %v", err)
 	}
 
-	idx, err := expiryindex.NewExpiryIndex(db, &params)
-	if err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("new expiry index: %v", err)
-	}
 	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
 		db.Close()
 		os.RemoveAll(tmpDir)
@@ -167,6 +169,13 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 		t.Fatalf("create db: %v", err)
 	}
 
+	idx, err := expiryindex.NewExpiryIndex(db, &params)
+	if err != nil {
+		db.Close()
+		os.RemoveAll(tmpDir)
+		t.Fatalf("new expiry index: %v", err)
+	}
+
 	chain, err := blockchain.New(&blockchain.Config{
 		DB:               db,
 		UtxoCacheMaxSize: 64 * 1024 * 1024,
@@ -174,6 +183,7 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 		TimeSource:       timeSource,
 		SigCache:         txscript.NewSigCache(1000),
 		HashCache:        txscript.NewHashCache(1000),
+		ReapPrefixSource: idx,
 	})
 	if err != nil {
 		db.Close()
@@ -181,12 +191,6 @@ func setupTemplateHarnessWithParamsAtHeight(t *testing.T, params chaincfg.Params
 		t.Fatalf("new chain: %v", err)
 	}
 
-	idx, err := expiryindex.NewExpiryIndex(db, &params)
-	if err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("new expiry index: %v", err)
-	}
 	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
 		db.Close()
 		os.RemoveAll(tmpDir)

@@ -7,6 +7,7 @@ package expiryindex
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -25,6 +26,8 @@ const (
 	expiryKeyEncodedSize           = 8
 	orderedOutPointEncodedSize     = chainhash.HashSize + 4
 	expiryOutpointCompositeKeySize = expiryKeyEncodedSize + orderedOutPointEncodedSize
+	amountKeyEncodedSize           = 8
+	reapStrictCompositeKeySize     = expiryKeyEncodedSize + amountKeyEncodedSize + orderedOutPointEncodedSize
 )
 
 var emptyIndexValue = []byte{}
@@ -128,6 +131,83 @@ func decodeExpiryOutpointCompositeKey(encoded []byte) (uint64, *wire.OutPoint, e
 	}
 
 	return expiryKey, outpoint, nil
+}
+
+// encodeReapOrderOutPoint serializes an outpoint so lexicographic byte order
+// matches the REAP consensus comparator used by validation_reap.go:
+// raw hash bytes followed by the output index encoded as big-endian.
+func encodeReapOrderOutPoint(op *wire.OutPoint) []byte {
+	encoded := make([]byte, orderedOutPointEncodedSize)
+	copy(encoded[:chainhash.HashSize], op.Hash[:])
+	binary.BigEndian.PutUint32(encoded[chainhash.HashSize:], op.Index)
+	return encoded
+}
+
+// decodeReapOrderOutPoint reconstructs an OutPoint from its REAP-order
+// encoding.
+func decodeReapOrderOutPoint(encoded []byte) (*wire.OutPoint, error) {
+	if len(encoded) != orderedOutPointEncodedSize {
+		return nil, fmt.Errorf("invalid REAP-order outpoint encoding length: got %d, expected %d",
+			len(encoded), orderedOutPointEncodedSize)
+	}
+
+	var hash chainhash.Hash
+	copy(hash[:], encoded[:chainhash.HashSize])
+
+	return &wire.OutPoint{
+		Hash:  hash,
+		Index: binary.BigEndian.Uint32(encoded[chainhash.HashSize:]),
+	}, nil
+}
+
+// encodeReapStrictCompositeKey encodes the scan key used by
+// bktReapStrictCandidates: expiry key, amount, then REAP-order outpoint.
+func encodeReapStrictCompositeKey(expiryKey uint64, amount int64,
+	outpoint *wire.OutPoint) ([]byte, error) {
+
+	if amount < 0 {
+		return nil, fmt.Errorf("negative REAP candidate amount: %d", amount)
+	}
+
+	encoded := make([]byte, reapStrictCompositeKeySize)
+	binary.BigEndian.PutUint64(encoded[:expiryKeyEncodedSize], expiryKey)
+	binary.BigEndian.PutUint64(
+		encoded[expiryKeyEncodedSize:expiryKeyEncodedSize+amountKeyEncodedSize],
+		uint64(amount),
+	)
+	copy(encoded[expiryKeyEncodedSize+amountKeyEncodedSize:],
+		encodeReapOrderOutPoint(outpoint))
+	return encoded, nil
+}
+
+// decodeReapStrictCompositeKey reconstructs the expiry key, amount, and
+// outpoint from a REAP strict candidate scan key.
+func decodeReapStrictCompositeKey(encoded []byte) (uint64, int64, *wire.OutPoint, error) {
+	if len(encoded) != reapStrictCompositeKeySize {
+		return 0, 0, nil, fmt.Errorf("invalid REAP strict composite key length: got %d, expected %d",
+			len(encoded), reapStrictCompositeKeySize)
+	}
+
+	expiryKey, err := decodeExpiryKey(encoded[:expiryKeyEncodedSize])
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	amountU64 := binary.BigEndian.Uint64(
+		encoded[expiryKeyEncodedSize : expiryKeyEncodedSize+amountKeyEncodedSize],
+	)
+	if amountU64 > uint64(math.MaxInt64) {
+		return 0, 0, nil, fmt.Errorf("invalid REAP strict amount exceeds int64: %d", amountU64)
+	}
+
+	outpoint, err := decodeReapOrderOutPoint(
+		encoded[expiryKeyEncodedSize+amountKeyEncodedSize:],
+	)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	return expiryKey, int64(amountU64), outpoint, nil
 }
 
 // expiryCompositePrefix returns the prefix used to seek all entries for the

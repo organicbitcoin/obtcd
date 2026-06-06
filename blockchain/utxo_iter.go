@@ -21,6 +21,16 @@ import (
 //
 // This function is safe for concurrent access (holds chainLock for reading).
 func (b *BlockChain) ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) error) error {
+	return b.ForEachUTXOWithAmount(func(outpoint wire.OutPoint, height int32, amount int64) error {
+		return fn(outpoint, height)
+	})
+}
+
+// ForEachUTXOWithAmount iterates over every unspent transaction output in the
+// database and calls fn with the outpoint, creation height, and amount.
+func (b *BlockChain) ForEachUTXOWithAmount(fn func(outpoint wire.OutPoint,
+	height int32, amount int64) error) error {
+
 	b.chainLock.RLock()
 	defer b.chainLock.RUnlock()
 
@@ -50,7 +60,7 @@ func (b *BlockChain) ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) e
 			}
 
 			op := wire.OutPoint{Hash: hash, Index: uint32(idx)}
-			if err := fn(op, entry.BlockHeight()); err != nil {
+			if err := fn(op, entry.BlockHeight(), entry.Amount()); err != nil {
 				return err
 			}
 		}

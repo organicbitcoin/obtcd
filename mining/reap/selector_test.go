@@ -21,6 +21,12 @@ type stubScanner struct {
 	items []*expiryindex.ExpiringUTXO
 }
 
+func makeSelectorOutPoint(index uint32) wire.OutPoint {
+	var hash chainhash.Hash
+	hash[0] = byte(index)
+	return wire.OutPoint{Hash: hash, Index: index}
+}
+
 func (s *stubScanner) ScanExpiringUTXOs(fromKey, toKey uint64, maxResults int, startAfter *wire.OutPoint) ([]*expiryindex.ExpiringUTXO, bool, error) {
 	start := 0
 	if startAfter != nil {
@@ -104,6 +110,49 @@ func TestSelectCandidatesMaxInputsAndWeightBudget(t *testing.T) {
 	}
 	if len(plan2.Inputs) != 2 {
 		t.Fatalf("expected weight-budget truncation to 2, got %d", len(plan2.Inputs))
+	}
+}
+
+func TestSelectPrefixCandidatesTruncatesTailOnly(t *testing.T) {
+	candidates := make([]blockchain.ReapPrefixCandidate, 0, 5)
+	for i := 0; i < 5; i++ {
+		candidates = append(candidates, blockchain.ReapPrefixCandidate{
+			OutPoint: makeSelectorOutPoint(uint32(i)),
+			Amount:   int64(1000 + i),
+		})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 3
+	p.WeightBudget = 0
+
+	plan, err := SelectPrefixCandidates(context.Background(), 123, candidates, p)
+	if err != nil {
+		t.Fatalf("select prefix: %v", err)
+	}
+	if len(plan.Inputs) != 3 {
+		t.Fatalf("input count: got %d want 3", len(plan.Inputs))
+	}
+	for i := range plan.Inputs {
+		if plan.Inputs[i] != candidates[i].OutPoint {
+			t.Fatalf("input %d: got %s want %s", i, plan.Inputs[i], candidates[i].OutPoint)
+		}
+	}
+	if plan.Stats.Skipped != 2 {
+		t.Fatalf("skipped: got %d want 2", plan.Stats.Skipped)
+	}
+
+	p.MaxInputs = 5
+	p.WeightBudget = EstimateBlueprintWeight(1)
+	plan, err = SelectPrefixCandidates(context.Background(), 123, candidates, p)
+	if err != nil {
+		t.Fatalf("select prefix with budget: %v", err)
+	}
+	if len(plan.Inputs) != 1 || plan.Inputs[0] != candidates[0].OutPoint {
+		t.Fatalf("budget should keep only first prefix candidate, got %+v", plan.Inputs)
+	}
+	if plan.Stats.Skipped != len(candidates)-1 {
+		t.Fatalf("budget skipped: got %d want %d", plan.Stats.Skipped, len(candidates)-1)
 	}
 }
 

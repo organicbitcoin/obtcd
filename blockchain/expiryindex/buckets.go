@@ -19,6 +19,8 @@ import (
 // 1. bktExpiryMeta: Stores index metadata (version, tip height, etc.)
 // 2. bktOutpoint2Expiry: Maps OutPoint -> ExpiryKey for fast deletion
 // 3. bktExpiry2Outpoints: Stores ordered composite keys for scanning
+// 4. bktReapStrictCandidates: Stores REAP canonical keys for consensus prefix scans
+// 5. bktOutpoint2ReapStrict: Maps OutPoint -> REAP canonical key for deletion
 var (
 	// bktExpiryMeta stores metadata about the index state
 	// Keys: keyTipHeightIndexed, keyIndexVersion
@@ -32,6 +34,16 @@ var (
 	// UTXO: expiry key (8 bytes) || ordered outpoint (36 bytes) -> empty.
 	// This enables efficient scanning of UTXOs by expiry order.
 	bktExpiry2Outpoints = []byte("expiry-to-outpoints")
+
+	// bktReapStrictCandidates stores one ordered composite-key entry per
+	// indexed UTXO: expiry key (8 bytes) || amount (8 bytes) || REAP-order
+	// outpoint (36 bytes) -> empty.  This enables bounded consensus scans
+	// of the canonical global REAP prefix.
+	bktReapStrictCandidates = []byte("reap-strict-candidates")
+
+	// bktOutpoint2ReapStrict maps outpoint (36 bytes) -> strict REAP
+	// composite key.  This enables fast deletion from bktReapStrictCandidates.
+	bktOutpoint2ReapStrict = []byte("outpoint-to-reap-strict")
 )
 
 // Metadata keys within bktExpiryMeta bucket
@@ -55,7 +67,7 @@ var (
 const (
 	// CurrentIndexVersion tracks the current index format version
 	// Increment this when making breaking changes to the index format
-	CurrentIndexVersion = 4
+	CurrentIndexVersion = 5
 
 	// DefaultBatchSize is the default number of entries to process in a single
 	// database transaction to balance memory usage and transaction overhead
@@ -148,6 +160,18 @@ func createExpiryIndexBuckets(dbTx database.Tx) error {
 		return fmt.Errorf("failed to create expiry-to-outpoints bucket: %v", err)
 	}
 
+	// Create REAP strict candidate bucket.
+	_, err = meta.CreateBucketIfNotExists(bktReapStrictCandidates)
+	if err != nil {
+		return fmt.Errorf("failed to create REAP strict candidate bucket: %v", err)
+	}
+
+	// Create outpoint-to-REAP-strict bucket.
+	_, err = meta.CreateBucketIfNotExists(bktOutpoint2ReapStrict)
+	if err != nil {
+		return fmt.Errorf("failed to create outpoint-to-REAP-strict bucket: %v", err)
+	}
+
 	return nil
 }
 
@@ -157,6 +181,14 @@ func dropExpiryIndexBuckets(dbTx database.Tx) error {
 	meta := dbTx.Metadata()
 
 	// Drop all buckets in reverse order of creation
+	if err := meta.DeleteBucket(bktOutpoint2ReapStrict); err != nil {
+		return fmt.Errorf("failed to drop outpoint-to-REAP-strict bucket: %v", err)
+	}
+
+	if err := meta.DeleteBucket(bktReapStrictCandidates); err != nil {
+		return fmt.Errorf("failed to drop REAP strict candidate bucket: %v", err)
+	}
+
 	if err := meta.DeleteBucket(bktExpiry2Outpoints); err != nil {
 		return fmt.Errorf("failed to drop expiry-to-outpoints bucket: %v", err)
 	}

@@ -101,6 +101,7 @@ type BlockChain struct {
 	timeSource          MedianTimeSource
 	sigCache            *txscript.SigCache
 	indexManager        IndexManager
+	reapPrefixSource    ReapPrefixSource
 	hashCache           *txscript.HashCache
 
 	// The following fields are calculated based upon the provided chain
@@ -940,6 +941,13 @@ func (b *BlockChain) reorganizeChain(detachNodes, attachNodes *list.List) error 
 		// as spent and add all transactions being created by this block
 		// to it.  Also, provide an stxo slice so the spent txout
 		// details are generated.
+		if err := checkReapGlobalPrefix(block, n.height,
+			b.reapPrefixSource, b.chainParams); err != nil {
+			if _, ok := err.(RuleError); ok {
+				b.index.SetStatusFlags(n, statusValidateFailed)
+			}
+			return err
+		}
 		stxos := make([]SpentTxOut, 0, countSpentOutputs(block))
 		err = b.utxoCache.connectTransactions(block, &stxos)
 		if err != nil {
@@ -1209,6 +1217,14 @@ func (b *BlockChain) connectBestChain(node *blockNode, block *btcutil.Block, fla
 
 		// Connect the transactions to the cache.  All the txs are considered valid
 		// at this point as they have passed validation or was considered valid already.
+		if err := checkReapGlobalPrefix(block, node.height,
+			b.reapPrefixSource, b.chainParams); err != nil {
+			if _, ok := err.(RuleError); ok {
+				b.index.SetStatusFlags(node, statusValidateFailed)
+				flushIndexState()
+			}
+			return false, err
+		}
 		stxos := make([]SpentTxOut, 0, countSpentOutputs(block))
 		err := b.utxoCache.connectTransactions(block, &stxos)
 		if err != nil {
@@ -2122,6 +2138,14 @@ type Config struct {
 	// index manager.
 	IndexManager IndexManager
 
+	// ReapPrefixSource defines the source used to validate REAP
+	// transactions against the canonical prefix of the globally expired UTXO
+	// set.
+	//
+	// This field must be set for OBTC networks once REAP consensus
+	// hardening is active and blocks include REAP transactions.
+	ReapPrefixSource ReapPrefixSource
+
 	// HashCache defines a transaction hash mid-state cache to use when
 	// validating transactions. This cache has the potential to greatly
 	// speed up transaction validation as re-using the pre-calculated
@@ -2181,6 +2205,7 @@ func New(config *Config) (*BlockChain, error) {
 		timeSource:          config.TimeSource,
 		sigCache:            config.SigCache,
 		indexManager:        config.IndexManager,
+		reapPrefixSource:    config.ReapPrefixSource,
 		minRetargetTimespan: targetTimespan / adjustmentFactor,
 		maxRetargetTimespan: targetTimespan * adjustmentFactor,
 		blocksPerRetarget:   int32(targetTimespan / targetTimePerBlock),

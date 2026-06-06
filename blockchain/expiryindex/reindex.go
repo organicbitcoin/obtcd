@@ -40,6 +40,32 @@ func clearExpiryIndexBuckets(dbTx database.Tx) error {
 		}
 	}
 
+	// Clear REAP strict candidate bucket.
+	reapBucket := dbTx.Metadata().Bucket(bktReapStrictCandidates)
+	if reapBucket != nil {
+		cursor := reapBucket.Cursor()
+		found := cursor.First()
+		for found {
+			if err := cursor.Delete(); err != nil {
+				return err
+			}
+			found = cursor.Next()
+		}
+	}
+
+	// Clear outpoint-to-REAP-strict bucket.
+	reapOutpointBucket := dbTx.Metadata().Bucket(bktOutpoint2ReapStrict)
+	if reapOutpointBucket != nil {
+		cursor := reapOutpointBucket.Cursor()
+		found := cursor.First()
+		for found {
+			if err := cursor.Delete(); err != nil {
+				return err
+			}
+			found = cursor.Next()
+		}
+	}
+
 	// Reset accumulator to identity state.
 	if err := dbPutAccumulatorState(dbTx, NewMuHash()); err != nil {
 		return fmt.Errorf("failed to reset accumulator: %v", err)

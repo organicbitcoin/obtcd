@@ -1150,6 +1150,18 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 		return err
 	}
 
+	// The REAP global prefix source tracks the current best chain state.
+	// Only run this pre-connect check when the candidate extends the
+	// current best tip.  Reorganization attach blocks are checked again
+	// immediately before they are connected, after the old fork has been
+	// detached and the prefix source represents their parent state.
+	if node.parent == b.bestChain.Tip() {
+		if err := checkReapGlobalPrefix(block, node.height,
+			b.reapPrefixSource, b.chainParams); err != nil {
+			return err
+		}
+	}
+
 	// BIP0016 describes a pay-to-script-hash type that is considered a
 	// "standard" type.  The rules for this BIP only apply to transactions
 	// after the timestamp defined by txscript.Bip16Activation.  See

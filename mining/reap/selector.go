@@ -33,6 +33,45 @@ func SelectCandidates(ctx context.Context, tip int32, idx *expiryindex.ExpiryInd
 	return selectCandidatesWithScanner(ctx, tip, idx, view, p)
 }
 
+// SelectPrefixCandidates builds a REAP plan from candidates that are already
+// ordered by the consensus global-prefix source.
+func SelectPrefixCandidates(ctx context.Context, tip int32,
+	candidates []blockchain.ReapPrefixCandidate, p REAPParams) (REAPPlan, error) {
+
+	if p.MaxInputs <= 0 {
+		return REAPPlan{}, fmt.Errorf("invalid MaxInputs: %d", p.MaxInputs)
+	}
+
+	plan := REAPPlan{Height: tip}
+	plan.Stats.Candidates = len(candidates)
+
+	for i, c := range candidates {
+		if err := ctx.Err(); err != nil {
+			return REAPPlan{}, err
+		}
+		if len(plan.Inputs) >= p.MaxInputs {
+			plan.Stats.Skipped += len(candidates) - len(plan.Inputs)
+			break
+		}
+		nextWeight := EstimateBlueprintWeight(len(plan.Inputs) + 1)
+		if p.WeightBudget > 0 && nextWeight > p.WeightBudget &&
+			len(plan.Inputs) > 0 {
+			plan.Stats.Skipped += len(candidates) - i
+			break
+		}
+		plan.Inputs = append(plan.Inputs, c.OutPoint)
+		tax := taxForValue(c.Amount, p)
+		refund := c.Amount - tax
+		refund, tax = applyDustRule(c.Amount, refund, tax, p.DustThresholdSat)
+		plan.TaxTotal += tax
+		plan.RefundTotal += refund
+	}
+
+	plan.Stats.Picked = len(plan.Inputs)
+	plan.Stats.EstWeight = EstimateBlueprintWeight(len(plan.Inputs))
+	return plan, nil
+}
+
 // SelectCandidatesWithScanner is an integration-friendly variant that accepts
 // any scanner implementation with the ExpiringUTXO scan contract.
 func SelectCandidatesWithScanner(ctx context.Context, tip int32, scanner interface {

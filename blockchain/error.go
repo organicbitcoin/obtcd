@@ -246,6 +246,10 @@ const (
 	// ErrMultipleReapTx indicates a block contains more than one REAP
 	// system transaction once REAP block hardening is active.
 	ErrMultipleReapTx
+
+	// ErrBadReapPrefix indicates a REAP transaction does not spend the
+	// canonical prefix of the globally expired UTXO set.
+	ErrBadReapPrefix
 )
 
 // Map of ErrorCode values back to their constant names for pretty printing.
@@ -298,6 +302,7 @@ var errorCodeStrings = map[ErrorCode]string{
 	ErrBadExpiryCommitmentFormat:    "ErrBadExpiryCommitmentFormat",
 	ErrBadExpiryCommitmentMismatch:  "ErrBadExpiryCommitmentMismatch",
 	ErrMultipleReapTx:               "ErrMultipleReapTx",
+	ErrBadReapPrefix:                "ErrBadReapPrefix",
 }
 
 // String returns the ErrorCode as a human-readable name.

@@ -2936,6 +2936,10 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	}
 
 	// Create a new block chain instance with the appropriate configuration.
+	var reapPrefixSource blockchain.ReapPrefixSource
+	if s.expiryIndex != nil {
+		reapPrefixSource = s.expiryIndex
+	}
 	var err error
 	s.chain, err = blockchain.New(&blockchain.Config{
 		DB:               s.db,
@@ -2945,6 +2949,7 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 		TimeSource:       s.timeSource,
 		SigCache:         s.sigCache,
 		IndexManager:     indexManager,
+		ReapPrefixSource: reapPrefixSource,
 		HashCache:        s.hashCache,
 		Prune:            cfg.Prune * 1024 * 1024,
 		UtxoCacheMaxSize: uint64(cfg.UtxoCacheMaxSizeMiB) * 1024 * 1024,

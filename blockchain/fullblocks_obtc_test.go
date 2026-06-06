@@ -5,6 +5,7 @@
 package blockchain
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,6 +15,27 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
+
+type staticReapPrefixSource struct {
+	tipHeight  int32
+	candidates []ReapPrefixCandidate
+}
+
+func (s staticReapPrefixSource) ReapPrefixTipHeight() (int32, error) {
+	return s.tipHeight, nil
+}
+
+func (s staticReapPrefixSource) ReapPrefixCandidates(blockHeight int32,
+	limit int) ([]ReapPrefixCandidate, error) {
+
+	if limit < 0 {
+		return nil, fmt.Errorf("negative limit")
+	}
+	if limit > len(s.candidates) {
+		limit = len(s.candidates)
+	}
+	return s.candidates[:limit], nil
+}
 
 func TestOBTCFullBlockAcceptsValidREAPSpend(t *testing.T) {
 	chain, teardown, err := chainSetup("obtc-fullblock-valid-reap",
@@ -30,6 +52,12 @@ func TestOBTCFullBlockAcceptsValidREAPSpend(t *testing.T) {
 
 	view := loadReapView(t, chain, expired.PrevOut)
 	reapTx := makeValidReapTx(t, view, 145, expired.PrevOut)
+	chain.reapPrefixSource = staticReapPrefixSource{
+		tipHeight: 144,
+		candidates: []ReapPrefixCandidate{{
+			OutPoint: expired.PrevOut,
+		}},
+	}
 
 	block := newOBTCBlock(t, chain, blocks[143], reapTx)
 	isMainChain, isOrphan, err := chain.ProcessBlock(block, BFNoPoWCheck)

@@ -47,6 +47,10 @@ type ChainAccessor interface {
 	ForEachUTXO(fn func(outpoint wire.OutPoint, height int32) error) error
 }
 
+type amountAwareChainAccessor interface {
+	ForEachUTXOWithAmount(fn func(outpoint wire.OutPoint, height int32, amount int64) error) error
+}
+
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
 
@@ -297,7 +301,7 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 			expiryKey := idx.expiryParams.CalculateExpiryKey(blockHeight)
 			mh.Add(computeEntryData(outpoint, expiryKey))
 
-			if err := idx.connectTxOut(dbTx, outpoint, blockHeight); err != nil {
+			if err := idx.connectTxOut(dbTx, outpoint, blockHeight, txOut.Value); err != nil {
 				return fmt.Errorf("failed to connect txout %v: %v", outpoint, err)
 			}
 			addedCount++
@@ -421,7 +425,7 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 				expiryKey := idx.expiryParams.CalculateExpiryKey(stxo.Height)
 				mh.Add(computeEntryData(op, expiryKey))
 
-				if err := idx.connectTxOut(dbTx, op, stxo.Height); err != nil {
+				if err := idx.connectTxOut(dbTx, op, stxo.Height, stxo.Amount); err != nil {
 					return fmt.Errorf("failed to reconnect txout %v: %v",
 						txIn.PreviousOutPoint, err)
 				}
@@ -449,7 +453,14 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 	return nil
 }
 
-func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64) error {
+func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64,
+	amounts ...int64) error {
+
+	amount := int64(0)
+	if len(amounts) > 0 {
+		amount = amounts[0]
+	}
+
 	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
 	if outpointBucket == nil {
 		return fmt.Errorf("outpoint-to-expiry bucket does not exist")
@@ -458,6 +469,16 @@ func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64
 	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
 	if expiryBucket == nil {
 		return fmt.Errorf("expiry-to-outpoints bucket does not exist")
+	}
+
+	reapBucket := dbTx.Metadata().Bucket(bktReapStrictCandidates)
+	if reapBucket == nil {
+		return fmt.Errorf("REAP strict candidate bucket does not exist")
+	}
+
+	reapOutpointBucket := dbTx.Metadata().Bucket(bktOutpoint2ReapStrict)
+	if reapOutpointBucket == nil {
+		return fmt.Errorf("outpoint-to-REAP-strict bucket does not exist")
 	}
 
 	if err := outpointBucket.Put(encodeOutPoint(outpoint), encodeExpiryKey(expiryKey)); err != nil {
@@ -469,19 +490,30 @@ func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64
 		return fmt.Errorf("failed to store expiry mapping: %v", err)
 	}
 
+	reapKey, err := encodeReapStrictCompositeKey(expiryKey, amount, outpoint)
+	if err != nil {
+		return err
+	}
+	if err := reapBucket.Put(reapKey, emptyIndexValue); err != nil {
+		return fmt.Errorf("failed to store REAP strict mapping: %v", err)
+	}
+	if err := reapOutpointBucket.Put(encodeOutPoint(outpoint), reapKey); err != nil {
+		return fmt.Errorf("failed to store outpoint REAP strict mapping: %v", err)
+	}
+
 	return nil
 }
 
 // connectTxOut adds a new UTXO to the expiry index
 func (idx *ExpiryIndex) connectTxOut(dbTx database.Tx, outpoint *wire.OutPoint,
-	createHeight int32) error {
+	createHeight int32, amounts ...int64) error {
 	if createHeight < idx.expiryParams.StartScanHeight {
 		return nil
 	}
 
 	// Calculate the expiry key for this UTXO
 	expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)
-	return putTxOutMapping(dbTx, outpoint, expiryKey)
+	return putTxOutMapping(dbTx, outpoint, expiryKey, amounts...)
 }
 
 // disconnectTxOut removes a UTXO from the expiry index
@@ -511,9 +543,28 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 		return fmt.Errorf("expiry-to-outpoints bucket does not exist")
 	}
 
+	reapBucket := dbTx.Metadata().Bucket(bktReapStrictCandidates)
+	if reapBucket == nil {
+		return fmt.Errorf("REAP strict candidate bucket does not exist")
+	}
+
+	reapOutpointBucket := dbTx.Metadata().Bucket(bktOutpoint2ReapStrict)
+	if reapOutpointBucket == nil {
+		return fmt.Errorf("outpoint-to-REAP-strict bucket does not exist")
+	}
+
 	compositeKey := encodeExpiryOutpointCompositeKey(expiryKey, outpoint)
 	if existingValue := expiryBucket.Get(compositeKey); existingValue == nil {
 		return fmt.Errorf("inconsistent index: expiry composite key %x not found", compositeKey)
+	}
+
+	reapKey := reapOutpointBucket.Get(encodedOutpoint)
+	if reapKey == nil {
+		return fmt.Errorf("inconsistent index: REAP strict key for outpoint %s not found", outpoint)
+	}
+	reapKey = append([]byte(nil), reapKey...)
+	if existingValue := reapBucket.Get(reapKey); existingValue == nil {
+		return fmt.Errorf("inconsistent index: REAP strict composite key %x not found", reapKey)
 	}
 
 	if err := outpointBucket.Delete(encodedOutpoint); err != nil {
@@ -521,6 +572,12 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 	}
 	if err := expiryBucket.Delete(compositeKey); err != nil {
 		return fmt.Errorf("failed to delete expiry mapping: %v", err)
+	}
+	if err := reapOutpointBucket.Delete(encodedOutpoint); err != nil {
+		return fmt.Errorf("failed to delete outpoint REAP strict mapping: %v", err)
+	}
+	if err := reapBucket.Delete(reapKey); err != nil {
+		return fmt.Errorf("failed to delete REAP strict mapping: %v", err)
 	}
 
 	return nil
@@ -624,6 +681,81 @@ func (idx *ExpiryIndex) GetAccumulatorDigest() ([AccumulatorDigestSize]byte, err
 		return [AccumulatorDigestSize]byte{}, err
 	}
 	return snapshot.Root, nil
+}
+
+// ReapPrefixTipHeight returns the indexed chain tip height represented by the
+// REAP prefix source.
+func (idx *ExpiryIndex) ReapPrefixTipHeight() (int32, error) {
+	if idx.disabled {
+		return -1, fmt.Errorf("expiry index is disabled")
+	}
+
+	var tipHeight int32
+	err := idx.db.View(func(dbTx database.Tx) error {
+		var err error
+		tipHeight, err = dbGetTipHeightIndexed(dbTx)
+		return err
+	})
+	return tipHeight, err
+}
+
+// ReapPrefixCandidates returns the canonical prefix of globally expired live
+// UTXOs at blockHeight.  The returned order matches REAP consensus ordering:
+// expiry key, amount, transaction hash bytes, then output index.
+func (idx *ExpiryIndex) ReapPrefixCandidates(blockHeight int32,
+	limit int) ([]blockchain.ReapPrefixCandidate, error) {
+
+	if idx.disabled {
+		return nil, fmt.Errorf("expiry index is disabled")
+	}
+	if limit <= 0 {
+		return nil, nil
+	}
+	if blockHeight < 0 {
+		return nil, nil
+	}
+
+	var results []blockchain.ReapPrefixCandidate
+	toKey := uint64(blockHeight)
+	err := idx.db.View(func(dbTx database.Tx) error {
+		reapBucket := dbTx.Metadata().Bucket(bktReapStrictCandidates)
+		if reapBucket == nil {
+			return fmt.Errorf("REAP strict candidate bucket does not exist")
+		}
+
+		cursor := reapBucket.Cursor()
+		for found := cursor.First(); found; found = cursor.Next() {
+			key := cursor.Key()
+			if key == nil {
+				break
+			}
+
+			expiryKey, amount, outpoint, err := decodeReapStrictCompositeKey(key)
+			if err != nil {
+				return fmt.Errorf("failed to decode REAP strict composite key: %v", err)
+			}
+			if expiryKey > toKey {
+				break
+			}
+
+			results = append(results, blockchain.ReapPrefixCandidate{
+				OutPoint:  *outpoint,
+				ExpiryKey: expiryKey,
+				Amount:    amount,
+			})
+			if len(results) >= limit {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	if err == nil {
+		idx.devLogf("ExpiryIndex REAP prefix height=%d limit=%d results=%d",
+			blockHeight, limit, len(results))
+	}
+	return results, err
 }
 
 // ScanExpiringUTXOs scans for UTXOs expiring within the specified range.
@@ -899,6 +1031,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	type rebuildBatchEntry struct {
 		outpoint  wire.OutPoint
 		expiryKey uint64
+		amount    int64
 	}
 	batch := make([]rebuildBatchEntry, 0, DefaultBatchSize)
 	flushBatch := func() error {
@@ -909,7 +1042,8 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		if err := idx.db.Update(func(dbTx database.Tx) error {
 			for i := range batch {
 				entry := batch[i]
-				if err := putTxOutMapping(dbTx, &entry.outpoint, entry.expiryKey); err != nil {
+				if err := putTxOutMapping(dbTx, &entry.outpoint, entry.expiryKey,
+					entry.amount); err != nil {
 					return fmt.Errorf("failed to add UTXO %v: %v", entry.outpoint, err)
 				}
 			}
@@ -922,7 +1056,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		return nil
 	}
 
-	populateErr := idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
+	processUTXO := func(outpoint wire.OutPoint, createHeight int32, amount int64) error {
 		// Only index UTXOs created at or after the scan start height.
 		if createHeight < idx.expiryParams.StartScanHeight {
 			return nil
@@ -933,6 +1067,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		batch = append(batch, rebuildBatchEntry{
 			outpoint:  outpoint,
 			expiryKey: expiryKey,
+			amount:    amount,
 		})
 		if len(batch) >= DefaultBatchSize {
 			if err := flushBatch(); err != nil {
@@ -947,7 +1082,16 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 			log.Infof("ExpiryIndex: Processed %d UTXOs (%.0f/s)", processed, rate)
 		}
 		return nil
-	})
+	}
+
+	var populateErr error
+	if amountAware, ok := idx.chain.(amountAwareChainAccessor); ok {
+		populateErr = amountAware.ForEachUTXOWithAmount(processUTXO)
+	} else {
+		populateErr = idx.chain.ForEachUTXO(func(outpoint wire.OutPoint, createHeight int32) error {
+			return processUTXO(outpoint, createHeight, 0)
+		})
+	}
 	if populateErr == nil {
 		populateErr = flushBatch()
 	}
