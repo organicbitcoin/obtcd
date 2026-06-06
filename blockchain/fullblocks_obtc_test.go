@@ -69,6 +69,150 @@ func TestOBTCFullBlockAcceptsValidREAPSpend(t *testing.T) {
 	}
 }
 
+func TestOBTCFullBlockAcceptsShortREAPPrefix(t *testing.T) {
+	chain, teardown, err := chainSetup("obtc-fullblock-short-reap-prefix",
+		&chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("unable to setup chain: %v", err)
+	}
+	defer teardown()
+
+	chain.TstSetCoinbaseMaturity(1)
+
+	blocks, spends := buildOBTCBlocks(t, chain, 145)
+	firstExpired := spends[1][0]
+	secondExpired := spends[2][0]
+
+	view := loadReapView(t, chain, firstExpired.PrevOut)
+	reapTx := makeValidReapTx(t, view, 146, firstExpired.PrevOut)
+	chain.reapPrefixSource = staticReapPrefixSource{
+		tipHeight: 145,
+		candidates: []ReapPrefixCandidate{
+			{OutPoint: firstExpired.PrevOut},
+			{OutPoint: secondExpired.PrevOut},
+		},
+	}
+
+	block := newOBTCBlock(t, chain, blocks[144], reapTx)
+	isMainChain, isOrphan, err := chain.ProcessBlock(block, BFNoPoWCheck)
+	if err != nil {
+		t.Fatalf("expected short-prefix REAP block to connect: %v", err)
+	}
+	if !isMainChain || isOrphan {
+		t.Fatalf("unexpected chain/orphan flags main=%v orphan=%v", isMainChain, isOrphan)
+	}
+}
+
+func TestOBTCFullBlockRejectsREAPCherryPickNonPrefix(t *testing.T) {
+	chain, teardown, err := chainSetup("obtc-fullblock-reap-nonprefix",
+		&chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("unable to setup chain: %v", err)
+	}
+	defer teardown()
+
+	chain.TstSetCoinbaseMaturity(1)
+
+	blocks, spends := buildOBTCBlocks(t, chain, 145)
+	firstExpired := spends[1][0]
+	secondExpired := spends[2][0]
+
+	view := loadReapView(t, chain, secondExpired.PrevOut)
+	reapTx := makeValidReapTx(t, view, 146, secondExpired.PrevOut)
+	chain.reapPrefixSource = staticReapPrefixSource{
+		tipHeight: 145,
+		candidates: []ReapPrefixCandidate{
+			{OutPoint: firstExpired.PrevOut},
+			{OutPoint: secondExpired.PrevOut},
+		},
+	}
+
+	block := newOBTCBlock(t, chain, blocks[144], reapTx)
+	_, _, err = chain.ProcessBlock(block, BFNoPoWCheck)
+	if err == nil {
+		t.Fatal("expected non-prefix REAP block to be rejected")
+	}
+
+	ruleErr, ok := err.(RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T: %v", err, err)
+	}
+	if ruleErr.ErrorCode != ErrBadReapPrefix {
+		t.Fatalf("unexpected error code: got %v want %v",
+			ruleErr.ErrorCode, ErrBadReapPrefix)
+	}
+}
+
+func TestOBTCFullBlockRejectsREAPWithoutPrefixSource(t *testing.T) {
+	chain, teardown, err := chainSetup("obtc-fullblock-reap-no-prefix-source",
+		&chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("unable to setup chain: %v", err)
+	}
+	defer teardown()
+
+	chain.TstSetCoinbaseMaturity(1)
+
+	blocks, spends := buildOBTCBlocks(t, chain, 144)
+	expired := spends[1][0]
+
+	view := loadReapView(t, chain, expired.PrevOut)
+	reapTx := makeValidReapTx(t, view, 145, expired.PrevOut)
+
+	block := newOBTCBlock(t, chain, blocks[143], reapTx)
+	_, _, err = chain.ProcessBlock(block, BFNoPoWCheck)
+	if err == nil {
+		t.Fatal("expected REAP block without prefix source to be rejected")
+	}
+
+	ruleErr, ok := err.(RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T: %v", err, err)
+	}
+	if ruleErr.ErrorCode != ErrBadReapPrefix {
+		t.Fatalf("unexpected error code: got %v want %v",
+			ruleErr.ErrorCode, ErrBadReapPrefix)
+	}
+}
+
+func TestOBTCFullBlockRejectsREAPPrefixSourceTipMismatch(t *testing.T) {
+	chain, teardown, err := chainSetup("obtc-fullblock-reap-prefix-tip-mismatch",
+		&chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("unable to setup chain: %v", err)
+	}
+	defer teardown()
+
+	chain.TstSetCoinbaseMaturity(1)
+
+	blocks, spends := buildOBTCBlocks(t, chain, 144)
+	expired := spends[1][0]
+
+	view := loadReapView(t, chain, expired.PrevOut)
+	reapTx := makeValidReapTx(t, view, 145, expired.PrevOut)
+	chain.reapPrefixSource = staticReapPrefixSource{
+		tipHeight: 143,
+		candidates: []ReapPrefixCandidate{{
+			OutPoint: expired.PrevOut,
+		}},
+	}
+
+	block := newOBTCBlock(t, chain, blocks[143], reapTx)
+	_, _, err = chain.ProcessBlock(block, BFNoPoWCheck)
+	if err == nil {
+		t.Fatal("expected REAP block with stale prefix source to be rejected")
+	}
+
+	ruleErr, ok := err.(RuleError)
+	if !ok {
+		t.Fatalf("expected RuleError, got %T: %v", err, err)
+	}
+	if ruleErr.ErrorCode != ErrBadReapPrefix {
+		t.Fatalf("unexpected error code: got %v want %v",
+			ruleErr.ErrorCode, ErrBadReapPrefix)
+	}
+}
+
 func TestOBTCFullBlockRejectsNonREAPExpiredSpend(t *testing.T) {
 	chain, teardown, err := chainSetup("obtc-fullblock-expired-nonreap",
 		&chaincfg.ObtcRegTestParams)
