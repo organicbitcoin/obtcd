@@ -38,8 +38,9 @@ type ExpiryParams struct {
 
 // Fork heights for OBTC networks.
 const (
-	// ObtcMainNetForkHeight is the OBTC mainnet fork height.
-	ObtcMainNetForkHeight int32 = 950000
+	// ObtcMainNetForkHeight is the provisional OBTC mainnet-candidate fork
+	// height. This value may change before final mainnet activation.
+	ObtcMainNetForkHeight int32 = 1_000_000
 
 	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
 	// independent chain, not a fork of Bitcoin testnet3 history.

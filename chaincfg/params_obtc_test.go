@@ -416,9 +416,9 @@ func TestIsPostOBTCFork(t *testing.T) {
 
 // TestOBTCForkHeightValues verifies fork heights are reasonable.
 func TestOBTCForkHeightValues(t *testing.T) {
-	// MainNet fork height should be in a reasonable range for Q2 2026
-	if ObtcMainNetForkHeight < 900000 || ObtcMainNetForkHeight > 1000000 {
-		t.Errorf("MainNet fork height %d seems unreasonable for Q2 2026 target", ObtcMainNetForkHeight)
+	// MainNet fork height should remain in the current provisional launch range.
+	if ObtcMainNetForkHeight < 1_000_000 || ObtcMainNetForkHeight > 1_100_000 {
+		t.Errorf("MainNet fork height %d seems outside the current provisional launch range", ObtcMainNetForkHeight)
 	}
 
 	// TestNet is an independent chain, so its OBTC rules are active from genesis.
