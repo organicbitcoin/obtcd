@@ -574,6 +574,61 @@ func TestConnectBlockBasic(t *testing.T) {
 	}
 }
 
+func TestConnectBlockSkipsGenesisCoinbase(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.Create(dbTx)
+	}); err != nil {
+		t.Fatalf("Failed to create index: %v", err)
+	}
+	if err := idx.Init(); err != nil {
+		t.Fatalf("Failed to initialize index: %v", err)
+	}
+
+	genesis := createTestBlock(t, 0)
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.ConnectBlock(dbTx, genesis, nil)
+	}); err != nil {
+		t.Fatalf("Failed to connect genesis-height block: %v", err)
+	}
+
+	stats, err := idx.GetStats()
+	if err != nil {
+		t.Fatalf("Failed to read stats: %v", err)
+	}
+	if stats.TipHeight != 0 {
+		t.Fatalf("tip height mismatch: got %d want 0", stats.TipHeight)
+	}
+	if stats.TotalUTXOs != 0 || stats.TotalExpiryKeys != 0 {
+		t.Fatalf("genesis coinbase should not be indexed, got stats %+v", stats)
+	}
+
+	snapshot, err := idx.GetAccumulatorSnapshot()
+	if err != nil {
+		t.Fatalf("Failed to read accumulator snapshot: %v", err)
+	}
+	if snapshot.Root != NewMuHash().Digest() {
+		t.Fatalf("genesis coinbase should not change accumulator root: got %x", snapshot.Root)
+	}
+
+	candidates, err := idx.ReapPrefixCandidates(10_000, 10)
+	if err != nil {
+		t.Fatalf("Failed to read REAP candidates: %v", err)
+	}
+	if len(candidates) != 0 {
+		t.Fatalf("genesis coinbase should not become a REAP candidate: %+v", candidates)
+	}
+}
+
 func TestConnectBlockDisabledNoOp(t *testing.T) {
 	db, teardown, err := createCoreTestDB()
 	if err != nil {

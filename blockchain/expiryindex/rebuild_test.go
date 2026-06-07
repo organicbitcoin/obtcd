@@ -827,6 +827,55 @@ func TestFastRebuildFromUTXOBatchesAndSkipsPreStart(t *testing.T) {
 	}
 }
 
+func TestFastRebuildFromUTXOSkipsGenesisCreatedUTXO(t *testing.T) {
+	db, teardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("Failed to create ExpiryIndex: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error { return idx.Create(dbTx) }); err != nil {
+		t.Fatalf("Failed to create index: %v", err)
+	}
+
+	genesisOut := makeOutPoint(0x01, 0)
+	heightOneOut := makeOutPoint(0x02, 0)
+	idx.chain = &rebuildMockChain{
+		bestHeight: 1,
+		blocks: map[int32]*btcutil.Block{
+			1: createTestBlock(t, 1),
+		},
+		utxos: map[wire.OutPoint]int32{
+			genesisOut:   0,
+			heightOneOut: 1,
+		},
+	}
+
+	if err := idx.fastRebuildFromUTXO(1); err != nil {
+		t.Fatalf("fast rebuild failed: %v", err)
+	}
+
+	stats, err := idx.GetStats()
+	if err != nil {
+		t.Fatalf("Failed to get stats: %v", err)
+	}
+	if stats.TotalUTXOs != 1 || stats.TotalExpiryKeys != 1 {
+		t.Fatalf("unexpected stats after genesis skip: %+v", stats)
+	}
+
+	candidates, err := idx.ReapPrefixCandidates(1_000, 10)
+	if err != nil {
+		t.Fatalf("Failed to read REAP prefix: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0].OutPoint != heightOneOut {
+		t.Fatalf("unexpected REAP candidates after genesis skip: %+v", candidates)
+	}
+}
+
 func TestFastRebuildFromUTXONegativeTipKeepsIdentitySnapshot(t *testing.T) {
 	db, teardown, err := createRebuildTestDB()
 	if err != nil {

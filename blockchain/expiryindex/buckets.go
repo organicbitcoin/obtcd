@@ -67,7 +67,7 @@ var (
 const (
 	// CurrentIndexVersion tracks the current index format version
 	// Increment this when making breaking changes to the index format
-	CurrentIndexVersion = 5
+	CurrentIndexVersion = 6
 
 	// DefaultBatchSize is the default number of entries to process in a single
 	// database transaction to balance memory usage and transaction overhead

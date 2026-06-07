@@ -60,6 +60,11 @@ func TestConnectTxOut(t *testing.T) {
 			shouldIndex:  true,
 		},
 		{
+			name:         "genesis height should skip",
+			createHeight: 0,
+			shouldIndex:  false,
+		},
+		{
 			name:         "negative height should skip",
 			createHeight: -1,
 			shouldIndex:  false,

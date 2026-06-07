@@ -261,6 +261,7 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
 	spentCount := 0
 	addedCount := 0
+	genesisCreatedCount := 0
 	unspendableCount := 0
 	for txIdx, tx := range block.Transactions() {
 		msgTx := tx.MsgTx()
@@ -286,8 +287,13 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 			}
 		}
 
-		// Process new UTXOs (add to index), skip provably unspendable outputs.
+		// Process new UTXOs (add to index), skip outputs that are never part of
+		// the spendable UTXO set represented by validation.
 		for voutIdx, txOut := range msgTx.TxOut {
+			if !idx.shouldIndexCreateHeight(blockHeight) {
+				genesisCreatedCount++
+				continue
+			}
 			if txscript.IsUnspendable(txOut.PkScript) {
 				unspendableCount++
 				continue
@@ -329,8 +335,8 @@ func (idx *ExpiryIndex) ConnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 	// Update our internal state
 	idx.curTipHeight = blockHeight
-	idx.devLogf("ExpiryIndex ConnectBlock done height=%d spent=%d added=%d skippedUnspendable=%d root=%x",
-		blockHeight, spentCount, addedCount, unspendableCount, mh.Digest())
+	idx.devLogf("ExpiryIndex ConnectBlock done height=%d spent=%d added=%d skippedGenesisCreated=%d skippedUnspendable=%d root=%x",
+		blockHeight, spentCount, addedCount, genesisCreatedCount, unspendableCount, mh.Digest())
 
 	return nil
 }
@@ -388,6 +394,9 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 		// Remove new UTXOs that were created by this block (reverse of Add).
 		for voutIdx := len(msgTx.TxOut) - 1; voutIdx >= 0; voutIdx-- {
+			if !idx.shouldIndexCreateHeight(blockHeight) {
+				continue
+			}
 			if txscript.IsUnspendable(msgTx.TxOut[voutIdx].PkScript) {
 				continue
 			}
@@ -416,7 +425,7 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 						stxoIdx, len(stxos), txIdx, vinIdx)
 				}
 				stxo := stxos[stxoIdx]
-				if stxo.Height < idx.expiryParams.StartScanHeight {
+				if !idx.shouldIndexCreateHeight(stxo.Height) {
 					continue
 				}
 
@@ -507,13 +516,19 @@ func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64
 // connectTxOut adds a new UTXO to the expiry index
 func (idx *ExpiryIndex) connectTxOut(dbTx database.Tx, outpoint *wire.OutPoint,
 	createHeight int32, amounts ...int64) error {
-	if createHeight < idx.expiryParams.StartScanHeight {
+	if !idx.shouldIndexCreateHeight(createHeight) {
 		return nil
 	}
 
 	// Calculate the expiry key for this UTXO
 	expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)
 	return putTxOutMapping(dbTx, outpoint, expiryKey, amounts...)
+}
+
+func (idx *ExpiryIndex) shouldIndexCreateHeight(createHeight int32) bool {
+	// Bitcoin consensus treats the genesis coinbase as unspendable, so it must
+	// not become an expiry or REAP candidate even when StartScanHeight is zero.
+	return createHeight > 0 && createHeight >= idx.expiryParams.StartScanHeight
 }
 
 // disconnectTxOut removes a UTXO from the expiry index
@@ -1057,8 +1072,8 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	}
 
 	processUTXO := func(outpoint wire.OutPoint, createHeight int32, amount int64) error {
-		// Only index UTXOs created at or after the scan start height.
-		if createHeight < idx.expiryParams.StartScanHeight {
+		// Only index UTXOs represented by validation's spendable UTXO set.
+		if !idx.shouldIndexCreateHeight(createHeight) {
 			return nil
 		}
 
