@@ -24,6 +24,7 @@ type ExpiryParams struct {
 	ReapConsensusAtHeight    int32  // Height to enforce canonical REAP ordering and limits
 	ReplayProtectionAtHeight int32  // Height to enable replay-protected sighash domains
 	ReapMaxInputs            int    // Consensus max REAP inputs per transaction (0 = disabled)
+	ReapDustMaxInputs        int    // Consensus max refundless dust REAP inputs per transaction
 	ReapTaxNumerator         int64  // Consensus REAP tax numerator
 	ReapTaxDenominator       int64  // Consensus REAP tax denominator
 	ReapDustThresholdSat     int64  // Inputs below this value fold fully into tax
@@ -369,6 +370,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ReapConsensusAtHeight:          mainnetActivationHeight,
 			ReplayProtectionAtHeight:       mainnetActivationHeight,
 			ReapMaxInputs:                  256,
+			ReapDustMaxInputs:              1024,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
@@ -384,6 +386,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ReapConsensusAtHeight:          120,
 			ReplayProtectionAtHeight:       130,
 			ReapMaxInputs:                  500,
+			ReapDustMaxInputs:              1000,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
@@ -399,6 +402,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ReapConsensusAtHeight:          ObtcRegTestForkHeight + 12,
 			ReplayProtectionAtHeight:       ObtcRegTestForkHeight + 14,
 			ReapMaxInputs:                  200,
+			ReapDustMaxInputs:              400,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,

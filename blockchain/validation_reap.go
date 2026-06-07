@@ -343,10 +343,14 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 	}
 	txHash := tx.TxHash()
 	logOBTCDevf(chainParams,
-		"REAP consensus hardening start tx=%s blockHeight=%d inputCount=%d maxInputs=%d",
-		txHash, txHeight, len(tx.TxIn), expiryParams.ReapMaxInputs)
+		"REAP consensus hardening start tx=%s blockHeight=%d inputCount=%d maxInputs=%d dustMaxInputs=%d",
+		txHash, txHeight, len(tx.TxIn), expiryParams.ReapMaxInputs,
+		expiryParams.ReapDustMaxInputs)
 
-	if expiryParams.ReapMaxInputs > 0 && len(tx.TxIn) > expiryParams.ReapMaxInputs {
+	twoTierLimits := expiryParams.ReapDustMaxInputs > 0
+	if !twoTierLimits && expiryParams.ReapMaxInputs > 0 &&
+		len(tx.TxIn) > expiryParams.ReapMaxInputs {
+
 		logOBTCDevf(chainParams,
 			"REAP consensus hardening failed tx=%s reason=max-inputs inputCount=%d maxInputs=%d",
 			txHash, len(tx.TxIn), expiryParams.ReapMaxInputs)
@@ -356,26 +360,61 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 		))
 	}
 
-	if len(tx.TxIn) <= 1 {
-		return nil
-	}
+	var prevKey reapInputOrderKey
+	dustCount := 0
+	normalCount := 0
 
-	prevKey, err := makeReapInputOrderKey(tx.TxIn[0].PreviousOutPoint, utxoView, expiryParams)
-	if err != nil {
-		return ruleError(ErrMissingTxOut, err.Error())
-	}
-
-	for i := 1; i < len(tx.TxIn); i++ {
-		curKey, err := makeReapInputOrderKey(tx.TxIn[i].PreviousOutPoint, utxoView, expiryParams)
+	for i, txIn := range tx.TxIn {
+		curKey, err := makeReapInputOrderKey(txIn.PreviousOutPoint, utxoView, expiryParams)
 		if err != nil {
 			return ruleError(ErrMissingTxOut, err.Error())
 		}
-		if compareReapInputOrderKey(prevKey, curKey) > 0 {
+		if i > 0 && compareReapInputOrderKey(prevKey, curKey) > 0 {
 			logOBTCDevf(chainParams,
 				"REAP consensus hardening failed tx=%s reason=canonical-order prev=%s cur=%s",
 				txHash, tx.TxIn[i-1].PreviousOutPoint, tx.TxIn[i].PreviousOutPoint)
 			return ruleError(ErrBadTxInput, "reap transaction inputs out of canonical order")
 		}
+
+		if twoTierLimits {
+			dustTier := isReapDustTierAmount(curKey.amount, expiryParams)
+			if dustTier {
+				if dustCount >= expiryParams.ReapDustMaxInputs {
+					logOBTCDevf(chainParams,
+						"REAP consensus hardening failed tx=%s reason=dust-max-inputs dustCount=%d max=%d",
+						txHash, dustCount+1, expiryParams.ReapDustMaxInputs)
+					return ruleError(ErrBadTxInput, fmt.Sprintf(
+						"reap dust input count %d exceeds consensus limit %d",
+						dustCount+1, expiryParams.ReapDustMaxInputs,
+					))
+				}
+			} else if normalCount >= expiryParams.ReapMaxInputs {
+				logOBTCDevf(chainParams,
+					"REAP consensus hardening failed tx=%s reason=normal-max-inputs normalCount=%d max=%d",
+					txHash, normalCount+1, expiryParams.ReapMaxInputs)
+				return ruleError(ErrBadTxInput, fmt.Sprintf(
+					"reap normal input count %d exceeds consensus limit %d",
+					normalCount+1, expiryParams.ReapMaxInputs,
+				))
+			}
+
+			if dustCount >= expiryParams.ReapDustMaxInputs ||
+				normalCount >= expiryParams.ReapMaxInputs {
+
+				logOBTCDevf(chainParams,
+					"REAP consensus hardening failed tx=%s reason=input-after-tier-cap input=%d dust=%d normal=%d",
+					txHash, i, dustCount, normalCount)
+				return ruleError(ErrBadTxInput,
+					"reap transaction includes inputs after a tier cap was reached")
+			}
+
+			if dustTier {
+				dustCount++
+			} else {
+				normalCount++
+			}
+		}
+
 		prevKey = curKey
 	}
 
@@ -384,6 +423,11 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 		txHash, txHeight, len(tx.TxIn))
 
 	return nil
+}
+
+func isReapDustTierAmount(value int64, expiryParams *chaincfg.ExpiryParams) bool {
+	return expiryParams != nil && expiryParams.ReapDustThresholdSat > 0 &&
+		value > 0 && value < expiryParams.ReapDustThresholdSat
 }
 
 func reapTaxForValue(v int64, expiryParams *chaincfg.ExpiryParams) int64 {

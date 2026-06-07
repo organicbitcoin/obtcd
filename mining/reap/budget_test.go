@@ -96,6 +96,32 @@ func TestBuildBudgetedBlueprintNormalizesCandidateStats(t *testing.T) {
 	}
 }
 
+func TestNormalizePlanTwoTierEstimate(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	dust1 := addUtxo(t, view, 719, 4)
+	dust2 := addUtxo(t, view, 700, 5)
+	normal := addUtxo(t, view, 720, 6)
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 256
+	p.DustMaxInputs = 1024
+
+	gotPlan, err := normalizePlan(REAPPlan{
+		Inputs: []wire.OutPoint{dust1, dust2, normal},
+		Stats:  REAPStats{Candidates: 5},
+	}, view, p)
+	if err != nil {
+		t.Fatalf("normalize failed: %v", err)
+	}
+	wantWeight := EstimateTieredBlueprintWeight(2, 1)
+	if gotPlan.Stats.EstWeight != wantWeight {
+		t.Fatalf("weight mismatch got=%d want=%d", gotPlan.Stats.EstWeight, wantWeight)
+	}
+	if gotPlan.Stats.Picked != 3 || gotPlan.Stats.Skipped != 2 {
+		t.Fatalf("unexpected stats: %+v", gotPlan.Stats)
+	}
+}
+
 func TestBuildBudgetedBlueprintTrimsToActualSoftBudget(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
 	op1 := addUtxoWithScript(t, view, 10_000, 11, largeSpendableScript(4_000, 0x52))

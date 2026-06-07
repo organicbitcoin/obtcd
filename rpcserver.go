@@ -4281,9 +4281,10 @@ func handleGetReapPlan(s *rpcServer, cmd interface{}, closeChan <-chan struct{})
 	fromKey := uint64(0)
 	toKey := uint64(nextHeight)
 	scanBatch := p.ScanBatch
-	maxCandidates := p.MaxInputs * 20
-	if maxCandidates < p.MaxInputs {
-		maxCandidates = p.MaxInputs
+	prefixLimit := p.PrefixCandidateLimit()
+	maxCandidates := prefixLimit * 20
+	if maxCandidates < prefixLimit {
+		maxCandidates = prefixLimit
 	}
 	if maxCandidates > 50000 {
 		maxCandidates = 50000

@@ -41,34 +41,49 @@ func SelectPrefixCandidates(ctx context.Context, tip int32,
 	if p.MaxInputs <= 0 {
 		return REAPPlan{}, fmt.Errorf("invalid MaxInputs: %d", p.MaxInputs)
 	}
+	if p.DustMaxInputs < 0 {
+		return REAPPlan{}, fmt.Errorf("invalid DustMaxInputs: %d", p.DustMaxInputs)
+	}
 
 	plan := REAPPlan{Height: tip}
 	plan.Stats.Candidates = len(candidates)
+	dustCount := 0
+	normalCount := 0
 
 	for i, c := range candidates {
 		if err := ctx.Err(); err != nil {
 			return REAPPlan{}, err
 		}
-		if len(plan.Inputs) >= p.MaxInputs {
-			plan.Stats.Skipped += len(candidates) - len(plan.Inputs)
+		dustTier := isDustTierAmount(c.Amount, p.DustThresholdSat)
+		if !canSelectTierCandidate(dustTier, dustCount, normalCount, p) {
+			plan.Stats.Skipped += len(candidates) - i
 			break
 		}
-		nextWeight := EstimateBlueprintWeight(len(plan.Inputs) + 1)
+		nextWeight := estimateNextWeight(dustTier, dustCount, normalCount, len(plan.Inputs), p)
 		if p.WeightBudget > 0 && nextWeight > p.WeightBudget &&
 			len(plan.Inputs) > 0 {
 			plan.Stats.Skipped += len(candidates) - i
 			break
 		}
 		plan.Inputs = append(plan.Inputs, c.OutPoint)
+		if dustTier {
+			dustCount++
+		} else {
+			normalCount++
+		}
 		tax := taxForValue(c.Amount, p)
 		refund := c.Amount - tax
 		refund, tax = applyDustRule(c.Amount, refund, tax, p.DustThresholdSat)
 		plan.TaxTotal += tax
 		plan.RefundTotal += refund
+		if tierLimitReached(dustCount, normalCount, p) {
+			plan.Stats.Skipped += len(candidates) - i - 1
+			break
+		}
 	}
 
 	plan.Stats.Picked = len(plan.Inputs)
-	plan.Stats.EstWeight = EstimateBlueprintWeight(len(plan.Inputs))
+	plan.Stats.EstWeight = estimatePlanWeight(dustCount, normalCount, len(plan.Inputs), p)
 	return plan, nil
 }
 
@@ -90,6 +105,9 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 	}
 	if p.MaxInputs <= 0 {
 		return REAPPlan{}, fmt.Errorf("invalid MaxInputs: %d", p.MaxInputs)
+	}
+	if p.DustMaxInputs < 0 {
+		return REAPPlan{}, fmt.Errorf("invalid DustMaxInputs: %d", p.DustMaxInputs)
 	}
 	if p.ScanBatch <= 0 {
 		p.ScanBatch = 10_000
@@ -137,18 +155,21 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 
 	plan := REAPPlan{Height: tip}
 	plan.Stats.Candidates = len(all)
+	dustCount := 0
+	normalCount := 0
 
-	for _, c := range all {
+	for i, c := range all {
 		if err := ctx.Err(); err != nil {
 			return REAPPlan{}, err
 		}
-		if len(plan.Inputs) >= p.MaxInputs {
-			plan.Stats.Skipped += len(all) - len(plan.Inputs)
+		dustTier := isDustTierAmount(c.amount, p.DustThresholdSat)
+		if !canSelectTierCandidate(dustTier, dustCount, normalCount, p) {
+			plan.Stats.Skipped += len(all) - i
 			p.debugLogf("REAP select stop reason=max-inputs picked=%d skipped=%d",
 				len(plan.Inputs), plan.Stats.Skipped)
 			break
 		}
-		nextWeight := EstimateBlueprintWeight(len(plan.Inputs) + 1)
+		nextWeight := estimateNextWeight(dustTier, dustCount, normalCount, len(plan.Inputs), p)
 		if p.WeightBudget > 0 && nextWeight > p.WeightBudget &&
 			len(plan.Inputs) > 0 {
 			plan.Stats.Skipped += len(all) - len(plan.Inputs)
@@ -157,15 +178,26 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 			break
 		}
 		plan.Inputs = append(plan.Inputs, c.op)
+		if dustTier {
+			dustCount++
+		} else {
+			normalCount++
+		}
 		tax := taxForValue(c.amount, p)
 		refund := c.amount - tax
 		refund, tax = applyDustRule(c.amount, refund, tax, p.DustThresholdSat)
 		plan.TaxTotal += tax
 		plan.RefundTotal += refund
+		if tierLimitReached(dustCount, normalCount, p) {
+			plan.Stats.Skipped += len(all) - i - 1
+			p.debugLogf("REAP select stop reason=tier-max-inputs picked=%d skipped=%d dust=%d normal=%d",
+				len(plan.Inputs), plan.Stats.Skipped, dustCount, normalCount)
+			break
+		}
 	}
 
 	plan.Stats.Picked = len(plan.Inputs)
-	plan.Stats.EstWeight = EstimateBlueprintWeight(len(plan.Inputs))
+	plan.Stats.EstWeight = estimatePlanWeight(dustCount, normalCount, len(plan.Inputs), p)
 	p.debugLogf("REAP select done tip=%d candidates=%d picked=%d skipped=%d refund=%d tax=%d estWeight=%d",
 		tip, plan.Stats.Candidates, plan.Stats.Picked, plan.Stats.Skipped,
 		plan.RefundTotal, plan.TaxTotal, plan.Stats.EstWeight)
@@ -199,6 +231,53 @@ func sortCandidates(cs []candidate, mode SortMode) {
 			return 0
 		}
 	})
+}
+
+func isDustTierAmount(amount, dustThresholdSat int64) bool {
+	return dustThresholdSat > 0 && amount > 0 && amount < dustThresholdSat
+}
+
+func canSelectTierCandidate(dustTier bool, dustCount, normalCount int, p REAPParams) bool {
+	if p.DustMaxInputs <= 0 {
+		return dustCount+normalCount < p.MaxInputs
+	}
+	if dustCount >= p.DustMaxInputs || normalCount >= p.MaxInputs {
+		return false
+	}
+	if dustTier {
+		return dustCount < p.DustMaxInputs
+	}
+	return normalCount < p.MaxInputs
+}
+
+func tierLimitReached(dustCount, normalCount int, p REAPParams) bool {
+	if p.DustMaxInputs <= 0 {
+		return dustCount+normalCount >= p.MaxInputs
+	}
+	return dustCount >= p.DustMaxInputs || normalCount >= p.MaxInputs
+}
+
+func estimateNextWeight(dustTier bool, dustCount, normalCount, inputCount int,
+	p REAPParams) int64 {
+
+	if p.DustMaxInputs <= 0 {
+		return EstimateBlueprintWeight(inputCount + 1)
+	}
+	nextDust := dustCount
+	nextNormal := normalCount
+	if dustTier {
+		nextDust++
+	} else {
+		nextNormal++
+	}
+	return EstimateTieredBlueprintWeight(nextDust, nextNormal)
+}
+
+func estimatePlanWeight(dustCount, normalCount, inputCount int, p REAPParams) int64 {
+	if p.DustMaxInputs <= 0 {
+		return EstimateBlueprintWeight(inputCount)
+	}
+	return EstimateTieredBlueprintWeight(dustCount, normalCount)
 }
 
 func taxForValue(v int64, p REAPParams) int64 {

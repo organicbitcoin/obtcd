@@ -20,7 +20,8 @@ func TestDefaultREAPParamsForNet(t *testing.T) {
 	}
 
 	obtcMain := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
-	if obtcMain.MaxInputs != 256 || obtcMain.ScanBatch != 10_000 || obtcMain.WeightBudget != 200_000 {
+	if obtcMain.MaxInputs != 256 || obtcMain.DustMaxInputs != 1024 ||
+		obtcMain.ScanBatch != 10_000 || obtcMain.WeightBudget != 200_000 {
 		t.Fatalf("unexpected obtc mainnet defaults: %+v", obtcMain)
 	}
 	if obtcMain.DebugEnabled {
@@ -28,7 +29,7 @@ func TestDefaultREAPParamsForNet(t *testing.T) {
 	}
 
 	reg := DefaultREAPParamsForNet(&chaincfg.ObtcRegTestParams, SortModeStrict)
-	if reg.MaxInputs != 200 || reg.ScanBatch != 2_000 {
+	if reg.MaxInputs != 200 || reg.DustMaxInputs != 400 || reg.ScanBatch != 2_000 {
 		t.Fatalf("unexpected regtest defaults: %+v", reg)
 	}
 	if !reg.DebugEnabled {
@@ -46,6 +47,9 @@ func TestOBTCMainnetConsensusAndTemplateMaxInputsAligned(t *testing.T) {
 	if p.MaxInputs != ep.ReapMaxInputs {
 		t.Fatalf("obtc mainnet max input mismatch: template=%d consensus=%d", p.MaxInputs, ep.ReapMaxInputs)
 	}
+	if p.DustMaxInputs != ep.ReapDustMaxInputs {
+		t.Fatalf("obtc mainnet dust max input mismatch: template=%d consensus=%d", p.DustMaxInputs, ep.ReapDustMaxInputs)
+	}
 }
 
 func TestREAPParamsValidate(t *testing.T) {
@@ -57,6 +61,12 @@ func TestREAPParamsValidate(t *testing.T) {
 	p.MaxInputs = 0
 	if err := p.Validate(); err == nil {
 		t.Fatalf("expected invalid MaxInputs")
+	}
+
+	p = DefaultREAPParams(SortModeStrict)
+	p.DustMaxInputs = -1
+	if err := p.Validate(); err == nil {
+		t.Fatalf("expected invalid DustMaxInputs")
 	}
 
 	p = DefaultREAPParams(SortModeStrict)

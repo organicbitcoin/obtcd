@@ -40,10 +40,10 @@ func (g *BlkTmplGenerator) maybeBuildREAPTx(nextBlockHeight int32) (*btcutil.Tx,
 		return nil, 0, err
 	}
 	logOBTCDevf(g.chainParams,
-		"REAP build start nextHeight=%d maxInputs=%d weightBudget=%d scanBatch=%d",
-		nextBlockHeight, p.MaxInputs, p.WeightBudget, p.ScanBatch)
+		"REAP build start nextHeight=%d maxInputs=%d dustMaxInputs=%d weightBudget=%d scanBatch=%d",
+		nextBlockHeight, p.MaxInputs, p.DustMaxInputs, p.WeightBudget, p.ScanBatch)
 
-	candidates, err := g.reapIndex.ReapPrefixCandidates(nextBlockHeight, p.MaxInputs)
+	candidates, err := g.reapIndex.ReapPrefixCandidates(nextBlockHeight, p.PrefixCandidateLimit())
 	if err != nil {
 		logOBTCDevf(g.chainParams,
 			"REAP build failed nextHeight=%d reason=prefix-candidates err=%v", nextBlockHeight, err)
@@ -165,9 +165,10 @@ func (g *BlkTmplGenerator) collectExpiredOutpoints(nextBlockHeight int32, p reap
 	fromKey := uint64(0)
 	toKey := uint64(nextBlockHeight)
 	var startAfter *wire.OutPoint
-	maxCandidates := p.MaxInputs * 20
-	if maxCandidates < p.MaxInputs {
-		maxCandidates = p.MaxInputs
+	prefixLimit := p.PrefixCandidateLimit()
+	maxCandidates := prefixLimit * 20
+	if maxCandidates < prefixLimit {
+		maxCandidates = prefixLimit
 	}
 	if maxCandidates > 50000 {
 		maxCandidates = 50000

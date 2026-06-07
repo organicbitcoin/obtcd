@@ -156,6 +156,151 @@ func TestSelectPrefixCandidatesTruncatesTailOnly(t *testing.T) {
 	}
 }
 
+func TestSelectPrefixCandidatesTwoTierAllDustStopsAtDustCap(t *testing.T) {
+	const dustMax = 1024
+	candidates := make([]blockchain.ReapPrefixCandidate, 0, dustMax+1)
+	for i := 0; i < dustMax+1; i++ {
+		candidates = append(candidates, blockchain.ReapPrefixCandidate{
+			OutPoint: makeSelectorOutPoint(uint32(i)),
+			Amount:   719,
+		})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 256
+	p.DustMaxInputs = dustMax
+	p.WeightBudget = 0
+
+	plan, err := SelectPrefixCandidates(context.Background(), 123, candidates, p)
+	if err != nil {
+		t.Fatalf("select prefix: %v", err)
+	}
+	if len(plan.Inputs) != dustMax {
+		t.Fatalf("input count: got %d want %d", len(plan.Inputs), dustMax)
+	}
+	if plan.Stats.Skipped != 1 {
+		t.Fatalf("skipped: got %d want 1", plan.Stats.Skipped)
+	}
+	if plan.TaxTotal != 719*dustMax || plan.RefundTotal != 0 {
+		t.Fatalf("unexpected totals: tax=%d refund=%d", plan.TaxTotal, plan.RefundTotal)
+	}
+}
+
+func TestSelectPrefixCandidatesTwoTierAllNormalStopsAtNormalCap(t *testing.T) {
+	const normalMax = 256
+	candidates := make([]blockchain.ReapPrefixCandidate, 0, normalMax+1)
+	for i := 0; i < normalMax+1; i++ {
+		candidates = append(candidates, blockchain.ReapPrefixCandidate{
+			OutPoint: makeSelectorOutPoint(uint32(i)),
+			Amount:   720,
+		})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = normalMax
+	p.DustMaxInputs = 1024
+	p.WeightBudget = 0
+
+	plan, err := SelectPrefixCandidates(context.Background(), 123, candidates, p)
+	if err != nil {
+		t.Fatalf("select prefix: %v", err)
+	}
+	if len(plan.Inputs) != normalMax {
+		t.Fatalf("input count: got %d want %d", len(plan.Inputs), normalMax)
+	}
+	if plan.Stats.Skipped != 1 {
+		t.Fatalf("skipped: got %d want 1", plan.Stats.Skipped)
+	}
+	if plan.TaxTotal != 216*normalMax || plan.RefundTotal != 504*normalMax {
+		t.Fatalf("unexpected totals: tax=%d refund=%d", plan.TaxTotal, plan.RefundTotal)
+	}
+}
+
+func TestSelectPrefixCandidatesTwoTierStopsWhenEitherCapReached(t *testing.T) {
+	tests := []struct {
+		name      string
+		amounts   []int64
+		wantCount int
+	}{
+		{
+			name:      "dust cap reached before normals",
+			amounts:   append(repeatAmount(719, 1024), append([]int64{720}, repeatAmount(721, 4)...)...),
+			wantCount: 1024,
+		},
+		{
+			name:      "normal cap reached before later dust",
+			amounts:   append(append(repeatAmount(719, 100), repeatAmount(720, 256)...), repeatAmount(719, 5)...),
+			wantCount: 356,
+		},
+		{
+			name:      "normal cap reached with dust cap one short",
+			amounts:   append(append(repeatAmount(719, 1023), repeatAmount(720, 256)...), []int64{719}...),
+			wantCount: 1279,
+		},
+		{
+			name:      "dust cap reached with normal cap one short",
+			amounts:   append(append(repeatAmount(720, 255), repeatAmount(719, 1024)...), []int64{720}...),
+			wantCount: 1279,
+		},
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 256
+	p.DustMaxInputs = 1024
+	p.WeightBudget = 0
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			candidates := make([]blockchain.ReapPrefixCandidate, 0, len(tc.amounts))
+			for i, amount := range tc.amounts {
+				candidates = append(candidates, blockchain.ReapPrefixCandidate{
+					OutPoint: makeSelectorOutPoint(uint32(i)),
+					Amount:   amount,
+				})
+			}
+
+			plan, err := SelectPrefixCandidates(context.Background(), 123, candidates, p)
+			if err != nil {
+				t.Fatalf("select prefix: %v", err)
+			}
+			if len(plan.Inputs) != tc.wantCount {
+				t.Fatalf("input count: got %d want %d", len(plan.Inputs), tc.wantCount)
+			}
+			if plan.Stats.Skipped != len(tc.amounts)-tc.wantCount {
+				t.Fatalf("skipped: got %d want %d", plan.Stats.Skipped, len(tc.amounts)-tc.wantCount)
+			}
+		})
+	}
+}
+
+func TestSelectPrefixCandidatesTwoTierDustWeightBudgetAllows1024Dust(t *testing.T) {
+	const dustMax = 1024
+	candidates := make([]blockchain.ReapPrefixCandidate, 0, dustMax)
+	for i := 0; i < dustMax; i++ {
+		candidates = append(candidates, blockchain.ReapPrefixCandidate{
+			OutPoint: makeSelectorOutPoint(uint32(i)),
+			Amount:   719,
+		})
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 256
+	p.DustMaxInputs = dustMax
+	p.WeightBudget = 200_000
+
+	plan, err := SelectPrefixCandidates(context.Background(), 123, candidates, p)
+	if err != nil {
+		t.Fatalf("select prefix: %v", err)
+	}
+	if len(plan.Inputs) != dustMax {
+		t.Fatalf("input count: got %d want %d", len(plan.Inputs), dustMax)
+	}
+	if plan.Stats.EstWeight > p.WeightBudget {
+		t.Fatalf("estimated weight should fit dust budget: got %d budget %d",
+			plan.Stats.EstWeight, p.WeightBudget)
+	}
+}
+
 func TestSelectCandidatesAllowsSingleInputOverWeightBudget(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
 	scanner := &stubScanner{}
@@ -181,6 +326,14 @@ func TestSelectCandidatesAllowsSingleInputOverWeightBudget(t *testing.T) {
 		t.Fatalf("unexpected stats picked=%d skipped=%d",
 			plan.Stats.Picked, plan.Stats.Skipped)
 	}
+}
+
+func repeatAmount(amount int64, count int) []int64 {
+	out := make([]int64, count)
+	for i := range out {
+		out[i] = amount
+	}
+	return out
 }
 
 func TestSelectCandidatesIntegrationFiltersMissingAndSpent(t *testing.T) {

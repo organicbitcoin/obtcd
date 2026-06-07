@@ -533,6 +533,9 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			if p.ReapMaxInputs <= 0 {
 				t.Fatalf("expected positive ReapMaxInputs: %+v", p)
 			}
+			if p.ReapDustMaxInputs <= 0 {
+				t.Fatalf("expected positive ReapDustMaxInputs: %+v", p)
+			}
 			if p.ReapTaxNumerator <= 0 || p.ReapTaxDenominator <= 0 {
 				t.Fatalf("expected positive REAP tax parameters: %+v", p)
 			}

@@ -65,3 +65,35 @@ func TestBuildDryRunSummaryDustFoldingTotals(t *testing.T) {
 		t.Fatalf("dust folding mismatch tax=%d refund=%d", s.TaxTotal, s.RefundTotal)
 	}
 }
+
+func TestBuildDryRunSummaryTwoTierDustWeightEstimate(t *testing.T) {
+	const dustMax = 1024
+
+	view := blockchain.NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, dustMax)
+	for i := 0; i < dustMax; i++ {
+		inputs = append(inputs, addUtxo(t, view, 719, uint32(1000+i)))
+	}
+
+	p := DefaultREAPParams(SortModeStrict)
+	p.MaxInputs = 256
+	p.DustMaxInputs = dustMax
+	p.WeightBudget = 200_000
+
+	s, err := BuildDryRunSummary(REAPPlan{Inputs: inputs}, view, p)
+	if err != nil {
+		t.Fatalf("dry run failed: %v", err)
+	}
+	wantWeight := EstimateTieredBlueprintWeight(dustMax, 0)
+	if s.EstWeight != wantWeight {
+		t.Fatalf("weight mismatch got=%d want=%d", s.EstWeight, wantWeight)
+	}
+	if s.EstWeight >= EstimateBlueprintWeight(dustMax) {
+		t.Fatalf("two-tier dust estimate should be below legacy upper bound: got=%d legacy=%d",
+			s.EstWeight, EstimateBlueprintWeight(dustMax))
+	}
+	if s.EstWeight > p.WeightBudget {
+		t.Fatalf("dust-only dry-run estimate should fit budget: got=%d budget=%d",
+			s.EstWeight, p.WeightBudget)
+	}
+}

@@ -25,6 +25,8 @@ func BuildDryRunSummary(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPPar
 
 	taxTotal := int64(0)
 	refundTotal := int64(0)
+	dustCount := 0
+	normalCount := 0
 	for _, op := range plan.Inputs {
 		entry := view.LookupEntry(op)
 		if entry == nil || entry.IsSpent() {
@@ -39,13 +41,18 @@ func BuildDryRunSummary(plan REAPPlan, view *blockchain.UtxoViewpoint, p REAPPar
 		refund, tax = applyDustRule(amt, refund, tax, p.DustThresholdSat)
 		taxTotal += tax
 		refundTotal += refund
+		if isDustTierAmount(amt, p.DustThresholdSat) {
+			dustCount++
+		} else {
+			normalCount++
+		}
 	}
 
 	return DryRunSummary{
 		Picked:      len(plan.Inputs),
 		TaxTotal:    taxTotal,
 		RefundTotal: refundTotal,
-		EstWeight:   EstimateBlueprintWeight(len(plan.Inputs)),
+		EstWeight:   estimatePlanWeight(dustCount, normalCount, len(plan.Inputs), p),
 		MarkerHash:  MarkerDigest(plan.Inputs),
 	}, nil
 }

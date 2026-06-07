@@ -78,6 +78,28 @@ func addUtxoToView(t *testing.T, view *UtxoViewpoint, value int64, height int32)
 	return wire.OutPoint{Hash: *btx.Hash(), Index: 0}
 }
 
+func addUniqueUtxoToView(t *testing.T, view *UtxoViewpoint, value int64,
+	height int32, nonce uint32) wire.OutPoint {
+
+	t.Helper()
+	tx := wire.NewMsgTx(1)
+	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Index: nonce}})
+	tx.AddTxOut(&wire.TxOut{Value: value, PkScript: []byte{txscript.OP_TRUE}})
+	btx := btcutil.NewTx(tx)
+	view.AddTxOut(btx, 0, height)
+	return wire.OutPoint{Hash: *btx.Hash(), Index: 0}
+}
+
+func sortReapTestOutpoints(inputs []wire.OutPoint) {
+	sort.Slice(inputs, func(i, j int) bool {
+		hcmp := bytes.Compare(inputs[i].Hash[:], inputs[j].Hash[:])
+		if hcmp != 0 {
+			return hcmp < 0
+		}
+		return inputs[i].Index < inputs[j].Index
+	})
+}
+
 func markerForTx(t *testing.T, tx *wire.MsgTx, height int32) []byte {
 	t.Helper()
 	payload := fmt.Sprintf("REAP:%d:%d:%s", height, len(tx.TxIn), reapInputDigest(tx))
@@ -426,6 +448,174 @@ func TestREAPInputCountConsensusLimit(t *testing.T) {
 	_, err := CheckTransactionInputs(btcutil.NewTx(tx), 500, view, &chaincfg.ObtcRegTestParams)
 	if err == nil || !strings.Contains(err.Error(), "exceeds consensus limit") {
 		t.Fatalf("expected reap input count limit rejection, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierDustCapAcceptedAtLimit(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, ep.ReapDustMaxInputs)
+	for i := 0; i < ep.ReapDustMaxInputs; i++ {
+		inputs = append(inputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat-1, 1, uint32(i)))
+	}
+	sortReapTestOutpoints(inputs)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	if len(tx.TxOut) != 1 {
+		t.Fatalf("expected dust-only reap tx to contain only marker output, got %d", len(tx.TxOut))
+	}
+
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams); err != nil {
+		t.Fatalf("expected dust cap limit tx to pass, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierDustCapExceededRejected(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, ep.ReapDustMaxInputs+1)
+	for i := 0; i < ep.ReapDustMaxInputs+1; i++ {
+		inputs = append(inputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat-1, 1, uint32(i)))
+	}
+	sortReapTestOutpoints(inputs)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams)
+	if err == nil || !strings.Contains(err.Error(), "dust input count") {
+		t.Fatalf("expected dust cap rejection, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierNormalCapAcceptedAtLimit(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs)
+	for i := 0; i < ep.ReapMaxInputs; i++ {
+		inputs = append(inputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat, 1, uint32(i)))
+	}
+	sortReapTestOutpoints(inputs)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams); err != nil {
+		t.Fatalf("expected normal cap limit tx to pass, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierNormalCapExceededRejected(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs+1)
+	for i := 0; i < ep.ReapMaxInputs+1; i++ {
+		inputs = append(inputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat, 1, uint32(i)))
+	}
+	sortReapTestOutpoints(inputs)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams)
+	if err == nil || !strings.Contains(err.Error(), "normal input count") {
+		t.Fatalf("expected normal cap rejection, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierMixedAcceptedWhenNormalCapReachedLast(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	dustInputs := make([]wire.OutPoint, 0, ep.ReapDustMaxInputs-1)
+	for i := 0; i < ep.ReapDustMaxInputs-1; i++ {
+		dustInputs = append(dustInputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat-1, 1, uint32(i)))
+	}
+	normalInputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs)
+	for i := 0; i < ep.ReapMaxInputs; i++ {
+		normalInputs = append(normalInputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat, 1, uint32(10_000+i)))
+	}
+	sortReapTestOutpoints(dustInputs)
+	sortReapTestOutpoints(normalInputs)
+	inputs := append(dustInputs, normalInputs...)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams); err != nil {
+		t.Fatalf("expected mixed tx ending at normal cap to pass, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierInputAfterDustCapRejected(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	dustInputs := make([]wire.OutPoint, 0, ep.ReapDustMaxInputs)
+	for i := 0; i < ep.ReapDustMaxInputs; i++ {
+		dustInputs = append(dustInputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat-1, 1, uint32(i)))
+	}
+	sortReapTestOutpoints(dustInputs)
+	normal := addUniqueUtxoToView(t, view, ep.ReapDustThresholdSat, 1, 50_000)
+	inputs := append(dustInputs, normal)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams)
+	if err == nil || !strings.Contains(err.Error(), "after a tier cap") {
+		t.Fatalf("expected input-after-dust-cap rejection, got: %v", err)
+	}
+}
+
+func TestREAPTwoTierInputAfterNormalCapRejected(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	normalInputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs)
+	for i := 0; i < ep.ReapMaxInputs; i++ {
+		normalInputs = append(normalInputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat, 1, uint32(i)))
+	}
+	sortReapTestOutpoints(normalInputs)
+	// Later expiry keeps this dust input canonical after the normal prefix
+	// even though its amount is lower.
+	dust := addUniqueUtxoToView(t, view, ep.ReapDustThresholdSat-1, 2, 60_000)
+	inputs := append(normalInputs, dust)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams)
+	if err == nil || !strings.Contains(err.Error(), "after a tier cap") {
+		t.Fatalf("expected input-after-normal-cap rejection, got: %v", err)
 	}
 }
 

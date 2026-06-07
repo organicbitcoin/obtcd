@@ -13,6 +13,7 @@ import (
 type REAPParams struct {
 	Sort             SortMode
 	MaxInputs        int
+	DustMaxInputs    int
 	WeightBudget     int64
 	ScanBatch        int
 	TaxNum           int64
@@ -47,6 +48,9 @@ func DefaultREAPParamsForNet(net *chaincfg.Params, mode SortMode) REAPParams {
 		if expiryParams.ReapMaxInputs > 0 {
 			p.MaxInputs = expiryParams.ReapMaxInputs
 		}
+		if expiryParams.ReapDustMaxInputs > 0 {
+			p.DustMaxInputs = expiryParams.ReapDustMaxInputs
+		}
 		if expiryParams.ReapTaxNumerator > 0 {
 			p.TaxNum = expiryParams.ReapTaxNumerator
 		}
@@ -76,6 +80,9 @@ func (p REAPParams) Validate() error {
 	if p.MaxInputs <= 0 {
 		return fmt.Errorf("MaxInputs must be > 0")
 	}
+	if p.DustMaxInputs < 0 {
+		return fmt.Errorf("DustMaxInputs must be >= 0")
+	}
 	if p.ScanBatch <= 0 {
 		return fmt.Errorf("ScanBatch must be > 0")
 	}
@@ -89,4 +96,13 @@ func (p REAPParams) Validate() error {
 		return fmt.Errorf("DustThresholdSat must be >= 0")
 	}
 	return nil
+}
+
+// PrefixCandidateLimit returns how many global-prefix candidates mining should
+// fetch before applying local tier and weight limits.
+func (p REAPParams) PrefixCandidateLimit() int {
+	if p.DustMaxInputs <= 0 {
+		return p.MaxInputs
+	}
+	return p.MaxInputs + p.DustMaxInputs
 }

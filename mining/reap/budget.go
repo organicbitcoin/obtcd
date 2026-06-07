@@ -70,6 +70,8 @@ func normalizePlan(plan REAPPlan, view *blockchain.UtxoViewpoint,
 	normalized := plan
 	normalized.TaxTotal = 0
 	normalized.RefundTotal = 0
+	dustCount := 0
+	normalCount := 0
 
 	for _, op := range normalized.Inputs {
 		entry := view.LookupEntry(op)
@@ -86,6 +88,11 @@ func normalizePlan(plan REAPPlan, view *blockchain.UtxoViewpoint,
 		refund, tax = applyDustRule(amt, refund, tax, p.DustThresholdSat)
 		normalized.TaxTotal += tax
 		normalized.RefundTotal += refund
+		if isDustTierAmount(amt, p.DustThresholdSat) {
+			dustCount++
+		} else {
+			normalCount++
+		}
 	}
 
 	normalized.Stats.Picked = len(normalized.Inputs)
@@ -93,7 +100,8 @@ func normalizePlan(plan REAPPlan, view *blockchain.UtxoViewpoint,
 		normalized.Stats.Candidates = normalized.Stats.Picked
 	}
 	normalized.Stats.Skipped = normalized.Stats.Candidates - normalized.Stats.Picked
-	normalized.Stats.EstWeight = EstimateBlueprintWeight(len(normalized.Inputs))
+	normalized.Stats.EstWeight = estimatePlanWeight(dustCount, normalCount,
+		len(normalized.Inputs), p)
 
 	return normalized, nil
 }
