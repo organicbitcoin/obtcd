@@ -68,11 +68,15 @@ The mainnet-candidate join draft is maintained in
 | Network magic | `0x4F425443` | `0x4F544553` | `0x4F524547` |
 | P2P port | `9527` | `19527` | `29527` |
 | RPC port | `9528` | `19528` | `29528` |
-| Fork height | `1000000` (provisional; may change) | `2800000` | `100` |
+| Fork height | `1000000`* | `2800000` | `100` |
 | Bech32 HRP | `obtc` | `obtct` | `obtcrt` |
 | P2PKH prefix | `0x47` | `0x71` | `0x72` |
 | P2SH prefix | `0x32` | `0xD1` | `0xD2` |
 | BIP44 coin type | `20260` | `20261` | `20262` |
+
+* Mainnet fork height is provisional and may change before final
+  mainnet-candidate release artifacts are published. Current derived mainnet
+  activation height is `1002016`.
 
 ## Requirements
 

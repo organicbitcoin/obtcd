@@ -95,9 +95,14 @@ Version-bits deployments:
 | REAP tax | `30 / 100` |
 | REAP dust threshold | `720` satoshis |
 
-The activation height is `ObtcMainNetForkHeight + 2016`, matching the current
-implementation. The current fork height is a mainnet-candidate value and may
-change before final activation.
+The OBTC mainnet fork height is a provisional mainnet-candidate planning value.
+It may change before final release artifacts are cut.
+
+The current mainnet activation height is derived as:
+
+`ObtcMainNetForkHeight + 2016`
+
+With the current candidate fork height, this gives `1002016`.
 
 ## Operational Notes
 

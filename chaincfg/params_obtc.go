@@ -39,7 +39,9 @@ type ExpiryParams struct {
 // Fork heights for OBTC networks.
 const (
 	// ObtcMainNetForkHeight is the provisional OBTC mainnet-candidate fork
-	// height. This value may change before final mainnet activation.
+	// height. This value is used for planning, review, and mainnet-candidate
+	// preparation. It may change before final mainnet-candidate release
+	// artifacts are published.
 	ObtcMainNetForkHeight int32 = 1_000_000
 
 	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
