@@ -195,6 +195,11 @@ func TestTestnetLabCollectSnapshotParallelizesRPCResources(t *testing.T) {
 	if len(snapshot.UserWallets) != 2 || !snapshot.UserWallets[0].Healthy || !snapshot.UserWallets[1].Healthy {
 		t.Fatalf("expected two healthy wallets, got %+v", snapshot.UserWallets)
 	}
+	if snapshot.UserWallets[0].NearExpiryItems != 1 ||
+		snapshot.UserWallets[0].TooLateRenewItems != 1 {
+
+		t.Fatalf("expected near-expiry wallet counts, got %+v", snapshot.UserWallets[0])
+	}
 	if atomic.LoadInt32(&maxActiveRequests) < 2 {
 		t.Fatalf("expected concurrent RPC collection, max active requests was %d", maxActiveRequests)
 	}
@@ -498,7 +503,14 @@ func labTestRPCResult(t *testing.T, method string) interface{} {
 		return map[string]interface{}{
 			"tip_height":    120,
 			"window_blocks": 144,
-			"items":         []interface{}{},
+			"items": []interface{}{
+				map[string]interface{}{
+					"status":                  "expiring",
+					"near_expiry_warning":     true,
+					"renewable_in_next_block": false,
+					"renewal_risk":            "too_late_next_block",
+				},
+			},
 		}
 	default:
 		t.Fatalf("unexpected rpc method %q", method)

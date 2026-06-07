@@ -85,17 +85,19 @@ type labNodeSnapshot struct {
 }
 
 type labWalletSnapshot struct {
-	Wallet          labWallet `json:"wallet"`
-	Healthy         bool      `json:"healthy"`
-	Error           string    `json:"error,omitempty"`
-	Balance         float64   `json:"balance,omitempty"`
-	Blocks          int32     `json:"blocks,omitempty"`
-	ExpiryTipHeight int32     `json:"expiry_tip_height,omitempty"`
-	ExpiryWindow    uint64    `json:"expiry_window,omitempty"`
-	ExpiryItems     int       `json:"expiry_items"`
-	ExpiringItems   int       `json:"expiring_items"`
-	ExpiredItems    int       `json:"expired_items"`
-	Warnings        []string  `json:"warnings,omitempty"`
+	Wallet            labWallet `json:"wallet"`
+	Healthy           bool      `json:"healthy"`
+	Error             string    `json:"error,omitempty"`
+	Balance           float64   `json:"balance,omitempty"`
+	Blocks            int32     `json:"blocks,omitempty"`
+	ExpiryTipHeight   int32     `json:"expiry_tip_height,omitempty"`
+	ExpiryWindow      uint64    `json:"expiry_window,omitempty"`
+	ExpiryItems       int       `json:"expiry_items"`
+	ExpiringItems     int       `json:"expiring_items"`
+	ExpiredItems      int       `json:"expired_items"`
+	NearExpiryItems   int       `json:"near_expiry_items"`
+	TooLateRenewItems int       `json:"too_late_renew_items"`
+	Warnings          []string  `json:"warnings,omitempty"`
 }
 
 type labLogSummary struct {
@@ -851,7 +853,10 @@ func (s *testnetLabServer) collectWallet(ctx context.Context, wallet labWallet) 
 		TipHeight    int32  `json:"tip_height"`
 		WindowBlocks uint64 `json:"window_blocks"`
 		Items        []struct {
-			Status string `json:"status"`
+			Status               string `json:"status"`
+			NearExpiryWarning    bool   `json:"near_expiry_warning"`
+			RenewableInNextBlock bool   `json:"renewable_in_next_block"`
+			RenewalRisk          string `json:"renewal_risk"`
 		} `json:"items"`
 	}
 	params := []interface{}{100}
@@ -868,6 +873,20 @@ func (s *testnetLabServer) collectWallet(ctx context.Context, wallet labWallet) 
 			case "expired":
 				snapshot.ExpiredItems++
 			}
+			if item.NearExpiryWarning {
+				snapshot.NearExpiryItems++
+			}
+			if strings.EqualFold(item.RenewalRisk, "too_late_next_block") {
+				snapshot.TooLateRenewItems++
+			}
+		}
+		if snapshot.TooLateRenewItems > 0 {
+			snapshot.Warnings = append(snapshot.Warnings,
+				fmt.Sprintf("%d UTXOs are too close to expiry for next-block renewal", snapshot.TooLateRenewItems))
+		}
+		if snapshot.NearExpiryItems > 0 {
+			snapshot.Warnings = append(snapshot.Warnings,
+				fmt.Sprintf("%d UTXOs are near expiry; renewal confirmation risk is elevated", snapshot.NearExpiryItems))
 		}
 	}
 
@@ -1605,11 +1624,11 @@ var testnetLabTemplate = template.Must(template.New("testnet-lab").Parse(`<!doct
 </html>
 {{define "wallet-table"}}
 <table>
-  <tr><th>Name</th><th>Behavior</th><th>Healthy</th><th>Blocks</th><th>Balance</th><th>Expiry Items</th><th>Expiring</th><th>Expired</th><th>Error / Warnings</th></tr>
+  <tr><th>Name</th><th>Behavior</th><th>Healthy</th><th>Blocks</th><th>Balance</th><th>Expiry Items</th><th>Expiring</th><th>Near Expiry</th><th>Too Late Renew</th><th>Expired</th><th>Error / Warnings</th></tr>
   {{range .}}
   <tr>
     <td>{{.Wallet.Name}}</td><td>{{.Wallet.Behavior}}</td><td>{{.Healthy}}</td><td>{{.Blocks}}</td>
-    <td>{{printf "%.8f" .Balance}}</td><td>{{.ExpiryItems}}</td><td>{{.ExpiringItems}}</td><td>{{.ExpiredItems}}</td>
+    <td>{{printf "%.8f" .Balance}}</td><td>{{.ExpiryItems}}</td><td>{{.ExpiringItems}}</td><td>{{.NearExpiryItems}}</td><td>{{.TooLateRenewItems}}</td><td>{{.ExpiredItems}}</td>
     <td>{{.Error}}{{range .Warnings}}<div class="warning">{{.}}</div>{{end}}</td>
   </tr>
 {{end}}
