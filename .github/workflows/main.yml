@@ -145,7 +145,8 @@ jobs:
             testnetFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcTestNetParams)
             regtestFork := chaincfg.GetOBTCForkHeight(&chaincfg.ObtcRegTestParams)
             
-            if mainnetFork <= 0 || testnetFork <= 0 || regtestFork <= 0 {
+            // Testnet is an independent chain, so height 0 is valid there.
+            if mainnetFork <= 0 || testnetFork < 0 || regtestFork <= 0 {
               panic("Invalid fork heights detected")
             }
             
