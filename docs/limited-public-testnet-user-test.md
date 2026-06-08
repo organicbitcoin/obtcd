@@ -1,15 +1,16 @@
 # OBTC Limited Public Testnet User Test
 
-This page is for invited technical reviewers who are helping validate the OBTC
-limited public testnet.
+This page is for invited testers who are helping try the OBTC limited public
+testnet.
 
 This is not a public launch, not a mainnet release, not an investment or yield
 program, and not a request for promotion or endorsement. Testnet coins have no
 real-world value.
 
-Expected time for a first pass: 30-90 minutes.
+Expected time for a first pass: 30-90 minutes. Thank you for taking the time to
+try this; short, honest feedback is enough.
 
-## What To Validate
+## What To Try
 
 The useful minimum test is:
 
@@ -17,12 +18,11 @@ The useful minimum test is:
 2. Start an `obtcd --obtctestnet` node from a clean data directory.
 3. Sync through the public seed peers.
 4. Create and start an `obtcwallet --obtctestnet` wallet.
-5. Request a small amount of testnet coin from the maintainer.
+5. Request a small amount of testnet coin from the person who invited you.
 6. Confirm the wallet receives funds.
 7. Query UTXO expiry state with `obtc.getexpiry`.
 8. Renew one active UTXO with `obtc.renew`.
-9. Send a short validation report with the height, block hash, txid, and any
-   confusing documentation or runtime behavior.
+9. Send a brief note about what worked and where you got stuck.
 
 ## Safety Rules
 
@@ -34,8 +34,8 @@ The useful minimum test is:
 - Keep node RPC and wallet RPC bound to `127.0.0.1`.
 - Do not expose wallet RPC `19554` or wallet agent gRPC `19556` to the public
   internet.
-- Mining is not the default reviewer path. If you want to test mining, ask the
-  maintainer first and use a coordinated time window.
+- Mining is not the default path for this test. If you want to test mining,
+  please coordinate first and use an agreed time window.
 
 ## Install Go
 
@@ -92,7 +92,7 @@ go version
 ### Windows
 
 Use WSL2 with Ubuntu and follow the Ubuntu steps above. Native Windows testing
-is not the preferred path for this limited validation round.
+is not the preferred path for this limited test round.
 
 ## Build From Source
 
@@ -160,7 +160,7 @@ cd ~/obtc-testnet
   --notls getexpiryindexstats
 ```
 
-For your validation report, record:
+For your own notes, record:
 
 - node height;
 - best block hash;
@@ -213,12 +213,12 @@ curl --user wallet:walletpass \
 
 ## Request Testnet Coins
 
-There is no public faucet during this limited validation stage. Testnet coins
-are sent manually by the maintainer.
+There is no public faucet during this limited test stage. Testnet coins are sent
+manually.
 
 Default request size:
 
-- normal reviewer request: `0.1` test OBTC;
+- normal test request: `0.1` test OBTC;
 - maximum without extra explanation: `1.0` test OBTC;
 - larger requests must explain the test scenario.
 
@@ -231,7 +231,7 @@ curl --user wallet:walletpass \
   http://127.0.0.1:19554/
 ```
 
-Send the maintainer only:
+Send the person who invited you only:
 
 ```text
 OBTC testnet address:
@@ -242,7 +242,7 @@ Reason:
 Do not send seed phrases, private keys, wallet private passphrases, or RPC
 passwords.
 
-After the maintainer sends testnet coins, check your balance:
+After testnet coins are sent, check your balance:
 
 ```bash
 curl --user wallet:walletpass \
@@ -337,22 +337,22 @@ cd ~/obtc-testnet
   --dry-run
 ```
 
-Do not run non-dry-run `renewall` unless the maintainer explicitly asks you to
-test batch renewal.
+Do not run non-dry-run `renewall` unless you have been asked to test batch
+renewal.
 
 ## Optional: Coordinated Mining Test
 
-Mining is not the default reviewer path. Do not run open-ended mining on the
-public testnet without coordination.
+Mining is not the default path for this test. Please do not run open-ended
+mining on the public testnet without coordination.
 
-If you specifically want to validate mining:
+If you specifically want to try mining:
 
-1. Ask the maintainer first and mark it as a mining test.
+1. Ask first and mark it as a mining test.
 2. Include your node commit, public P2P address if any, requested time window,
    and mining payout address.
-3. Wait for maintainer confirmation.
+3. Wait for confirmation.
 4. Mine only during the agreed window.
-5. Submit block hash, height, node commit, and logs with secrets removed.
+5. Send the block hash, height, node commit, and logs with secrets removed.
 
 For a short coordinated test, the command shape is:
 
@@ -364,11 +364,19 @@ For a short coordinated test, the command shape is:
   --notls generate 1
 ```
 
-## Validation Report
+## Short Feedback
 
-Send a short report to the maintainer through the agreed channel.
+Please send a short note through the agreed channel. A few sentences are enough.
+For example:
 
-Use this template:
+```text
+I was able to build both repos and sync the node to height <height>.
+The wallet received testnet coins and obtc.getexpiry worked / did not work.
+The renew tx was <txid> and it confirmed / did not confirm.
+The confusing part was <one short note>.
+```
+
+If something fails, the most helpful details are:
 
 ```text
 OS and architecture:
@@ -378,26 +386,10 @@ obtcwallet commit:
 Node height:
 Best block hash:
 Peer count:
-Expiry index disabled:
-Expiry index tip height:
-Wallet processed height:
-Testnet receive address:
-Funding txid:
-Renewal txid:
-Renewal confirmed block hash:
-Did obtc.getexpiry show expiry data? yes/no
-Did obtc.renew confirm? yes/no
-Problems or confusing steps:
-```
-
-For failures, include:
-
-```text
 Command:
 Observed error:
-Expected behavior:
 Relevant logs with secrets removed:
 ```
 
 Do not include seed phrases, private keys, wallet private passphrases, or RPC
-passwords in the report.
+passwords in your feedback.
