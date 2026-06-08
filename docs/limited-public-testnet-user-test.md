@@ -24,6 +24,54 @@ The useful minimum test is:
 8. Renew one active UTXO with `obtc.renew`.
 9. Send a brief note about what worked and where you got stuck.
 
+## If You Use Cursor, Claude, Codex, Or Another AI Assistant
+
+You can ask an AI coding assistant to run most of this for you. It can install
+Go, build the repos, start the node and wallet, check sync, query expiry, and
+prepare the short feedback note.
+
+Important: do not paste wallet seed phrases, private keys, wallet private
+passphrases, or RPC passwords into an AI chat. If a command needs the wallet
+private passphrase, type it only into your local terminal when prompted.
+
+Copy this prompt into your AI assistant:
+
+```text
+Please help me try the OBTC limited public testnet on this machine.
+
+Follow this guide:
+https://github.com/organicbitcoin/obtcd/blob/bypass/docs/limited-public-testnet-user-test.md
+
+Rules:
+- Use ~/obtc-testnet as the working directory.
+- Install Go 1.24.6+ only if it is missing or too old.
+- Clone and build:
+  https://github.com/organicbitcoin/obtcd
+  https://github.com/organicbitcoin/obtcwallet
+- Always use --obtctestnet.
+- Keep node RPC and wallet RPC bound to 127.0.0.1.
+- Do not expose wallet RPC or wallet agent ports to the public internet.
+- Do not ask me to paste wallet seed phrases, private keys, wallet private
+  passphrases, or RPC passwords into chat.
+- If the wallet private passphrase is needed, give me a command that prompts me
+  locally in the terminal.
+- Start obtcd, wait until it has peers and is synced, then create/start
+  btcwallet.
+- Generate one testnet receive address and stop so I can ask for testnet coins.
+- After I confirm coins were sent, check balance, run obtc.getexpiry, choose one
+  active outpoint, unlock locally, and run one obtc.renew.
+- At the end, give me a short note with:
+  OS, Go version, obtcd commit, obtcwallet commit, height, best hash, peer count,
+  whether obtc.getexpiry worked, renew txid if any, and the one thing that was
+  confusing.
+```
+
+The AI assistant should stop at two points:
+
+1. After generating a receive address, so you can ask for testnet coins.
+2. Before unlocking the wallet, so you can type the wallet private passphrase
+   locally instead of sending it through chat.
+
 ## Safety Rules
 
 - Always pass `--obtctestnet` to node, wallet, and CLI commands.
@@ -31,6 +79,8 @@ The useful minimum test is:
 - Do not post seed phrases, private keys, wallet private passphrases, RPC
   passwords, private IP addresses, local private paths, or screenshots that
   contain secrets.
+- If you use an AI assistant, do not paste wallet seed phrases, private keys, or
+  wallet private passphrases into the chat.
 - Keep node RPC and wallet RPC bound to `127.0.0.1`.
 - Do not expose wallet RPC `19554` or wallet agent gRPC `19556` to the public
   internet.
@@ -287,10 +337,32 @@ format is:
 Unlock the wallet for signing:
 
 ```bash
-curl --user wallet:walletpass \
-  -H 'content-type: text/plain;' \
-  --data-binary '{"jsonrpc":"1.0","id":"unlock","method":"walletpassphrase","params":["<your-wallet-private-passphrase>",600]}' \
-  http://127.0.0.1:19554/
+python3 - <<'PY'
+import getpass
+import json
+import subprocess
+
+payload = {
+    "jsonrpc": "1.0",
+    "id": "unlock",
+    "method": "walletpassphrase",
+    "params": [getpass.getpass("Wallet private passphrase: "), 600],
+}
+
+subprocess.run(
+    [
+        "curl",
+        "--user",
+        "wallet:walletpass",
+        "-H",
+        "content-type: text/plain;",
+        "--data-binary",
+        json.dumps(payload),
+        "http://127.0.0.1:19554/",
+    ],
+    check=True,
+)
+PY
 ```
 
 Run one funded renewal:
