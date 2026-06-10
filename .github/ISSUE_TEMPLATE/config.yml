@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Discussions
-    url: https://github.com/btcsuite/btcd/discussions
-    about: For general or troubleshooting questions or if you're not sure what issue type to pick.
-  - name: Community Slack
-    url: https://lightning.engineering/slack.html
-    about: Please ask and answer questions here.
-  - name: Security issue disclosure policy
-    url: https://github.com/lightningnetwork/lnd#security
-    about: Please refer to this document when reporting security related issues.
+  - name: OBTC public testnet guide
+    url: https://github.com/organicbitcoin/obtcd/blob/master/docs/public-testnet-user-test.md
+    about: Start here to build a node, create a wallet, request testnet coins, and try expiry renewal.
+  - name: OBTC wallet repository
+    url: https://github.com/organicbitcoin/obtcwallet/issues/new/choose
+    about: Use this for confirmed wallet-only issues after trying the testnet guide.
+  - name: Security-sensitive issue
+    url: https://github.com/organicbitcoin/obtcd/issues/new?template=bug_report.md
+    about: Do not post secrets publicly. Open a minimal bug first and avoid seed phrases, private keys, passphrases, RPC passwords, or sensitive logs.

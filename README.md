@@ -182,14 +182,16 @@ traffic and restart testing:
 ## Documentation
 
 - [OBTC Node Documentation](docs/)
+- [OBTC Public Testnet User Test](docs/public-testnet-user-test.md)
 - [OBTC Mainnet Join Runbook](docs/mainnet-join.md)
 - [OBTC Testnet Join Guide](docs/testnet-join.md)
 - [Network Parameters](docs/network-parameters.md)
 
 ## Issues
 
-Use this repository's issue tracker for node bugs, release evidence,
-mainnet-candidate blockers, mining-template review, and operator feedback:
+Use this repository's issue tracker for public testnet coin requests, short
+test feedback, node bugs, release evidence, mainnet-candidate blockers,
+mining-template review, and operator feedback:
 
 <https://github.com/organicbitcoin/obtcd/issues>
 
