@@ -24,6 +24,27 @@ go build ./...
 - Recommended RPC port for operators: `19528`
 - Bech32 HRP: `obtct`
 
+## 2.1 Testnet lifecycle parameters
+
+The public OBTC testnet is an independent accelerated test chain. Its lifecycle
+values are intentionally short so expiry, renewal, and REAP paths can be tested
+on human time scales. They are not Bitcoin mainnet-derived.
+
+| Field | Current testnet value |
+|---|---:|
+| Fork height | `0` |
+| Expiry index start scan height | `0` |
+| Expiry enable height | `100` |
+| Expiry commitment mandatory height | `100` |
+| REAP consensus / hardening height | `120` |
+| Replay protection height | `130` |
+| Expiry window | `144` blocks |
+| Expiry scan list batch limit | `5000` |
+| REAP max normal inputs | `500` |
+| REAP max refundless dust inputs | `1000` |
+| REAP dust threshold | `720 sat` |
+| REAP split | `70%` refund / `30%` security budget |
+
 ## 3. Start a node
 
 ### Option A (recommended): phase6 helper script
