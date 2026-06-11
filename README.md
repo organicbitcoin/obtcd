@@ -78,8 +78,9 @@ The mainnet-candidate join draft is maintained in
   mainnet-candidate release artifacts are published. Current derived mainnet
   activation height is `1002016`.
 
-** The public OBTC testnet is an independent accelerated test chain. Its
-   fork/activation values are not Bitcoin mainnet-derived.
+** Testnet fork height `0` is intentional. The public OBTC testnet is an
+   independent accelerated test chain, so its fork/activation values are not
+   Bitcoin mainnet-derived.
 
 ## Requirements
 
