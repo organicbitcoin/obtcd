@@ -278,7 +278,7 @@ Record one row at start and then at least every 12 hours.
 | T+72h | seed-1 |  |  |  |  |  |  |  |  |
 
 For pre-activation periods, REAP production and backlog metrics are
-`N/A (pre-activation)` unless the chain has reached activation height `952016`.
+`N/A (pre-activation)` unless the chain has reached activation height `1002016`.
 
 ## Fresh Sync Evidence
 

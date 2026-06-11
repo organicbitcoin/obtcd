@@ -82,21 +82,27 @@ Version-bits deployments:
 
 | Field | Value |
 |---|---|
-| OBTC mainnet fork height | `950000` |
-| Mainnet activation height | `952016` |
+| OBTC mainnet fork height | `1000000` (provisional; may change before final activation) |
+| Mainnet activation height | `1002016` (derived from the provisional fork height) |
 | Expiry index start scan height | `0` |
-| Expiry enforcement height | `952016` |
-| REAP consensus height | `952016` |
-| Replay protection height | `952016` |
-| Expiry commitment mandatory height | `952016` |
+| Expiry enforcement height | `1002016` |
+| REAP consensus height | `1002016` |
+| Replay protection height | `1002016` |
+| Expiry commitment mandatory height | `1002016` |
 | Expiry window | `362880` blocks |
 | Expiry scan list batch limit | `10000` |
 | REAP max inputs | `256` |
 | REAP tax | `30 / 100` |
 | REAP dust threshold | `720` satoshis |
 
-The activation height is `ObtcMainNetForkHeight + 2016`, matching the current
-implementation.
+The OBTC mainnet fork height is a provisional mainnet-candidate planning value.
+It may change before final release artifacts are cut.
+
+The current mainnet activation height is derived as:
+
+`ObtcMainNetForkHeight + 2016`
+
+With the current candidate fork height, this gives `1002016`.
 
 ## Operational Notes
 

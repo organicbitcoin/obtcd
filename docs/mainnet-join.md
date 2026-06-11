@@ -19,8 +19,8 @@ Before using this runbook, review [OBTC Mainnet Parameters](mainnet-params.md).
 | Node RPC port | `9528` |
 | Bech32 HRP | `obtc` |
 | Wire magic | `0x4F425443` |
-| Fork height | `950000` |
-| OBTC activation height | `952016` |
+| Fork height | `1000000` (provisional; may change before final activation) |
+| OBTC activation height | `1002016` (derived from the provisional fork height) |
 
 The code still contains the placeholder DNS seed `seed.obtc.example.com`.
 Mainnet-candidate bootstrap should therefore use explicit peers until final DNS
