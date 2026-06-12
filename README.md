@@ -197,9 +197,10 @@ traffic and restart testing:
 
 ## Issues
 
-Use this repository's issue tracker for public testnet coin requests, short
-test feedback, node bugs, release evidence, mainnet-candidate blockers,
-mining-template review, and operator feedback:
+Use this repository's issue tracker for invited-reviewer test feedback, manual
+test coin issuance coordination, node bugs, release evidence,
+mainnet-candidate blockers, mining-template review, and operator feedback.
+There is no public faucet or open public test coin request queue:
 
 <https://github.com/organicbitcoin/obtcd/issues>
 
