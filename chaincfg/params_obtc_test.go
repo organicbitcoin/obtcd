@@ -420,10 +420,33 @@ func TestOBTCForkHeightValues(t *testing.T) {
 	if ObtcMainNetForkHeight < 1_000_000 || ObtcMainNetForkHeight > 1_100_000 {
 		t.Errorf("MainNet fork height %d seems outside the current provisional launch range", ObtcMainNetForkHeight)
 	}
+	if ObtcMainNetFirstBlockHeight != ObtcMainNetForkHeight+1 {
+		t.Errorf("MainNet first block height got %d want %d",
+			ObtcMainNetFirstBlockHeight, ObtcMainNetForkHeight+1)
+	}
+	if ObtcMainNetActivationHeight != ObtcMainNetForkHeight+2016 {
+		t.Errorf("MainNet activation height got %d want %d",
+			ObtcMainNetActivationHeight, ObtcMainNetForkHeight+2016)
+	}
+	if ObtcMainNetParams.ForkDAAStartHeight != ObtcMainNetFirstBlockHeight {
+		t.Errorf("MainNet ForkDAA start got %d want %d",
+			ObtcMainNetParams.ForkDAAStartHeight, ObtcMainNetFirstBlockHeight)
+	}
+	if ObtcMainNetParams.ForkDAABootstrapEndHeight != ObtcMainNetActivationHeight {
+		t.Errorf("MainNet ForkDAA bootstrap end got %d want %d",
+			ObtcMainNetParams.ForkDAABootstrapEndHeight, ObtcMainNetActivationHeight)
+	}
+	if ObtcMainNetParams.ForkDAAForkResetBits != 0x1d00ffff {
+		t.Errorf("MainNet ForkDAA reset bits got %08x", ObtcMainNetParams.ForkDAAForkResetBits)
+	}
 
 	// TestNet is an independent chain, so its OBTC rules are active from genesis.
 	if ObtcTestNetForkHeight != 0 {
 		t.Errorf("TestNet fork height %d should be 0", ObtcTestNetForkHeight)
+	}
+	if ObtcTestNetParams.ForkDAAForkResetBits != 0 {
+		t.Errorf("TestNet ForkDAA should remain disabled, got reset bits %08x",
+			ObtcTestNetParams.ForkDAAForkResetBits)
 	}
 
 	// RegTest fork height should be low for development
@@ -512,8 +535,8 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 				t.Fatalf("expected StartScanHeight to begin at genesis, got %d", p.StartScanHeight)
 			}
 			if tc.params.Net == ObtcMainNetParams.Net {
-				wantActivation := ObtcMainNetForkHeight + 2016
-				wantReplay := ObtcMainNetForkHeight + 1
+				wantActivation := ObtcMainNetActivationHeight
+				wantReplay := ObtcMainNetFirstBlockHeight
 				if p.EnableAtHeight != wantActivation {
 					t.Fatalf("expected mainnet EnableAtHeight %d, got %d",
 						wantActivation, p.EnableAtHeight)
