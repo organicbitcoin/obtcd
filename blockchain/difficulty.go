@@ -12,6 +12,91 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
+const asertRadix = int64(1 << 16)
+
+func calcASERTRequiredDifficulty(anchor HeaderCtx, nextHeight int32,
+	newBlockTime time.Time, targetSpacing, halfLife time.Duration,
+	powLimit *big.Int) (uint32, error) {
+
+	if anchor == nil {
+		return 0, AssertError("missing ASERT anchor")
+	}
+	if halfLife <= 0 || targetSpacing <= 0 {
+		return 0, AssertError("invalid ASERT timing parameters")
+	}
+
+	timeDiff := newBlockTime.Unix() - anchor.Timestamp()
+	heightDiff := int64(nextHeight - anchor.Height())
+	targetSpacingSeconds := int64(targetSpacing / time.Second)
+	halfLifeSeconds := int64(halfLife / time.Second)
+	exponent := ((timeDiff - heightDiff*targetSpacingSeconds) *
+		asertRadix) / halfLifeSeconds
+
+	shifts := exponent >> 16
+	frac := uint64(exponent - shifts*asertRadix)
+	factor := uint64(asertRadix) +
+		((195766423245049*frac +
+			971821376*frac*frac +
+			5127*frac*frac*frac +
+			(1 << 47)) >> 48)
+
+	newTarget := CompactToBig(anchor.Bits())
+	newTarget.Mul(newTarget, new(big.Int).SetUint64(factor))
+	if shifts < 0 {
+		newTarget.Rsh(newTarget, uint(-shifts))
+	} else {
+		newTarget.Lsh(newTarget, uint(shifts))
+	}
+	newTarget.Rsh(newTarget, 16)
+	if newTarget.Sign() <= 0 {
+		newTarget.SetInt64(1)
+	}
+	if newTarget.Cmp(powLimit) > 0 {
+		newTarget.Set(powLimit)
+	}
+
+	return BigToCompact(newTarget), nil
+}
+
+func calcOBTCForkNextRequiredDifficulty(lastNode HeaderCtx, newBlockTime time.Time,
+	c ChainCtx) (uint32, bool, error) {
+
+	params := c.ChainParams()
+	if params.ForkDAAStartHeight <= 0 || params.ForkDAAForkResetBits == 0 {
+		return 0, false, nil
+	}
+
+	nextHeight := lastNode.Height() + 1
+	if nextHeight < params.ForkDAAStartHeight {
+		return 0, false, nil
+	}
+	if nextHeight == params.ForkDAAStartHeight {
+		return params.ForkDAAForkResetBits, true, nil
+	}
+
+	anchorHeight := params.ForkDAAStartHeight
+	halfLife := params.ForkDAABootstrapHalfLife
+	if params.ForkDAABootstrapEndHeight >= params.ForkDAAStartHeight &&
+		nextHeight > params.ForkDAABootstrapEndHeight {
+
+		anchorHeight = params.ForkDAABootstrapEndHeight
+		halfLife = params.ForkDAANormalHalfLife
+	}
+
+	distance := lastNode.Height() - anchorHeight
+	if distance < 0 {
+		return 0, true, AssertError("ASERT anchor is ahead of previous block")
+	}
+	anchor := lastNode.RelativeAncestorCtx(distance)
+	bits, err := calcASERTRequiredDifficulty(anchor, nextHeight, newBlockTime,
+		params.TargetTimePerBlock, halfLife, params.PowLimit)
+	if err != nil {
+		return 0, true, err
+	}
+
+	return bits, true, nil
+}
+
 // HashToBig converts a chainhash.Hash into a big.Int that can be used to
 // perform math comparisons.
 func HashToBig(hash *chainhash.Hash) *big.Int {
@@ -147,6 +232,12 @@ func calcNextRequiredDifficulty(lastNode HeaderCtx, newBlockTime time.Time,
 		return c.ChainParams().PowLimitBits, nil
 	}
 
+	if difficulty, ok, err := calcOBTCForkNextRequiredDifficulty(
+		lastNode, newBlockTime, c,
+	); ok || err != nil {
+		return difficulty, err
+	}
+
 	// Return the previous block's difficulty requirements if this block
 	// is not at a difficulty retarget interval.
 	if (lastNode.Height()+1)%c.BlocksPerRetarget() != 0 {
@@ -228,6 +319,14 @@ func calcNextRequiredDifficulty(lastNode HeaderCtx, newBlockTime time.Time,
 		c.ChainParams().TargetTimespan)
 
 	return newTargetBits, nil
+}
+
+// CalcNextRequiredDifficultyForHeader calculates the required difficulty for
+// the block after the provided header context.
+func CalcNextRequiredDifficultyForHeader(lastNode HeaderCtx, newBlockTime time.Time,
+	c ChainCtx) (uint32, error) {
+
+	return calcNextRequiredDifficulty(lastNode, newBlockTime, c)
 }
 
 // CalcNextRequiredDifficulty calculates the required difficulty for the block

@@ -257,6 +257,27 @@ type Params struct {
 	// GenerateSupported specifies whether or not CPU mining is allowed.
 	GenerateSupported bool
 
+	// ForkDAAStartHeight is the first height that uses OBTC post-fork
+	// difficulty adjustment rules. A negative value or zero reset bits means
+	// the fork DAA is disabled for the network.
+	ForkDAAStartHeight int32
+
+	// ForkDAABootstrapEndHeight is the final height of the post-fork
+	// bootstrap difficulty adjustment epoch. A value less than
+	// ForkDAAStartHeight disables the bootstrap epoch.
+	ForkDAABootstrapEndHeight int32
+
+	// ForkDAAForkResetBits is the required difficulty for the first
+	// OBTC-independent block after the Bitcoin fork anchor.
+	ForkDAAForkResetBits uint32
+
+	// ForkDAABootstrapHalfLife is the ASERT half-life during the bootstrap
+	// difficulty epoch.
+	ForkDAABootstrapHalfLife time.Duration
+
+	// ForkDAANormalHalfLife is the ASERT half-life after the bootstrap epoch.
+	ForkDAANormalHalfLife time.Duration
+
 	// Checkpoints ordered from oldest to newest.
 	Checkpoints []Checkpoint
 
