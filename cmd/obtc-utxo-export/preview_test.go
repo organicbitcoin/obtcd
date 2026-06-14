@@ -5,6 +5,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -221,5 +222,61 @@ func TestBuildPreviewSortsAndCarriesBacklog(t *testing.T) {
 	}
 	if len(summary.ByDay) != 1 || len(summary.ByWeek) != 1 {
 		t.Fatalf("expected day/week buckets: %+v %+v", summary.ByDay, summary.ByWeek)
+	}
+}
+
+func TestAggregatePreviewMatchesInMemoryPreview(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "utxo.jsonl.gz")
+	w, err := newJSONLGzipWriter(input)
+	if err != nil {
+		t.Fatalf("new writer: %v", err)
+	}
+	rows := []utxoRow{
+		{TxID: "04", Vout: 0, AmountSat: 5000, ExpiryHeight: 11, SnapshotHeight: 7, SnapshotHash: "abc"},
+		{TxID: "02", Vout: 0, AmountSat: 2000, ExpiryHeight: 10, SnapshotHeight: 7, SnapshotHash: "abc"},
+		{TxID: "00", Vout: 0, AmountSat: 100, ExpiryHeight: 10, SnapshotHeight: 7, SnapshotHash: "abc"},
+		{TxID: "03", Vout: 0, AmountSat: 3000, ExpiryHeight: 10, SnapshotHeight: 7, SnapshotHash: "abc"},
+		{TxID: "01", Vout: 0, AmountSat: 1000, ExpiryHeight: 10, SnapshotHeight: 7, SnapshotHash: "abc"},
+	}
+	for _, row := range rows {
+		if err := w.WriteJSON(row); err != nil {
+			t.Fatalf("write row: %v", err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close input: %v", err)
+	}
+
+	var details []reapPreviewDetail
+	inMemory, err := buildPreview(rows, "obtcmainnet", &chaincfg.ObtcMainNetParams, 7, "abc", func(d reapPreviewDetail) error {
+		details = append(details, d)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("build in-memory preview: %v", err)
+	}
+
+	blocksPath := filepath.Join(dir, "blocks.jsonl.gz")
+	summaryPath := filepath.Join(dir, "summary.json")
+	aggregate, err := writeAggregatePreviewFiles(input, "obtcmainnet", &chaincfg.ObtcMainNetParams, 7, "abc",
+		blocksPath, summaryPath, aggregatePreviewOptions{WorkDir: dir, ShardSpan: 1})
+	if err != nil {
+		t.Fatalf("write aggregate preview: %v", err)
+	}
+	if aggregate.UTXORowCount != int64(len(rows)) {
+		t.Fatalf("row count got %d", aggregate.UTXORowCount)
+	}
+	if aggregate.SelectedInputs != int64(inMemory.SelectedInputs) ||
+		aggregate.TaxTotalSat != inMemory.TaxTotalSat ||
+		aggregate.RefundTotalSat != inMemory.RefundTotalSat ||
+		aggregate.MaxRemainingBacklog != int64(inMemory.MaxRemainingBacklog) {
+		t.Fatalf("aggregate mismatch got %+v want %+v", aggregate, inMemory)
+	}
+	if aggregate.BlocksSHA256 == "" || aggregate.BlocksFileSHA256 == "" {
+		t.Fatal("expected aggregate block hashes")
+	}
+	if _, err := os.Stat(summaryPath); err != nil {
+		t.Fatalf("summary missing: %v", err)
 	}
 }

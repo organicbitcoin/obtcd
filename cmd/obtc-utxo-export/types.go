@@ -126,3 +126,41 @@ type reapPreviewParams struct {
 	DustMaxInputs    int   `json:"dust_max_inputs"`
 	WeightBudget     int64 `json:"weight_budget"`
 }
+
+type reapAggregateBlock struct {
+	ReapHeight       uint64 `json:"reap_height"`
+	ExpiredInputs    int64  `json:"expired_inputs"`
+	ExpiredAmountSat int64  `json:"expired_amount_sat"`
+	SelectedInputs   int64  `json:"selected_inputs"`
+	TaxTotalSat      int64  `json:"tax_total_sat"`
+	RefundTotalSat   int64  `json:"refund_total_sat"`
+	DustTaxSat       int64  `json:"dust_tax_sat"`
+	NormalTaxSat     int64  `json:"normal_tax_sat"`
+	DustInputs       int64  `json:"dust_inputs"`
+	NormalInputs     int64  `json:"normal_inputs"`
+	RemainingBacklog int64  `json:"remaining_backlog"`
+}
+
+type reapAggregateSummary struct {
+	Network             string            `json:"network"`
+	SnapshotHeight      int32             `json:"snapshot_height"`
+	SnapshotHash        string            `json:"snapshot_hash"`
+	GeneratedAt         time.Time         `json:"generated_at"`
+	UTXORowCount        int64             `json:"utxo_row_count"`
+	ReapBlockCount      int64             `json:"reap_block_count"`
+	FirstReapHeight     uint64            `json:"first_reap_height"`
+	LastReapHeight      uint64            `json:"last_reap_height"`
+	ExpiredInputs       int64             `json:"expired_inputs"`
+	ExpiredAmountSat    int64             `json:"expired_amount_sat"`
+	SelectedInputs      int64             `json:"selected_inputs"`
+	TaxTotalSat         int64             `json:"tax_total_sat"`
+	RefundTotalSat      int64             `json:"refund_total_sat"`
+	DustTaxSat          int64             `json:"dust_tax_sat"`
+	NormalTaxSat        int64             `json:"normal_tax_sat"`
+	MaxRemainingBacklog int64             `json:"max_remaining_backlog"`
+	Params              reapPreviewParams `json:"params"`
+	BlocksSHA256        string            `json:"blocks_sha256"`
+	BlocksFileSHA256    string            `json:"blocks_file_sha256"`
+	BlocksFile          string            `json:"blocks_file"`
+	ShardSpan           uint64            `json:"shard_span"`
+}
