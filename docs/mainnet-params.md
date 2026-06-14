@@ -83,11 +83,12 @@ Version-bits deployments:
 | Field | Value |
 |---|---|
 | OBTC mainnet fork height | `1000000` (provisional; may change before final activation) |
-| Mainnet activation height | `1002016` (derived from the provisional fork height) |
+| First independent OBTC block height | `1000001` |
+| Replay protection height | `1000001` |
+| Expiry / REAP / commitment activation height | `1002016` (derived from the provisional fork height) |
 | Expiry index start scan height | `0` |
 | Expiry enforcement height | `1002016` |
 | REAP consensus height | `1002016` |
-| Replay protection height | `1000001` |
 | Expiry commitment mandatory height | `1002016` |
 | Expiry window | `362880` blocks |
 | Expiry scan list batch limit | `10000` |
@@ -100,15 +101,15 @@ Version-bits deployments:
 The OBTC mainnet fork height is a provisional mainnet-candidate planning value.
 It may change before final release artifacts are cut.
 
-The current mainnet activation height is derived as:
+The current expiry / REAP / commitment activation height is derived as:
 
 `ObtcMainNetForkHeight + 2016`
 
 With the current candidate fork height, this gives `1002016`.
 
-Replay protection is intentionally earlier than expiry and REAP activation. It
-starts at `ObtcMainNetForkHeight + 1` so the first independent OBTC block
-requires OBTC replay-protected signatures.
+Replay protection is intentionally earlier than expiry / REAP / commitment
+activation. It starts at `ObtcMainNetForkHeight + 1` so the first independent
+OBTC block requires OBTC replay-protected signatures.
 
 ## Operational Notes
 

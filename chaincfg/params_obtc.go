@@ -42,7 +42,9 @@ const (
 	// ObtcMainNetForkHeight is the provisional OBTC mainnet-candidate fork
 	// height. This value is used for planning, review, and mainnet-candidate
 	// preparation. It may change before final mainnet-candidate release
-	// artifacts are published.
+	// artifacts are published. ObtcMainNetForkHeight is the shared-history fork
+	// anchor. The first independent OBTC block height is
+	// ObtcMainNetForkHeight + 1.
 	ObtcMainNetForkHeight int32 = 1_000_000
 
 	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
@@ -324,7 +326,9 @@ func GetOBTCForkHeight(params *Params) int32 {
 	}
 }
 
-// IsPostOBTCFork reports whether height is at or after the network fork point.
+// IsPostOBTCFork reports whether height is at or after the shared-history fork
+// anchor. It does not mean "first independent OBTC block"; that height is the
+// fork anchor plus one.
 func IsPostOBTCFork(params *Params, height int32) bool {
 	if !IsOBTC(params) {
 		return false

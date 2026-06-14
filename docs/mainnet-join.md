@@ -20,7 +20,8 @@ Before using this runbook, review [OBTC Mainnet Parameters](mainnet-params.md).
 | Bech32 HRP | `obtc` |
 | Wire magic | `0x4F425443` |
 | Fork height | `1000000` (provisional; may change before final activation) |
-| OBTC activation height | `1002016` (derived from the provisional fork height) |
+| Replay-protection height | `1000001` (currently fork + 1) |
+| Expiry / REAP / commitment activation height | `1002016` (currently fork + 2016) |
 
 The code still contains the placeholder DNS seed `seed.obtc.example.com`.
 Mainnet-candidate bootstrap should therefore use explicit peers until final DNS
