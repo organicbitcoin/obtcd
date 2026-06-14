@@ -6,6 +6,7 @@ package blockchain
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"sort"
 	"strings"
@@ -519,6 +520,51 @@ func TestREAPTwoTierNormalCapAcceptedAtLimit(t *testing.T) {
 	}
 }
 
+func TestREAPMaxWeightExceededRejected(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+	if ep.ReapMaxInputs != 256 {
+		t.Fatalf("test assumes unchanged mainnet normal cap, got %d", ep.ReapMaxInputs)
+	}
+	if ep.ReapMaxWeight <= 0 {
+		t.Fatalf("expected mainnet REAP max weight")
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	inputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs)
+	for i := 0; i < ep.ReapMaxInputs; i++ {
+		script := make([]byte, 600)
+		script[0] = txscript.OP_TRUE
+		binary.BigEndian.PutUint32(script[1:5], uint32(i))
+		for j := 5; j < len(script); j++ {
+			script[j] = byte(i + j)
+		}
+		op := addUniqueUtxoToView(t, view, 10_000, 1, uint32(i))
+		entry := view.LookupEntry(op)
+		if entry == nil {
+			t.Fatalf("missing test utxo %s", op)
+		}
+		entry.pkScript = script
+		inputs = append(inputs, op)
+	}
+	sortReapTestOutpoints(inputs)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	txWeight := GetTransactionWeight(btcutil.NewTx(tx))
+	if txWeight <= ep.ReapMaxWeight {
+		t.Fatalf("test setup expected REAP tx weight over limit: got %d limit %d",
+			txWeight, ep.ReapMaxWeight)
+	}
+
+	_, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams)
+	if err == nil || !strings.Contains(err.Error(), "weight") {
+		t.Fatalf("expected REAP max weight rejection, got: %v", err)
+	}
+}
+
 func TestREAPTwoTierNormalCapExceededRejected(t *testing.T) {
 	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
 	if ep == nil {
@@ -549,8 +595,12 @@ func TestREAPTwoTierMixedAcceptedWhenNormalCapReachedLast(t *testing.T) {
 
 	height := ep.ReapConsensusAtHeight
 	view := NewUtxoViewpoint()
-	dustInputs := make([]wire.OutPoint, 0, ep.ReapDustMaxInputs-1)
-	for i := 0; i < ep.ReapDustMaxInputs-1; i++ {
+	dustCount := ep.ReapDustMaxInputs - 1
+	if dustCount <= 0 {
+		t.Fatalf("test setup requires positive dust input count")
+	}
+	dustInputs := make([]wire.OutPoint, 0, dustCount)
+	for i := 0; i < dustCount; i++ {
 		dustInputs = append(dustInputs, addUniqueUtxoToView(t, view,
 			ep.ReapDustThresholdSat-1, 1, uint32(i)))
 	}
@@ -564,8 +614,98 @@ func TestREAPTwoTierMixedAcceptedWhenNormalCapReachedLast(t *testing.T) {
 	inputs := append(dustInputs, normalInputs...)
 
 	tx := makeValidReapTx(t, view, height, inputs...)
+	txWeight := GetTransactionWeight(btcutil.NewTx(tx))
+	if ep.ReapMaxWeight > 0 && txWeight > ep.ReapMaxWeight {
+		t.Fatalf("test setup exceeded REAP max weight: got %d limit %d",
+			txWeight, ep.ReapMaxWeight)
+	}
 	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams); err != nil {
 		t.Fatalf("expected mixed tx ending at normal cap to pass, got: %v", err)
+	}
+}
+
+func TestREAPNearFullTierCapsWithUniqueRefundScriptsFitsMaxWeight(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+	if ep.ReapMaxInputs != 256 || ep.ReapDustMaxInputs != 1024 ||
+		ep.ReapMaxWeight != 400_000 {
+
+		t.Fatalf("unexpected mainnet REAP limits: %+v", ep)
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	dustCount := ep.ReapDustMaxInputs - 1
+	dustInputs := make([]wire.OutPoint, 0, dustCount)
+	for i := 0; i < dustCount; i++ {
+		dustInputs = append(dustInputs, addUniqueUtxoToView(t, view,
+			ep.ReapDustThresholdSat-1, 1, uint32(i)))
+	}
+	normalInputs := make([]wire.OutPoint, 0, ep.ReapMaxInputs)
+	for i := 0; i < ep.ReapMaxInputs; i++ {
+		op := addUniqueUtxoToView(t, view, ep.ReapDustThresholdSat,
+			1, uint32(10_000+i))
+		entry := view.LookupEntry(op)
+		if entry == nil {
+			t.Fatalf("missing test utxo %s", op)
+		}
+		script := make([]byte, 34)
+		script[0] = txscript.OP_1
+		script[1] = 32
+		binary.BigEndian.PutUint32(script[2:6], uint32(i))
+		for j := 6; j < len(script); j++ {
+			script[j] = byte(i + j)
+		}
+		entry.pkScript = script
+		normalInputs = append(normalInputs, op)
+	}
+	sortReapTestOutpoints(dustInputs)
+	sortReapTestOutpoints(normalInputs)
+	inputs := append(dustInputs, normalInputs...)
+
+	tx := makeValidReapTx(t, view, height, inputs...)
+	txWeight := GetTransactionWeight(btcutil.NewTx(tx))
+	t.Logf("near-full REAP weight=%d inputs=%d outputs=%d maxWeight=%d",
+		txWeight, len(tx.TxIn), len(tx.TxOut), ep.ReapMaxWeight)
+	if txWeight > ep.ReapMaxWeight {
+		t.Fatalf("near-full REAP tx exceeded max weight: got %d limit %d",
+			txWeight, ep.ReapMaxWeight)
+	}
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams); err != nil {
+		t.Fatalf("expected near-full REAP tx to pass, got: %v", err)
+	}
+}
+
+func TestREAPSingleMaxScriptSizeUTXOFitsMaxWeight(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected mainnet expiry params")
+	}
+	if ep.ReapMaxWeight != 400_000 {
+		t.Fatalf("unexpected mainnet REAP max weight: %d", ep.ReapMaxWeight)
+	}
+
+	height := ep.ReapConsensusAtHeight
+	view := NewUtxoViewpoint()
+	op := addUniqueUtxoToView(t, view, 10_000, 1, 70_000)
+	entry := view.LookupEntry(op)
+	if entry == nil {
+		t.Fatalf("missing test utxo %s", op)
+	}
+	entry.pkScript = bytes.Repeat([]byte{txscript.OP_TRUE}, txscript.MaxScriptSize)
+
+	tx := makeValidReapTx(t, view, height, op)
+	txWeight := GetTransactionWeight(btcutil.NewTx(tx))
+	t.Logf("single max-script REAP weight=%d scriptLen=%d maxWeight=%d",
+		txWeight, len(entry.PkScript()), ep.ReapMaxWeight)
+	if txWeight > ep.ReapMaxWeight {
+		t.Fatalf("single max-script REAP exceeded max weight: got %d limit %d",
+			txWeight, ep.ReapMaxWeight)
+	}
+	if _, err := CheckTransactionInputs(btcutil.NewTx(tx), height, view, &chaincfg.ObtcMainNetParams); err != nil {
+		t.Fatalf("expected single max-script REAP tx to pass, got: %v", err)
 	}
 }
 

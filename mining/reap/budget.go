@@ -12,11 +12,10 @@ import (
 )
 
 // BuildBudgetedBlueprint builds a REAP blueprint and trims trailing inputs
-// until the actual transaction weight fits the configured soft budget.  A
-// single input is allowed to exceed the soft budget so oversized refund scripts
-// do not prevent forward progress.  When maxTxWeight is positive, it is treated
-// as a hard exclusive upper bound because template assembly requires the final
-// block weight to remain strictly below the block max.
+// until the actual transaction weight fits the configured budget.  When
+// maxTxWeight is positive, it is treated as a hard exclusive upper bound
+// because template assembly requires the final block weight to remain strictly
+// below the block max.
 func BuildBudgetedBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint,
 	p REAPParams, maxTxWeight int64) (*btcutil.Tx, REAPPlan, int64, error) {
 
@@ -50,7 +49,10 @@ func BuildBudgetedBlueprint(plan REAPPlan, view *blockchain.UtxoViewpoint,
 			continue
 		}
 
-		if softOver && len(plan.Inputs) > 1 {
+		if softOver {
+			if len(plan.Inputs) == 1 {
+				return nil, normalized, txWeight, nil
+			}
 			plan.Inputs = plan.Inputs[:len(plan.Inputs)-1]
 			continue
 		}

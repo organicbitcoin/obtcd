@@ -343,9 +343,22 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 	}
 	txHash := tx.TxHash()
 	logOBTCDevf(chainParams,
-		"REAP consensus hardening start tx=%s blockHeight=%d inputCount=%d maxInputs=%d dustMaxInputs=%d",
+		"REAP consensus hardening start tx=%s blockHeight=%d inputCount=%d maxInputs=%d dustMaxInputs=%d maxWeight=%d",
 		txHash, txHeight, len(tx.TxIn), expiryParams.ReapMaxInputs,
-		expiryParams.ReapDustMaxInputs)
+		expiryParams.ReapDustMaxInputs, expiryParams.ReapMaxWeight)
+
+	if expiryParams.ReapMaxWeight > 0 {
+		txWeight := GetTransactionWeight(btcutil.NewTx(tx))
+		if txWeight > expiryParams.ReapMaxWeight {
+			logOBTCDevf(chainParams,
+				"REAP consensus hardening failed tx=%s reason=max-weight weight=%d maxWeight=%d",
+				txHash, txWeight, expiryParams.ReapMaxWeight)
+			return ruleError(ErrBadTxInput, fmt.Sprintf(
+				"reap transaction weight %d exceeds consensus limit %d",
+				txWeight, expiryParams.ReapMaxWeight,
+			))
+		}
+	}
 
 	twoTierLimits := expiryParams.ReapDustMaxInputs > 0
 	if !twoTierLimits && expiryParams.ReapMaxInputs > 0 &&

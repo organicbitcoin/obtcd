@@ -25,6 +25,7 @@ type ExpiryParams struct {
 	ReplayProtectionAtHeight int32  // Height to enable replay-protected sighash domains
 	ReapMaxInputs            int    // Consensus max REAP inputs per transaction (0 = disabled)
 	ReapDustMaxInputs        int    // Consensus max refundless dust REAP inputs per transaction
+	ReapMaxWeight            int64  // Consensus max REAP transaction weight (0 = disabled)
 	ReapTaxNumerator         int64  // Consensus REAP tax numerator
 	ReapTaxDenominator       int64  // Consensus REAP tax denominator
 	ReapDustThresholdSat     int64  // Inputs below this value fold fully into tax
@@ -374,6 +375,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ReplayProtectionAtHeight:       mainnetActivationHeight,
 			ReapMaxInputs:                  256,
 			ReapDustMaxInputs:              1024,
+			ReapMaxWeight:                  400_000,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,

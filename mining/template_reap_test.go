@@ -304,7 +304,7 @@ func TestNormalTxWeightLimitReservePolicy(t *testing.T) {
 	}
 
 	// At/after enable height, reserve REAP budget from normal tx area.
-	want := blockMax - 200_000
+	want := blockMax - uint32(ep.ReapMaxWeight)
 	if got := g.normalTxWeightLimit(ep.EnableAtHeight, true); got != want {
 		t.Fatalf("unexpected post-enable weight limit: got %d want %d", got, want)
 	}
@@ -393,10 +393,10 @@ func TestReservedREAPWeightScenarios(t *testing.T) {
 		{name: "nil_chain_params", blockMax: 1_000_000, chainParams: nil, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
 		{name: "non_obtc_network", blockMax: 1_000_000, chainParams: &chaincfg.MainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
 		{name: "before_enable_height", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight - 1, wantReserved: 0},
-		{name: "enabled_obtc_mainnet", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 200_000},
+		{name: "enabled_obtc_mainnet", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: uint32(mainEP.ReapMaxWeight)},
 		{name: "enabled_obtc_regtest", blockMax: 1_000_000, chainParams: &chaincfg.ObtcRegTestParams, withIndex: true, nextHeight: regEP.EnableAtHeight, wantReserved: 400_000},
-		{name: "reserve_equals_block_max", blockMax: 200_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
-		{name: "reserve_exceeds_block_max", blockMax: 199_999, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "reserve_equals_block_max", blockMax: uint32(mainEP.ReapMaxWeight), chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
+		{name: "reserve_exceeds_block_max", blockMax: uint32(mainEP.ReapMaxWeight - 1), chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
 		{name: "zero_block_max", blockMax: 0, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, wantReserved: 0},
 	}
 
@@ -433,7 +433,7 @@ func TestNormalTxWeightLimitScenarioMatrix(t *testing.T) {
 		wantNormalLimit uint32
 	}{
 		{name: "reserve_flag_off_even_if_reap_possible", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: false, wantNormalLimit: 1_000_000},
-		{name: "reserve_flag_on_and_reap_possible", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 800_000},
+		{name: "reserve_flag_on_and_reap_possible", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 600_000},
 		{name: "reserve_flag_on_but_pre_enable", blockMax: 1_000_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight - 1, reserveForREAP: true, wantNormalLimit: 1_000_000},
 		{name: "reserve_flag_on_but_non_obtc", blockMax: 1_000_000, chainParams: &chaincfg.MainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 1_000_000},
 		{name: "reserve_flag_on_but_block_too_small", blockMax: 150_000, chainParams: &chaincfg.ObtcMainNetParams, withIndex: true, nextHeight: mainEP.EnableAtHeight, reserveForREAP: true, wantNormalLimit: 150_000},

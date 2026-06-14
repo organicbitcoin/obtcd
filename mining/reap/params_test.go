@@ -21,7 +21,7 @@ func TestDefaultREAPParamsForNet(t *testing.T) {
 
 	obtcMain := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
 	if obtcMain.MaxInputs != 256 || obtcMain.DustMaxInputs != 1024 ||
-		obtcMain.ScanBatch != 10_000 || obtcMain.WeightBudget != 200_000 {
+		obtcMain.ScanBatch != 10_000 || obtcMain.WeightBudget != 400_000 {
 		t.Fatalf("unexpected obtc mainnet defaults: %+v", obtcMain)
 	}
 	if obtcMain.DebugEnabled {
@@ -50,6 +50,24 @@ func TestOBTCMainnetConsensusAndTemplateMaxInputsAligned(t *testing.T) {
 	if p.DustMaxInputs != ep.ReapDustMaxInputs {
 		t.Fatalf("obtc mainnet dust max input mismatch: template=%d consensus=%d", p.DustMaxInputs, ep.ReapDustMaxInputs)
 	}
+	if p.WeightBudget != ep.ReapMaxWeight {
+		t.Fatalf("obtc mainnet weight budget mismatch: template=%d consensus=%d", p.WeightBudget, ep.ReapMaxWeight)
+	}
+}
+
+func TestOBTCMainnetTierEstimateFitsWeightBudget(t *testing.T) {
+	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
+	if ep == nil {
+		t.Fatalf("expected expiry params for obtc mainnet")
+	}
+	p := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
+	dustInputs := ep.ReapDustMaxInputs - 1
+	normalInputs := ep.ReapMaxInputs
+	estWeight := EstimateTieredBlueprintWeight(dustInputs, normalInputs)
+	if estWeight >= p.WeightBudget {
+		t.Fatalf("near-full tier estimate should fit budget: dust=%d normal=%d estimate=%d budget=%d",
+			dustInputs, normalInputs, estWeight, p.WeightBudget)
+	}
 }
 
 func TestREAPParamsValidate(t *testing.T) {
@@ -67,6 +85,12 @@ func TestREAPParamsValidate(t *testing.T) {
 	p.DustMaxInputs = -1
 	if err := p.Validate(); err == nil {
 		t.Fatalf("expected invalid DustMaxInputs")
+	}
+
+	p = DefaultREAPParams(SortModeStrict)
+	p.WeightBudget = -1
+	if err := p.Validate(); err == nil {
+		t.Fatalf("expected invalid WeightBudget")
 	}
 
 	p = DefaultREAPParams(SortModeStrict)

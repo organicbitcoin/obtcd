@@ -11,6 +11,8 @@ import (
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -160,7 +162,50 @@ func TestBuildBudgetedBlueprintTrimsToActualSoftBudget(t *testing.T) {
 	}
 }
 
-func TestBuildBudgetedBlueprintAllowsSingleSoftOverage(t *testing.T) {
+func TestBuildBudgetedBlueprintTrimsLargeScriptsToMainnetWeightBudget(t *testing.T) {
+	view := blockchain.NewUtxoViewpoint()
+	p := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
+	if p.WeightBudget != 400_000 {
+		t.Fatalf("unexpected mainnet REAP weight budget: %d", p.WeightBudget)
+	}
+
+	inputs := make([]wire.OutPoint, 0, 12)
+	for i := 0; i < 12; i++ {
+		inputs = append(inputs, addUtxoWithScript(t, view, 10_000,
+			uint32(100+i), largeSpendableScript(txscript.MaxScriptSize, byte(txscript.OP_1+i))))
+	}
+
+	fullWeight := blueprintWeight(t, REAPPlan{Height: 123, Inputs: inputs}, view, p)
+	if fullWeight <= p.WeightBudget {
+		t.Fatalf("test setup expected full plan over budget: got %d budget %d",
+			fullWeight, p.WeightBudget)
+	}
+
+	tx, gotPlan, weight, err := BuildBudgetedBlueprint(REAPPlan{
+		Height: 123,
+		Inputs: inputs,
+		Stats:  REAPStats{Candidates: len(inputs)},
+	}, view, p, 0)
+	if err != nil {
+		t.Fatalf("budgeted build failed: %v", err)
+	}
+	if tx == nil {
+		t.Fatalf("expected trimmed tx")
+	}
+	if weight > p.WeightBudget {
+		t.Fatalf("trimmed tx exceeds budget: got %d budget %d", weight, p.WeightBudget)
+	}
+	if len(gotPlan.Inputs) == 0 || len(gotPlan.Inputs) >= len(inputs) {
+		t.Fatalf("expected non-empty trimmed plan, got %d of %d inputs",
+			len(gotPlan.Inputs), len(inputs))
+	}
+	if gotPlan.Stats.Skipped != len(inputs)-len(gotPlan.Inputs) {
+		t.Fatalf("unexpected skipped count: got %d want %d",
+			gotPlan.Stats.Skipped, len(inputs)-len(gotPlan.Inputs))
+	}
+}
+
+func TestBuildBudgetedBlueprintSkipsSingleOverWeightBudget(t *testing.T) {
 	view := blockchain.NewUtxoViewpoint()
 	op := addUtxoWithScript(t, view, 10_000, 21, largeSpendableScript(4_000, 0x52))
 
@@ -174,10 +219,13 @@ func TestBuildBudgetedBlueprintAllowsSingleSoftOverage(t *testing.T) {
 
 	tx, gotPlan, weight, err := BuildBudgetedBlueprint(plan, view, p, 0)
 	if err != nil {
-		t.Fatalf("single-input soft overage should be allowed: %v", err)
+		t.Fatalf("single-input overage should be skipped without error: %v", err)
 	}
-	if tx == nil || len(gotPlan.Inputs) != 1 {
-		t.Fatalf("expected single-input tx, got tx=%v inputs=%d", tx, len(gotPlan.Inputs))
+	if tx != nil {
+		t.Fatalf("single-input overage should not return tx")
+	}
+	if len(gotPlan.Inputs) != 1 {
+		t.Fatalf("expected normalized single-input plan, got inputs=%d", len(gotPlan.Inputs))
 	}
 	if weight <= p.WeightBudget {
 		t.Fatalf("test setup expected soft overage: got %d budget %d", weight, p.WeightBudget)

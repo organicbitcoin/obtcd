@@ -51,6 +51,9 @@ func DefaultREAPParamsForNet(net *chaincfg.Params, mode SortMode) REAPParams {
 		if expiryParams.ReapDustMaxInputs > 0 {
 			p.DustMaxInputs = expiryParams.ReapDustMaxInputs
 		}
+		if expiryParams.ReapMaxWeight > 0 {
+			p.WeightBudget = expiryParams.ReapMaxWeight
+		}
 		if expiryParams.ReapTaxNumerator > 0 {
 			p.TaxNum = expiryParams.ReapTaxNumerator
 		}
@@ -64,8 +67,10 @@ func DefaultREAPParamsForNet(net *chaincfg.Params, mode SortMode) REAPParams {
 
 	switch net.Net {
 	case chaincfg.ObtcMainNetParams.Net:
-		// Mainnet starts conservative to avoid starving normal transactions.
-		p.WeightBudget = 200_000
+		if p.WeightBudget <= 0 {
+			// Mainnet starts conservative to avoid starving normal transactions.
+			p.WeightBudget = 200_000
+		}
 	case chaincfg.ObtcRegTestParams.Net:
 		p.ScanBatch = 2_000
 		p.DebugEnabled = true
@@ -82,6 +87,9 @@ func (p REAPParams) Validate() error {
 	}
 	if p.DustMaxInputs < 0 {
 		return fmt.Errorf("DustMaxInputs must be >= 0")
+	}
+	if p.WeightBudget < 0 {
+		return fmt.Errorf("WeightBudget must be >= 0")
 	}
 	if p.ScanBatch <= 0 {
 		return fmt.Errorf("ScanBatch must be > 0")
