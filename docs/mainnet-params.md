@@ -92,6 +92,8 @@ Version-bits deployments:
 | Expiry window | `362880` blocks |
 | Expiry scan list batch limit | `10000` |
 | REAP max inputs | `256` |
+| REAP max refundless dust inputs | `1024` |
+| REAP max weight (`ReapMaxWeight`) | `400,000` |
 | REAP tax | `30 / 100` |
 | REAP dust threshold | `720` satoshis |
 
