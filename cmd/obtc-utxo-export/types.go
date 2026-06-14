@@ -148,6 +148,7 @@ type reapAggregateSummary struct {
 	GeneratedAt         time.Time         `json:"generated_at"`
 	UTXORowCount        int64             `json:"utxo_row_count"`
 	ReapBlockCount      int64             `json:"reap_block_count"`
+	ReapStartHeight     uint64            `json:"reap_start_height"`
 	FirstReapHeight     uint64            `json:"first_reap_height"`
 	LastReapHeight      uint64            `json:"last_reap_height"`
 	ExpiredInputs       int64             `json:"expired_inputs"`

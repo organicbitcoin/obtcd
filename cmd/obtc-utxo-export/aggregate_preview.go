@@ -22,8 +22,9 @@ import (
 const aggregateShardRecordSize = 16
 
 type aggregatePreviewOptions struct {
-	WorkDir   string
-	ShardSpan uint64
+	WorkDir         string
+	ShardSpan       uint64
+	ReapStartHeight uint64
 }
 
 type aggregateShardInfo struct {
@@ -123,7 +124,7 @@ func writeAggregatePreviewFiles(inputPath, network string, params *chaincfg.Para
 	}
 
 	summary, err := replayAggregateShards(shards, network, params, snapshotHeight,
-		snapshotHash, blocksPath, opts.ShardSpan, rowCount)
+		snapshotHash, blocksPath, opts, rowCount)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,7 @@ func shardAggregateRows(inputPath, workDir string, shardSpan uint64) (map[uint64
 
 func replayAggregateShards(shards map[uint64]aggregateShardInfo, network string,
 	params *chaincfg.Params, snapshotHeight int32, snapshotHash, blocksPath string,
-	shardSpan uint64, rowCount int64) (*reapAggregateSummary, error) {
+	opts aggregatePreviewOptions, rowCount int64) (*reapAggregateSummary, error) {
 
 	if params == nil {
 		params = &chaincfg.ObtcMainNetParams
@@ -192,13 +193,14 @@ func replayAggregateShards(shards map[uint64]aggregateShardInfo, network string,
 	}
 
 	summary := &reapAggregateSummary{
-		Network:        network,
-		SnapshotHeight: snapshotHeight,
-		SnapshotHash:   snapshotHash,
-		GeneratedAt:    time.Now().UTC(),
-		UTXORowCount:   rowCount,
-		BlocksFile:     blocksPath,
-		ShardSpan:      shardSpan,
+		Network:         network,
+		SnapshotHeight:  snapshotHeight,
+		SnapshotHash:    snapshotHash,
+		GeneratedAt:     time.Now().UTC(),
+		UTXORowCount:    rowCount,
+		BlocksFile:      blocksPath,
+		ShardSpan:       opts.ShardSpan,
+		ReapStartHeight: opts.ReapStartHeight,
 		Params: reapPreviewParams{
 			TaxNumerator:     p.TaxNum,
 			TaxDenominator:   p.TaxDen,
@@ -220,6 +222,7 @@ func replayAggregateShards(shards map[uint64]aggregateShardInfo, network string,
 		backlogCount  int64
 		currentHeight uint64
 		haveHeight    bool
+		startStats    aggregateHeightStats
 	)
 
 	emit := func(block reapAggregateBlock) error {
@@ -262,12 +265,30 @@ func replayAggregateShards(shards map[uint64]aggregateShardInfo, network string,
 		sort.Slice(heights, func(i, j int) bool { return heights[i] < heights[j] })
 
 		for _, height := range heights {
+			if opts.ReapStartHeight > 0 && height < opts.ReapStartHeight {
+				for _, group := range groupsByHeight[height] {
+					backlog = append(backlog, group)
+					backlogCount += group.Count
+				}
+				stats := statsByHeight[height]
+				startStats.Count += stats.Count
+				startStats.AmountSat += stats.AmountSat
+				continue
+			}
 			if !haveHeight {
 				currentHeight = height
+				if opts.ReapStartHeight > 0 {
+					currentHeight = opts.ReapStartHeight
+				}
 				haveHeight = true
 			}
 			for backlogCount > 0 && currentHeight < height {
-				if err := processHeight(currentHeight, aggregateHeightStats{}); err != nil {
+				expired := aggregateHeightStats{}
+				if opts.ReapStartHeight > 0 && currentHeight == opts.ReapStartHeight {
+					expired = startStats
+					startStats = aggregateHeightStats{}
+				}
+				if err := processHeight(currentHeight, expired); err != nil {
 					_ = writer.Close()
 					return nil, err
 				}
@@ -280,12 +301,28 @@ func replayAggregateShards(shards map[uint64]aggregateShardInfo, network string,
 				backlog = append(backlog, group)
 				backlogCount += group.Count
 			}
-			if err := processHeight(currentHeight, statsByHeight[height]); err != nil {
+			expired := statsByHeight[height]
+			if opts.ReapStartHeight > 0 && currentHeight == opts.ReapStartHeight {
+				expired.Count += startStats.Count
+				expired.AmountSat += startStats.AmountSat
+				startStats = aggregateHeightStats{}
+			}
+			if err := processHeight(currentHeight, expired); err != nil {
 				_ = writer.Close()
 				return nil, err
 			}
 			currentHeight++
 		}
+	}
+	if !haveHeight && (backlogCount > 0 || startStats.Count > 0) {
+		currentHeight = opts.ReapStartHeight
+		haveHeight = true
+		if err := processHeight(currentHeight, startStats); err != nil {
+			_ = writer.Close()
+			return nil, err
+		}
+		currentHeight++
+		startStats = aggregateHeightStats{}
 	}
 	for backlogCount > 0 {
 		if err := processHeight(currentHeight, aggregateHeightStats{}); err != nil {
