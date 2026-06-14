@@ -5,6 +5,9 @@
 package main
 
 import (
+	"compress/gzip"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -279,4 +282,71 @@ func TestAggregatePreviewMatchesInMemoryPreview(t *testing.T) {
 	if _, err := os.Stat(summaryPath); err != nil {
 		t.Fatalf("summary missing: %v", err)
 	}
+}
+
+func TestAggregatePreviewHonorsReapStartHeight(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "utxo.jsonl.gz")
+	w, err := newJSONLGzipWriter(input)
+	if err != nil {
+		t.Fatalf("new writer: %v", err)
+	}
+	rows := []utxoRow{
+		{TxID: "00", Vout: 0, AmountSat: 1000, ExpiryHeight: 10, SnapshotHeight: 7, SnapshotHash: "abc"},
+		{TxID: "01", Vout: 0, AmountSat: 2000, ExpiryHeight: 11, SnapshotHeight: 7, SnapshotHash: "abc"},
+	}
+	for _, row := range rows {
+		if err := w.WriteJSON(row); err != nil {
+			t.Fatalf("write row: %v", err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close input: %v", err)
+	}
+
+	blocksPath := filepath.Join(dir, "blocks.jsonl.gz")
+	summaryPath := filepath.Join(dir, "summary.json")
+	summary, err := writeAggregatePreviewFiles(input, "obtcmainnet", &chaincfg.ObtcMainNetParams, 7, "abc",
+		blocksPath, summaryPath, aggregatePreviewOptions{WorkDir: dir, ShardSpan: 1, ReapStartHeight: 20})
+	if err != nil {
+		t.Fatalf("write aggregate preview: %v", err)
+	}
+	if summary.FirstReapHeight != 20 || summary.ReapStartHeight != 20 {
+		t.Fatalf("expected first/start height 20, got first=%d start=%d",
+			summary.FirstReapHeight, summary.ReapStartHeight)
+	}
+	gotBlocks := loadAggregateBlocks(t, blocksPath)
+	if len(gotBlocks) == 0 || gotBlocks[0].ReapHeight != 20 {
+		t.Fatalf("unexpected blocks: %+v", gotBlocks)
+	}
+	if gotBlocks[0].ExpiredInputs != 2 || gotBlocks[0].ExpiredAmountSat != 3000 {
+		t.Fatalf("expected historical expiries to be counted at start: %+v", gotBlocks[0])
+	}
+}
+
+func loadAggregateBlocks(t *testing.T, path string) []reapAggregateBlock {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open aggregate blocks: %v", err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("gzip reader: %v", err)
+	}
+	defer gz.Close()
+	dec := json.NewDecoder(gz)
+	var blocks []reapAggregateBlock
+	for {
+		var block reapAggregateBlock
+		if err := dec.Decode(&block); err != nil {
+			if err == io.EOF {
+				break
+			}
+			t.Fatalf("decode block: %v", err)
+		}
+		blocks = append(blocks, block)
+	}
+	return blocks
 }

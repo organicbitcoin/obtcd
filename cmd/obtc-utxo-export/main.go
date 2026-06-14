@@ -44,6 +44,7 @@ type config struct {
 	AggregatePreview bool
 	PreviewWorkDir   string
 	PreviewShardSpan int
+	ReapStartHeight  int
 	NoPreview        bool
 }
 
@@ -92,6 +93,7 @@ func parseConfig(args []string) (*config, error) {
 	fs.BoolVar(&cfg.AggregatePreview, "aggregate-preview", false, "write memory-bounded aggregate REAP preview instead of private txid/vout detail")
 	fs.StringVar(&cfg.PreviewWorkDir, "preview-workdir", "", "temporary directory for aggregate preview shards; defaults to --outdir")
 	fs.IntVar(&cfg.PreviewShardSpan, "preview-shard-span", 4096, "expiry-height span per aggregate preview shard")
+	fs.IntVar(&cfg.ReapStartHeight, "reap-start-height", -1, "first chain height allowed to include REAP; defaults to fork-height+2016 when --fork-height is set")
 	fs.BoolVar(&cfg.NoPreview, "no-preview", false, "export UTXO snapshot only")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -135,6 +137,9 @@ func parseConfig(args []string) (*config, error) {
 	if cfg.PreviewShardSpan <= 0 {
 		return nil, errors.New("--preview-shard-span must be > 0")
 	}
+	if cfg.ReapStartHeight < -1 {
+		return nil, errors.New("--reap-start-height must be >= 0 or -1")
+	}
 	return cfg, nil
 }
 
@@ -156,8 +161,9 @@ func run(cfg *config) error {
 			blocksPath, summaryPath := aggregatePreviewPaths(cfg.OutDir, snapshotHeight, snapshotHash)
 			_, err := writeAggregatePreviewFiles(cfg.InputPath, cfg.Network, params, snapshotHeight,
 				snapshotHash, blocksPath, summaryPath, aggregatePreviewOptions{
-					WorkDir:   aggregateWorkDir(cfg),
-					ShardSpan: uint64(cfg.PreviewShardSpan),
+					WorkDir:         aggregateWorkDir(cfg),
+					ShardSpan:       uint64(cfg.PreviewShardSpan),
+					ReapStartHeight: aggregateReapStartHeight(cfg),
 				})
 			if err != nil {
 				return fmt.Errorf("write aggregate preview: %w", err)
@@ -211,8 +217,9 @@ func run(cfg *config) error {
 		blocksPath, summaryPath := aggregatePreviewPaths(cfg.OutDir, manifest.SnapshotHeight, manifest.SnapshotHash)
 		_, err := writeAggregatePreviewFiles(utxoPath, cfg.Network, params, manifest.SnapshotHeight,
 			manifest.SnapshotHash, blocksPath, summaryPath, aggregatePreviewOptions{
-				WorkDir:   aggregateWorkDir(cfg),
-				ShardSpan: uint64(cfg.PreviewShardSpan),
+				WorkDir:         aggregateWorkDir(cfg),
+				ShardSpan:       uint64(cfg.PreviewShardSpan),
+				ReapStartHeight: aggregateReapStartHeight(cfg),
 			})
 		if err != nil {
 			return fmt.Errorf("write aggregate preview: %w", err)
@@ -476,6 +483,16 @@ func aggregateWorkDir(cfg *config) string {
 		return cfg.PreviewWorkDir
 	}
 	return cfg.OutDir
+}
+
+func aggregateReapStartHeight(cfg *config) uint64 {
+	if cfg.ReapStartHeight >= 0 {
+		return uint64(cfg.ReapStartHeight)
+	}
+	if cfg.ForkHeight >= 0 {
+		return uint64(cfg.ForkHeight + 2016)
+	}
+	return 0
 }
 
 func cleanHash(hash string) string {
