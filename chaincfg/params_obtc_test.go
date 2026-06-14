@@ -512,16 +512,23 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 				t.Fatalf("expected StartScanHeight to begin at genesis, got %d", p.StartScanHeight)
 			}
 			if tc.params.Net == ObtcMainNetParams.Net {
-				want := ObtcMainNetForkHeight + 2016
-				if p.EnableAtHeight != want {
-					t.Fatalf("expected mainnet EnableAtHeight %d, got %d", want, p.EnableAtHeight)
+				wantActivation := ObtcMainNetForkHeight + 2016
+				wantReplay := ObtcMainNetForkHeight + 1
+				if p.EnableAtHeight != wantActivation {
+					t.Fatalf("expected mainnet EnableAtHeight %d, got %d",
+						wantActivation, p.EnableAtHeight)
 				}
-				if p.ReapConsensusAtHeight != want || p.ReplayProtectionAtHeight != want {
-					t.Fatalf("expected mainnet staged heights to collapse to %d: %+v", want, p)
+				if p.ReapConsensusAtHeight != wantActivation {
+					t.Fatalf("expected mainnet ReapConsensusAtHeight %d, got %d",
+						wantActivation, p.ReapConsensusAtHeight)
 				}
-				if p.ExpiryCommitmentEnableAtHeight != want {
+				if p.ReplayProtectionAtHeight != wantReplay {
+					t.Fatalf("expected mainnet ReplayProtectionAtHeight %d, got %d",
+						wantReplay, p.ReplayProtectionAtHeight)
+				}
+				if p.ExpiryCommitmentEnableAtHeight != wantActivation {
 					t.Fatalf("expected mainnet commitment activation %d, got %d",
-						want, p.ExpiryCommitmentEnableAtHeight)
+						wantActivation, p.ExpiryCommitmentEnableAtHeight)
 				}
 				if p.ReapMaxInputs != 256 || p.ReapDustMaxInputs != 1024 ||
 					p.ReapMaxWeight != 400_000 {
@@ -534,7 +541,8 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			if p.ReapConsensusAtHeight < p.EnableAtHeight {
 				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
 			}
-			if p.ReplayProtectionAtHeight < p.ReapConsensusAtHeight {
+			if tc.params.Net != ObtcMainNetParams.Net &&
+				p.ReplayProtectionAtHeight < p.ReapConsensusAtHeight {
 				t.Fatalf("expected ReplayProtectionAtHeight >= ReapConsensusAtHeight: %+v", p)
 			}
 			if p.ReapMaxInputs <= 0 {
