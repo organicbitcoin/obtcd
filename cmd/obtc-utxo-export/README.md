@@ -72,6 +72,20 @@ anchor height before running direct export.
 Offline mode does not require RPC credentials. It validates that all input rows
 belong to one snapshot before generating preview files.
 
+For full BTC mainnet snapshots, use aggregate preview so the command does not
+load every UTXO into memory and does not emit txid/vout detail:
+
+```bash
+./obtc-utxo-export \
+  --network=obtcmainnet \
+  --input=/mnt/obtc-rehearsal/utxo-export/utxo-expiry-snapshot-<height>-<hash>.jsonl.gz \
+  --aggregate-preview \
+  --outdir=/mnt/obtc-rehearsal/utxo-export
+```
+
+Direct DB export uses aggregate preview by default unless `--no-preview` is
+set.
+
 ## Outputs
 
 - `utxo-expiry-snapshot-<height>-<hash>.jsonl.gz`: private raw UTXO rows.
@@ -81,6 +95,11 @@ belong to one snapshot before generating preview files.
   details.
 - `reap-preview-summary-<height>-<hash>.json`: aggregate preview by height,
   day, and week.
+- `reap-preview-blocks-<height>-<hash>.jsonl.gz`: public aggregate per future
+  REAP block, including expired input count, selected input count, tax, refund,
+  and backlog.
+- `reap-preview-aggregate-summary-<height>-<hash>.json`: public aggregate
+  totals and hashes for the block-level preview.
 
 The manifest `sha256` is computed over the uncompressed JSONL content so the
 same snapshot can be compared across repeated exports.

@@ -21,27 +21,30 @@ import (
 )
 
 type config struct {
-	Network        string
-	Source         string
-	RPCServer      string
-	RPCUser        string
-	RPCPass        string
-	RPCCert        string
-	NoTLS          bool
-	DBType         string
-	DBPath         string
-	DBNet          string
-	ForkHeight     int
-	ForkHash       string
-	OutDir         string
-	InputPath      string
-	PageSize       int
-	StartHeight    int
-	EndHeight      int
-	EndHeightSet   bool
-	AllowMovingTip bool
-	AllowStaleUTXO bool
-	NoPreview      bool
+	Network          string
+	Source           string
+	RPCServer        string
+	RPCUser          string
+	RPCPass          string
+	RPCCert          string
+	NoTLS            bool
+	DBType           string
+	DBPath           string
+	DBNet            string
+	ForkHeight       int
+	ForkHash         string
+	OutDir           string
+	InputPath        string
+	PageSize         int
+	StartHeight      int
+	EndHeight        int
+	EndHeightSet     bool
+	AllowMovingTip   bool
+	AllowStaleUTXO   bool
+	AggregatePreview bool
+	PreviewWorkDir   string
+	PreviewShardSpan int
+	NoPreview        bool
 }
 
 func main() {
@@ -86,6 +89,9 @@ func parseConfig(args []string) (*config, error) {
 	fs.IntVar(&cfg.EndHeight, "end-height", -1, "expiry height scan end; defaults to snapshot height + expiry window")
 	fs.BoolVar(&cfg.AllowMovingTip, "allow-moving-tip", false, "allow export even if chain tip changes while scanning")
 	fs.BoolVar(&cfg.AllowStaleUTXO, "allow-stale-utxo", false, "allow direct DB export when the flushed UTXO state hash does not match the best chain hash")
+	fs.BoolVar(&cfg.AggregatePreview, "aggregate-preview", false, "write memory-bounded aggregate REAP preview instead of private txid/vout detail")
+	fs.StringVar(&cfg.PreviewWorkDir, "preview-workdir", "", "temporary directory for aggregate preview shards; defaults to --outdir")
+	fs.IntVar(&cfg.PreviewShardSpan, "preview-shard-span", 4096, "expiry-height span per aggregate preview shard")
 	fs.BoolVar(&cfg.NoPreview, "no-preview", false, "export UTXO snapshot only")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -126,6 +132,9 @@ func parseConfig(args []string) (*config, error) {
 	if cfg.StartHeight < 0 {
 		return nil, errors.New("--start-height must be >= 0")
 	}
+	if cfg.PreviewShardSpan <= 0 {
+		return nil, errors.New("--preview-shard-span must be > 0")
+	}
 	return cfg, nil
 }
 
@@ -139,13 +148,26 @@ func run(cfg *config) error {
 	}
 
 	if cfg.InputPath != "" {
+		snapshotHeight, snapshotHash, err := snapshotFromFile(cfg.InputPath)
+		if err != nil {
+			return err
+		}
+		if cfg.AggregatePreview {
+			blocksPath, summaryPath := aggregatePreviewPaths(cfg.OutDir, snapshotHeight, snapshotHash)
+			_, err := writeAggregatePreviewFiles(cfg.InputPath, cfg.Network, params, snapshotHeight,
+				snapshotHash, blocksPath, summaryPath, aggregatePreviewOptions{
+					WorkDir:   aggregateWorkDir(cfg),
+					ShardSpan: uint64(cfg.PreviewShardSpan),
+				})
+			if err != nil {
+				return fmt.Errorf("write aggregate preview: %w", err)
+			}
+			fmt.Printf("preview_blocks=%s\npreview_summary=%s\n", blocksPath, summaryPath)
+			return nil
+		}
 		rows, err := loadUTXORows(cfg.InputPath)
 		if err != nil {
 			return fmt.Errorf("load input: %w", err)
-		}
-		snapshotHeight, snapshotHash, err := snapshotFromRows(rows)
-		if err != nil {
-			return err
 		}
 		detailPath, summaryPath := previewPaths(cfg.OutDir, snapshotHeight, snapshotHash)
 		_, err = writePreviewFiles(rows, cfg.Network, params, snapshotHeight, snapshotHash, detailPath, summaryPath)
@@ -183,6 +205,19 @@ func run(cfg *config) error {
 			manifest.SnapshotHeight, manifest.SnapshotHash, manifest.FinalHeight, manifest.FinalHash)
 	}
 	if cfg.NoPreview {
+		return nil
+	}
+	if cfg.AggregatePreview || cfg.Source == "btcd-db" {
+		blocksPath, summaryPath := aggregatePreviewPaths(cfg.OutDir, manifest.SnapshotHeight, manifest.SnapshotHash)
+		_, err := writeAggregatePreviewFiles(utxoPath, cfg.Network, params, manifest.SnapshotHeight,
+			manifest.SnapshotHash, blocksPath, summaryPath, aggregatePreviewOptions{
+				WorkDir:   aggregateWorkDir(cfg),
+				ShardSpan: uint64(cfg.PreviewShardSpan),
+			})
+		if err != nil {
+			return fmt.Errorf("write aggregate preview: %w", err)
+		}
+		fmt.Printf("preview_blocks=%s\npreview_summary=%s\n", blocksPath, summaryPath)
 		return nil
 	}
 
@@ -428,6 +463,19 @@ func previewPaths(outDir string, height int32, hash string) (string, string) {
 	clean := cleanHash(hash)
 	return filepath.Join(outDir, fmt.Sprintf("reap-preview-detail-%d-%s.jsonl.gz", height, clean)),
 		filepath.Join(outDir, fmt.Sprintf("reap-preview-summary-%d-%s.json", height, clean))
+}
+
+func aggregatePreviewPaths(outDir string, height int32, hash string) (string, string) {
+	clean := cleanHash(hash)
+	return filepath.Join(outDir, fmt.Sprintf("reap-preview-blocks-%d-%s.jsonl.gz", height, clean)),
+		filepath.Join(outDir, fmt.Sprintf("reap-preview-aggregate-summary-%d-%s.json", height, clean))
+}
+
+func aggregateWorkDir(cfg *config) string {
+	if cfg.PreviewWorkDir != "" {
+		return cfg.PreviewWorkDir
+	}
+	return cfg.OutDir
 }
 
 func cleanHash(hash string) string {
