@@ -101,6 +101,10 @@ Version-bits deployments:
 The OBTC mainnet fork height is a provisional mainnet-candidate planning value.
 It may change before final release artifacts are cut.
 
+The current mainnet replay-protection height is derived as:
+
+`ObtcMainNetForkHeight + 1`
+
 The current expiry / REAP / commitment activation height is derived as:
 
 `ObtcMainNetForkHeight + 2016`

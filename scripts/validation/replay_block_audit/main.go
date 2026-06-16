@@ -549,9 +549,9 @@ func (a *replayAuditor) applyTransaction(tx *wire.MsgTx, height int32) {
 
 		op := wire.OutPoint{Hash: txHash, Index: uint32(i)}
 		if height == 0 && isCoinbase {
-			if a.expiryParams != nil {
-				a.accumulator.Add(encodeAccumulatorEntry(op, a.expiryParams.CalculateExpiryKey(height)))
-			}
+			// Bitcoin consensus treats the genesis coinbase as unspendable.
+			// OBTC expiry state therefore excludes it from both the live UTXO
+			// set and the expiry commitment accumulator.
 			continue
 		}
 
