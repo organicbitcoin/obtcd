@@ -75,8 +75,9 @@ The mainnet-candidate join draft is maintained in
 | BIP44 coin type | `20260` | `20261` | `20262` |
 
 * Mainnet fork height is provisional and may change before final
-  mainnet-candidate release artifacts are published. Current derived mainnet
-  activation height is `1002016`.
+  mainnet-candidate release artifacts are published. Current mainnet
+  replay-protection height is `1000001` (fork + 1). Current expiry / REAP /
+  commitment activation height is `1002016` (fork + 2016).
 
 ## Requirements
 

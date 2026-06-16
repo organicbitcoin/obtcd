@@ -365,13 +365,14 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 	switch params.Net {
 	case wire.ObtcMainNet:
 		mainnetActivationHeight := ObtcMainNetForkHeight + 2016
+		mainnetReplayProtectionHeight := ObtcMainNetForkHeight + 1
 		return &ExpiryParams{
 			WindowBlocks:                   362880,
 			ListBatchLimit:                 10000,
 			StartScanHeight:                0,
 			EnableAtHeight:                 mainnetActivationHeight,
 			ReapConsensusAtHeight:          mainnetActivationHeight,
-			ReplayProtectionAtHeight:       mainnetActivationHeight,
+			ReplayProtectionAtHeight:       mainnetReplayProtectionHeight,
 			ReapMaxInputs:                  256,
 			ReapDustMaxInputs:              1024,
 			ReapTaxNumerator:               30,

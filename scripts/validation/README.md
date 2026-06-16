@@ -141,7 +141,7 @@ Two implementation notes from recent debugging are worth keeping in mind:
 
 The replay model also includes the current genesis special-casing used by OBTC:
 
-- the genesis coinbase is included in the expiry-commitment accumulator model
+- the genesis coinbase is excluded from the expiry-commitment accumulator model
 - the genesis coinbase is not treated as a live spend candidate or REAP input
 
 ## 🔧 Advanced Usage
