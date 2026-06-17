@@ -3,6 +3,10 @@
 This page is for invited testers who are helping try the OBTC limited public
 testnet.
 
+Canonical guide: [OBTC Public Testnet User Test](public-testnet-user-test.md).
+Use that page for new tests; this page is kept as a compatibility entry point
+for older limited-review links.
+
 This is not a public launch, not a mainnet release, not an investment or yield
 program, and not a request for promotion or endorsement. Testnet coins have no
 real-world value.
@@ -40,7 +44,7 @@ Copy this prompt into your AI assistant:
 Please help me try the OBTC limited public testnet on this machine.
 
 Follow this guide:
-https://github.com/organicbitcoin/obtcd/blob/bypass/docs/limited-public-testnet-user-test.md
+https://github.com/organicbitcoin/obtcd/blob/master/docs/public-testnet-user-test.md
 
 Rules:
 - Use ~/obtc-testnet as the working directory.
