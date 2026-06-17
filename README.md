@@ -4,21 +4,50 @@
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
 
-OBTC is a Bitcoin-derived lifecycle-money experiment.
+OBTC is a Bitcoin-derived lifecycle-money experiment. It asks whether a
+Bitcoin-like UTXO system can make long dormancy explicit through expiry,
+renewal, and a rule-bound reclaim path instead of treating every old output as
+operationally active forever.
 
 `obtcd` is the OBTC node implementation. It is derived from
 [btcsuite/btcd](https://github.com/btcsuite/btcd) and adds OBTC network
 parameters, expiry-aware indexing, replay protection, expiry commitment support,
 REAP validation paths, and operator tooling for testnet and mainnet-candidate
-work.
+review.
 
-This repository is public for developer, node operator, miner, and reviewer
-inspection. It is not production financial infrastructure.
+## Read this first
+
+If you are new to OBTC, start here:
+
+- **What it is:** a separate Bitcoin-derived proof-of-work chain experiment
+  around UTXO lifecycle rules.
+- **Core mechanisms:** expiry, active renewal, REAP, refund/security-budget
+  accounting, expiry commitments, and replay protection.
+- **Why it exists:** to test whether dormant UTXO state, state maintenance, and
+  long-term security-budget pressure can be handled by explicit lifecycle rules
+  in a separate experiment.
+- **Current status:** mainnet-candidate and public testnet review. The code and
+  docs are open for technical review, but this is not final release material or
+  mature financial infrastructure.
+- **Non-goals:** this is not a Bitcoin consensus proposal, not an endorsement
+  request, not an investment project, not a promise of miner income, and not a
+  request that any pool, firmware project, or protocol project adopt OBTC.
+- **What review is useful:** protocol assumptions, replay/activation boundaries,
+  wallet renewal behavior, mining-template and coinbase accounting, Stratum
+  documentation assumptions, reproducibility of testnet instructions, and
+  wording that could overstate readiness.
+
+Reviewer entry points:
+
+- [Reviewer Quick Start](docs/reviewer-quickstart.md)
+- [Mining Review Checklist](docs/mining-review-checklist.md)
+- [Testnet Join Guide](docs/testnet-join.md)
+- [Mainnet Join Runbook](docs/mainnet-join.md)
+- [Network Parameters](docs/network-parameters.md)
 
 ## Status
 
-The current public target is `mainnet-candidate-2026-07`, not a mature
-production mainnet.
+The current public target is `mainnet-candidate-2026-07`.
 
 Current milestone:
 
@@ -50,7 +79,7 @@ Website:
 - This is a mainnet-candidate codebase, not a production financial system.
 - Seed replacement, public observation, and release hardening are still active
   launch work.
-- Miner-facing material must not be read as a revenue guarantee. REAP-related
+- Miner-facing material must not be read as an income projection. REAP-related
   miner accounting depends on activation state, candidate availability, and
   block template validation.
 - The Go module path still inherits upstream `github.com/btcsuite/btcd`.
