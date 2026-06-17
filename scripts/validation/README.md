@@ -144,6 +144,46 @@ The replay model also includes the current genesis special-casing used by OBTC:
 - the genesis coinbase is excluded from the expiry-commitment accumulator model
 - the genesis coinbase is not treated as a live spend candidate or REAP input
 
+For long-running public testnet or mainnet-candidate audits, use a block cache
+and checkpoint so the run is resumable and can be repeated offline without
+holding live RPC open for the entire replay:
+
+```bash
+go run ./scripts/validation/replay_block_audit/main.go \
+  -network=obtctestnet \
+  -rpchost=127.0.0.1:19528 \
+  -rpcuser="$RPC_USER" \
+  -rpcpass="$RPC_PASS" \
+  -block-cache-dir=/tmp/obtc-replay-cache \
+  -checkpoint=/tmp/obtc-replay-cache/obtctestnet.checkpoint.json \
+  -resume \
+  -check-reap-selection \
+  -verbose \
+  -progress-every=25 \
+  -json \
+  -output=/tmp/obtc-replay-audit.json
+```
+
+After the cache is populated, the same chain can be replayed without RPC:
+
+```bash
+go run ./scripts/validation/replay_block_audit/main.go \
+  -network=obtctestnet \
+  -offline \
+  -block-cache-dir=/tmp/obtc-replay-cache \
+  -checkpoint=/tmp/obtc-replay-cache/obtctestnet.checkpoint.json \
+  -resume \
+  -check-reap-selection \
+  -verbose \
+  -json \
+  -output=/tmp/obtc-replay-audit-offline.json
+```
+
+The `-start` flag controls the reported range. The auditor may still replay
+earlier blocks to reconstruct the UTXO set, expiry accumulator, and deterministic
+REAP candidate set. Use `-checkpoint` and `-resume` when that reconstruction is
+expensive.
+
 ## 🔧 Advanced Usage
 
 ### Direct Tool Usage

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
@@ -42,6 +43,12 @@ type config struct {
 	OutputFile         string
 	MaxIssues          int
 	CheckReapSelection bool
+	BlockCacheDir      string
+	Offline            bool
+	CheckpointFile     string
+	CheckpointEvery    int32
+	Resume             bool
+	ProgressEvery      int32
 }
 
 type trackedUTXO struct {
@@ -87,6 +94,29 @@ type auditReport struct {
 	FirstIssues []auditIssue `json:"first_issues,omitempty"`
 }
 
+type auditCheckpoint struct {
+	Version            int              `json:"version"`
+	Network            string           `json:"network"`
+	StartHeight        int32            `json:"start_height"`
+	EndHeight          int32            `json:"end_height"`
+	TipHeight          int32            `json:"tip_height"`
+	CheckReapSelection bool             `json:"check_reap_selection"`
+	CompletedHeight    int32            `json:"completed_height"`
+	PrevHash           string           `json:"prev_hash,omitempty"`
+	Accumulator        string           `json:"accumulator"`
+	Report             auditReport      `json:"report"`
+	LiveUTXOs          []checkpointUTXO `json:"live_utxos"`
+}
+
+type checkpointUTXO struct {
+	Hash        string `json:"hash"`
+	Index       uint32 `json:"index"`
+	Value       int64  `json:"value"`
+	PkScript    string `json:"pk_script"`
+	BlockHeight int32  `json:"block_height"`
+	IsCoinbase  bool   `json:"is_coinbase"`
+}
+
 type replayAuditor struct {
 	cfg          *config
 	net          *chaincfg.Params
@@ -115,27 +145,30 @@ func main() {
 		fatalf("resolve network: %v", err)
 	}
 
-	client, err := createRPCClient(cfg)
-	if err != nil {
-		fatalf("create RPC client: %v", err)
+	var client *rpcclient.Client
+	if !cfg.Offline {
+		client, err = createRPCClient(cfg)
+		if err != nil {
+			fatalf("create RPC client: %v", err)
+		}
+		defer client.Shutdown()
 	}
-	defer client.Shutdown()
 
-	tipHeight, err := client.GetBlockCount()
+	tipHeight, err := resolveTipHeight(client, cfg, net)
 	if err != nil {
-		fatalf("get block count: %v", err)
+		fatalf("resolve tip height: %v", err)
 	}
 	if !cfg.EndSet {
-		cfg.EndHeight = int32(tipHeight)
+		cfg.EndHeight = tipHeight
 	}
-	if cfg.EndHeight > int32(tipHeight) {
+	if cfg.EndHeight > tipHeight {
 		fatalf("requested end height %d exceeds tip %d", cfg.EndHeight, tipHeight)
 	}
 	if cfg.StartHeight < 0 || cfg.StartHeight > cfg.EndHeight {
 		fatalf("invalid height range start=%d end=%d", cfg.StartHeight, cfg.EndHeight)
 	}
 
-	report, err := runAudit(client, cfg, net, int32(tipHeight))
+	report, err := runAudit(client, cfg, net, tipHeight)
 	if err != nil {
 		fatalf("run audit: %v", err)
 	}
@@ -161,6 +194,8 @@ func parseFlags() (*config, error) {
 	cfg := &config{}
 	var startHeight int
 	var endHeight int
+	var checkpointEvery int
+	var progressEvery int
 
 	flag.StringVar(&cfg.RPCHost, "rpchost", "", "RPC server host:port (auto-detected if empty)")
 	flag.StringVar(&cfg.RPCUser, "rpcuser", "", "RPC username")
@@ -174,14 +209,31 @@ func parseFlags() (*config, error) {
 	flag.StringVar(&cfg.OutputFile, "output", "", "write JSON report to file")
 	flag.IntVar(&cfg.MaxIssues, "max-issues", 20, "maximum issues to keep in the report body")
 	flag.BoolVar(&cfg.CheckReapSelection, "check-reap-selection", false, "also enforce the current deterministic REAP selection policy")
+	flag.StringVar(&cfg.BlockCacheDir, "block-cache-dir", "", "directory for raw block cache; enables resumable fetch and offline replays")
+	flag.BoolVar(&cfg.Offline, "offline", false, "read blocks only from -block-cache-dir without RPC")
+	flag.StringVar(&cfg.CheckpointFile, "checkpoint", "", "checkpoint file for resumable full-chain audits")
+	flag.IntVar(&checkpointEvery, "checkpoint-every", 100, "write checkpoint every N blocks when -checkpoint is set")
+	flag.BoolVar(&cfg.Resume, "resume", false, "resume from -checkpoint if it exists")
+	flag.IntVar(&progressEvery, "progress-every", 100, "verbose progress interval in blocks")
 	flag.Parse()
 
-	if cfg.RPCUser == "" || cfg.RPCPass == "" {
+	if cfg.Offline && cfg.BlockCacheDir == "" {
+		return nil, errors.New("offline mode requires -block-cache-dir")
+	}
+	if !cfg.Offline && (cfg.RPCUser == "" || cfg.RPCPass == "") {
 		return nil, errors.New("rpcuser and rpcpass are required")
 	}
 	if cfg.MaxIssues < 0 {
 		return nil, fmt.Errorf("max-issues must be >= 0")
 	}
+	if checkpointEvery < 0 {
+		return nil, fmt.Errorf("checkpoint-every must be >= 0")
+	}
+	if progressEvery < 0 {
+		return nil, fmt.Errorf("progress-every must be >= 0")
+	}
+	cfg.CheckpointEvery = int32(checkpointEvery)
+	cfg.ProgressEvery = int32(progressEvery)
 	if endHeight >= 0 {
 		cfg.EndHeight = int32(endHeight)
 		cfg.EndSet = true
@@ -228,6 +280,162 @@ func resolveNetwork(name string) (*chaincfg.Params, error) {
 	}
 }
 
+func resolveTipHeight(client *rpcclient.Client, cfg *config, net *chaincfg.Params) (int32, error) {
+	if cfg.Offline {
+		height, err := maxCachedHeight(cfg, net)
+		if err != nil {
+			return 0, err
+		}
+		return height, nil
+	}
+	tipHeight, err := client.GetBlockCount()
+	if err != nil {
+		return 0, fmt.Errorf("get block count: %w", err)
+	}
+	return int32(tipHeight), nil
+}
+
+func getBlockAtHeight(client *rpcclient.Client, cfg *config, net *chaincfg.Params, height int32) (*wire.MsgBlock, *chainhash.Hash, error) {
+	if cfg.Offline {
+		return readCachedBlockAtHeight(cfg, net, height)
+	}
+
+	blockHash, err := client.GetBlockHash(int64(height))
+	if err != nil {
+		return nil, nil, fmt.Errorf("get block hash at %d: %w", height, err)
+	}
+	if cfg.BlockCacheDir != "" {
+		if block, err := readCachedBlock(cfg, net, height, blockHash); err == nil {
+			return block, blockHash, nil
+		}
+	}
+
+	block, err := client.GetBlock(blockHash)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get block %s: %w", blockHash, err)
+	}
+	if cfg.BlockCacheDir != "" {
+		if err := writeCachedBlock(cfg, net, height, blockHash, block); err != nil {
+			return nil, nil, err
+		}
+	}
+	return block, blockHash, nil
+}
+
+func cacheNetworkDir(cfg *config, net *chaincfg.Params) string {
+	return filepath.Join(filepath.Clean(cfg.BlockCacheDir), sanitizePathComponent(net.Name))
+}
+
+func cachedBlockPath(cfg *config, net *chaincfg.Params, height int32, hash *chainhash.Hash) string {
+	return filepath.Join(cacheNetworkDir(cfg, net), fmt.Sprintf("%09d-%s.block", height, hash))
+}
+
+func cachedBlockGlob(cfg *config, net *chaincfg.Params, height int32) string {
+	return filepath.Join(cacheNetworkDir(cfg, net), fmt.Sprintf("%09d-*.block", height))
+}
+
+func maxCachedHeight(cfg *config, net *chaincfg.Params) (int32, error) {
+	matches, err := filepath.Glob(filepath.Join(cacheNetworkDir(cfg, net), "*.block"))
+	if err != nil {
+		return 0, err
+	}
+	if len(matches) == 0 {
+		return 0, fmt.Errorf("no cached blocks found under %s", cacheNetworkDir(cfg, net))
+	}
+
+	var maxHeight int32 = -1
+	for _, match := range matches {
+		base := filepath.Base(match)
+		var height int32
+		if _, err := fmt.Sscanf(base, "%09d-", &height); err != nil {
+			continue
+		}
+		if height > maxHeight {
+			maxHeight = height
+		}
+	}
+	if maxHeight < 0 {
+		return 0, fmt.Errorf("no height-prefixed cached block files found under %s", cacheNetworkDir(cfg, net))
+	}
+	return maxHeight, nil
+}
+
+func readCachedBlockAtHeight(cfg *config, net *chaincfg.Params, height int32) (*wire.MsgBlock, *chainhash.Hash, error) {
+	matches, err := filepath.Glob(cachedBlockGlob(cfg, net, height))
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(matches) == 0 {
+		return nil, nil, fmt.Errorf("cached block missing at height %d", height)
+	}
+	if len(matches) > 1 {
+		return nil, nil, fmt.Errorf("multiple cached blocks at height %d: %v", height, matches)
+	}
+	block, err := readBlockFile(matches[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	hash := block.BlockHash()
+	return block, &hash, nil
+}
+
+func readCachedBlock(cfg *config, net *chaincfg.Params, height int32, hash *chainhash.Hash) (*wire.MsgBlock, error) {
+	return readBlockFile(cachedBlockPath(cfg, net, height, hash))
+}
+
+func readBlockFile(path string) (*wire.MsgBlock, error) {
+	payload, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return nil, err
+	}
+	var block wire.MsgBlock
+	if err := block.Deserialize(bytes.NewReader(payload)); err != nil {
+		return nil, fmt.Errorf("deserialize cached block %s: %w", path, err)
+	}
+	return &block, nil
+}
+
+func writeCachedBlock(cfg *config, net *chaincfg.Params, height int32, hash *chainhash.Hash, block *wire.MsgBlock) error {
+	dir := cacheNetworkDir(cfg, net)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create block cache dir: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := block.Serialize(&buf); err != nil {
+		return fmt.Errorf("serialize block %d: %w", height, err)
+	}
+	path := cachedBlockPath(cfg, net, height, hash)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write cached block %d: %w", height, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("commit cached block %d: %w", height, err)
+	}
+	return nil
+}
+
+func sanitizePathComponent(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "unknown"
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		case r == '-' || r == '_' || r == '.':
+			return r
+		default:
+			return '_'
+		}
+	}, s)
+}
+
 func createRPCClient(cfg *config) (*rpcclient.Client, error) {
 	connCfg := &rpcclient.ConnConfig{
 		Host:         cfg.RPCHost,
@@ -265,24 +473,225 @@ func runAudit(client *rpcclient.Client, cfg *config, net *chaincfg.Params, tipHe
 		},
 	}
 
-	for height := int32(0); height <= cfg.EndHeight; height++ {
-		if cfg.Verbose && (height == 0 || height == cfg.EndHeight || height%100 == 0) {
-			fmt.Fprintf(os.Stderr, "[audit] replaying block %d/%d\n", height, cfg.EndHeight)
+	nextHeight := int32(0)
+	if cfg.Resume && cfg.CheckpointFile != "" {
+		resumed, completedHeight, err := loadCheckpoint(cfg, net, tipHeight)
+		if err != nil {
+			return nil, err
+		}
+		if resumed != nil {
+			auditor = resumed
+			nextHeight = completedHeight + 1
+			auditor.cfg = cfg
+			auditor.net = net
+			auditor.expiryParams = chaincfg.GetExpiryParams(net)
+			auditor.reapParams = reap.DefaultREAPParamsForNet(net, reap.SortModeStrict)
+			auditor.report.Summary.EndHeight = cfg.EndHeight
+			auditor.report.Summary.TipHeight = tipHeight
+			if cfg.Verbose {
+				fmt.Fprintf(os.Stderr, "[audit] resumed checkpoint height=%d next=%d utxos=%d issues=%d\n",
+					completedHeight, nextHeight, len(auditor.liveUTXOs), auditor.report.Summary.IssueCount)
+			}
+		}
+	}
+
+	startedAt := time.Now()
+	for height := nextHeight; height <= cfg.EndHeight; height++ {
+		if shouldPrintProgress(cfg, height) {
+			printProgress(auditor, height, startedAt)
 		}
 
-		blockHash, err := client.GetBlockHash(int64(height))
+		block, _, err := getBlockAtHeight(client, cfg, net, height)
 		if err != nil {
-			return nil, fmt.Errorf("get block hash at %d: %w", height, err)
+			return nil, err
 		}
-		block, err := client.GetBlock(blockHash)
-		if err != nil {
-			return nil, fmt.Errorf("get block %s: %w", blockHash, err)
-		}
-
 		auditor.auditBlock(block, height, height >= cfg.StartHeight)
+		if shouldWriteCheckpoint(cfg, height) {
+			if err := saveCheckpoint(cfg, auditor, height, tipHeight); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if cfg.CheckpointFile != "" {
+		if err := saveCheckpoint(cfg, auditor, cfg.EndHeight, tipHeight); err != nil {
+			return nil, err
+		}
 	}
 
 	return &auditor.report, nil
+}
+
+func shouldPrintProgress(cfg *config, height int32) bool {
+	if !cfg.Verbose {
+		return false
+	}
+	if height == 0 || height == cfg.EndHeight {
+		return true
+	}
+	return cfg.ProgressEvery > 0 && height%cfg.ProgressEvery == 0
+}
+
+func printProgress(a *replayAuditor, height int32, startedAt time.Time) {
+	fmt.Fprintf(os.Stderr, "[audit] replaying block %d/%d elapsed=%s utxos=%d issues=%d reap_blocks=%d\n",
+		height, a.cfg.EndHeight, time.Since(startedAt).Round(time.Second),
+		len(a.liveUTXOs), a.report.Summary.IssueCount, a.report.Summary.ReapBlocks)
+}
+
+func shouldWriteCheckpoint(cfg *config, height int32) bool {
+	if cfg.CheckpointFile == "" || cfg.CheckpointEvery <= 0 {
+		return false
+	}
+	return height == cfg.EndHeight || height%cfg.CheckpointEvery == 0
+}
+
+func saveCheckpoint(cfg *config, a *replayAuditor, completedHeight, tipHeight int32) error {
+	accumulator := a.accumulator.Serialize()
+	prevHash := ""
+	if a.prevHash != nil {
+		prevHash = a.prevHash.String()
+	}
+	cp := auditCheckpoint{
+		Version:            1,
+		Network:            a.net.Name,
+		StartHeight:        cfg.StartHeight,
+		EndHeight:          cfg.EndHeight,
+		TipHeight:          tipHeight,
+		CheckReapSelection: cfg.CheckReapSelection,
+		CompletedHeight:    completedHeight,
+		PrevHash:           prevHash,
+		Accumulator:        hex.EncodeToString(accumulator),
+		Report:             a.report,
+		LiveUTXOs:          checkpointUTXOs(a.liveUTXOs),
+	}
+	payload, err := json.MarshalIndent(cp, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal checkpoint: %w", err)
+	}
+	path := filepath.Clean(cfg.CheckpointFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create checkpoint dir: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+		return fmt.Errorf("write checkpoint: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("commit checkpoint: %w", err)
+	}
+	if cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "[audit] checkpoint height=%d path=%s utxos=%d\n",
+			completedHeight, path, len(cp.LiveUTXOs))
+	}
+	return nil
+}
+
+func loadCheckpoint(cfg *config, net *chaincfg.Params, tipHeight int32) (*replayAuditor, int32, error) {
+	path := filepath.Clean(cfg.CheckpointFile)
+	payload, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, -1, nil
+	}
+	if err != nil {
+		return nil, -1, fmt.Errorf("read checkpoint: %w", err)
+	}
+	var cp auditCheckpoint
+	if err := json.Unmarshal(payload, &cp); err != nil {
+		return nil, -1, fmt.Errorf("decode checkpoint: %w", err)
+	}
+	if cp.Version != 1 {
+		return nil, -1, fmt.Errorf("unsupported checkpoint version %d", cp.Version)
+	}
+	if cp.Network != net.Name {
+		return nil, -1, fmt.Errorf("checkpoint network %q does not match %q", cp.Network, net.Name)
+	}
+	if cp.StartHeight != cfg.StartHeight {
+		return nil, -1, fmt.Errorf("checkpoint start height %d does not match %d", cp.StartHeight, cfg.StartHeight)
+	}
+	if cp.CheckReapSelection != cfg.CheckReapSelection {
+		return nil, -1, fmt.Errorf("checkpoint check-reap-selection=%v does not match %v",
+			cp.CheckReapSelection, cfg.CheckReapSelection)
+	}
+	if cp.CompletedHeight > cfg.EndHeight {
+		return nil, -1, fmt.Errorf("checkpoint completed height %d exceeds requested end %d",
+			cp.CompletedHeight, cfg.EndHeight)
+	}
+
+	accumulatorBytes, err := hex.DecodeString(cp.Accumulator)
+	if err != nil {
+		return nil, -1, fmt.Errorf("decode checkpoint accumulator: %w", err)
+	}
+	accumulator := expiryindex.NewMuHash()
+	if err := accumulator.Deserialize(accumulatorBytes); err != nil {
+		return nil, -1, fmt.Errorf("restore checkpoint accumulator: %w", err)
+	}
+	liveUTXOs, err := restoreCheckpointUTXOs(cp.LiveUTXOs)
+	if err != nil {
+		return nil, -1, err
+	}
+	var prevHash *chainhash.Hash
+	if cp.PrevHash != "" {
+		hash, err := chainhash.NewHashFromStr(cp.PrevHash)
+		if err != nil {
+			return nil, -1, fmt.Errorf("decode checkpoint prev hash: %w", err)
+		}
+		prevHash = hash
+	}
+	cp.Report.Summary.EndHeight = cfg.EndHeight
+	cp.Report.Summary.TipHeight = tipHeight
+	return &replayAuditor{
+		cfg:          cfg,
+		net:          net,
+		expiryParams: chaincfg.GetExpiryParams(net),
+		reapParams:   reap.DefaultREAPParamsForNet(net, reap.SortModeStrict),
+		liveUTXOs:    liveUTXOs,
+		accumulator:  accumulator,
+		report:       cp.Report,
+		prevHash:     prevHash,
+	}, cp.CompletedHeight, nil
+}
+
+func checkpointUTXOs(utxos map[wire.OutPoint]*trackedUTXO) []checkpointUTXO {
+	out := make([]checkpointUTXO, 0, len(utxos))
+	for _, utxo := range utxos {
+		out = append(out, checkpointUTXO{
+			Hash:        utxo.OutPoint.Hash.String(),
+			Index:       utxo.OutPoint.Index,
+			Value:       utxo.Value,
+			PkScript:    hex.EncodeToString(utxo.PkScript),
+			BlockHeight: utxo.BlockHeight,
+			IsCoinbase:  utxo.IsCoinbase,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Hash != out[j].Hash {
+			return out[i].Hash < out[j].Hash
+		}
+		return out[i].Index < out[j].Index
+	})
+	return out
+}
+
+func restoreCheckpointUTXOs(entries []checkpointUTXO) (map[wire.OutPoint]*trackedUTXO, error) {
+	out := make(map[wire.OutPoint]*trackedUTXO, len(entries))
+	for _, entry := range entries {
+		hash, err := chainhash.NewHashFromStr(entry.Hash)
+		if err != nil {
+			return nil, fmt.Errorf("decode checkpoint outpoint hash: %w", err)
+		}
+		pkScript, err := hex.DecodeString(entry.PkScript)
+		if err != nil {
+			return nil, fmt.Errorf("decode checkpoint pkscript: %w", err)
+		}
+		op := wire.OutPoint{Hash: *hash, Index: entry.Index}
+		out[op] = &trackedUTXO{
+			OutPoint:    op,
+			Value:       entry.Value,
+			PkScript:    pkScript,
+			BlockHeight: entry.BlockHeight,
+			IsCoinbase:  entry.IsCoinbase,
+		}
+	}
+	return out, nil
 }
 
 func (a *replayAuditor) auditBlock(block *wire.MsgBlock, height int32, countInReport bool) {
