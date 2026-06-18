@@ -49,6 +49,7 @@ type config struct {
 	CheckpointEvery    int32
 	Resume             bool
 	ProgressEvery      int32
+	RPCRetries         int
 }
 
 type trackedUTXO struct {
@@ -215,6 +216,7 @@ func parseFlags() (*config, error) {
 	flag.IntVar(&checkpointEvery, "checkpoint-every", 100, "write checkpoint every N blocks when -checkpoint is set")
 	flag.BoolVar(&cfg.Resume, "resume", false, "resume from -checkpoint if it exists")
 	flag.IntVar(&progressEvery, "progress-every", 100, "verbose progress interval in blocks")
+	flag.IntVar(&cfg.RPCRetries, "rpc-retries", 5, "number of retries for transient RPC read failures")
 	flag.Parse()
 
 	if cfg.Offline && cfg.BlockCacheDir == "" {
@@ -231,6 +233,9 @@ func parseFlags() (*config, error) {
 	}
 	if progressEvery < 0 {
 		return nil, fmt.Errorf("progress-every must be >= 0")
+	}
+	if cfg.RPCRetries < 0 {
+		return nil, fmt.Errorf("rpc-retries must be >= 0")
 	}
 	cfg.CheckpointEvery = int32(checkpointEvery)
 	cfg.ProgressEvery = int32(progressEvery)
@@ -288,7 +293,7 @@ func resolveTipHeight(client *rpcclient.Client, cfg *config, net *chaincfg.Param
 		}
 		return height, nil
 	}
-	tipHeight, err := client.GetBlockCount()
+	tipHeight, err := getBlockCountWithRetry(client, cfg)
 	if err != nil {
 		return 0, fmt.Errorf("get block count: %w", err)
 	}
@@ -300,7 +305,7 @@ func getBlockAtHeight(client *rpcclient.Client, cfg *config, net *chaincfg.Param
 		return readCachedBlockAtHeight(cfg, net, height)
 	}
 
-	blockHash, err := client.GetBlockHash(int64(height))
+	blockHash, err := getBlockHashWithRetry(client, cfg, height)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get block hash at %d: %w", height, err)
 	}
@@ -310,7 +315,7 @@ func getBlockAtHeight(client *rpcclient.Client, cfg *config, net *chaincfg.Param
 		}
 	}
 
-	block, err := client.GetBlock(blockHash)
+	block, err := getBlockWithRetry(client, cfg, blockHash)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get block %s: %w", blockHash, err)
 	}
@@ -320,6 +325,60 @@ func getBlockAtHeight(client *rpcclient.Client, cfg *config, net *chaincfg.Param
 		}
 	}
 	return block, blockHash, nil
+}
+
+func getBlockCountWithRetry(client *rpcclient.Client, cfg *config) (int64, error) {
+	var lastErr error
+	for attempt := 0; attempt <= cfg.RPCRetries; attempt++ {
+		count, err := client.GetBlockCount()
+		if err == nil {
+			return count, nil
+		}
+		lastErr = err
+		sleepBeforeRPCRetry(cfg, "getblockcount", attempt, err)
+	}
+	return 0, lastErr
+}
+
+func getBlockHashWithRetry(client *rpcclient.Client, cfg *config, height int32) (*chainhash.Hash, error) {
+	var lastErr error
+	for attempt := 0; attempt <= cfg.RPCRetries; attempt++ {
+		hash, err := client.GetBlockHash(int64(height))
+		if err == nil {
+			return hash, nil
+		}
+		lastErr = err
+		sleepBeforeRPCRetry(cfg, fmt.Sprintf("getblockhash height=%d", height), attempt, err)
+	}
+	return nil, lastErr
+}
+
+func getBlockWithRetry(client *rpcclient.Client, cfg *config, hash *chainhash.Hash) (*wire.MsgBlock, error) {
+	var lastErr error
+	for attempt := 0; attempt <= cfg.RPCRetries; attempt++ {
+		block, err := client.GetBlock(hash)
+		if err == nil {
+			return block, nil
+		}
+		lastErr = err
+		sleepBeforeRPCRetry(cfg, fmt.Sprintf("getblock hash=%s", hash), attempt, err)
+	}
+	return nil, lastErr
+}
+
+func sleepBeforeRPCRetry(cfg *config, operation string, attempt int, err error) {
+	if attempt >= cfg.RPCRetries {
+		return
+	}
+	delay := time.Duration(attempt+1) * time.Second
+	if delay > 5*time.Second {
+		delay = 5 * time.Second
+	}
+	if cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "[audit] rpc retry operation=%q attempt=%d/%d delay=%s err=%v\n",
+			operation, attempt+2, cfg.RPCRetries+1, delay, err)
+	}
+	time.Sleep(delay)
 }
 
 func cacheNetworkDir(cfg *config, net *chaincfg.Params) string {
@@ -405,7 +464,10 @@ func writeCachedBlock(cfg *config, net *chaincfg.Params, height int32, hash *cha
 		return fmt.Errorf("serialize block %d: %w", height, err)
 	}
 	path := cachedBlockPath(cfg, net, height, hash)
-	tmp := path + ".tmp"
+	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
+	defer func() {
+		_ = os.Remove(tmp)
+	}()
 	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
 		return fmt.Errorf("write cached block %d: %w", height, err)
 	}

@@ -157,6 +157,7 @@ go run ./scripts/validation/replay_block_audit/main.go \
   -block-cache-dir=/tmp/obtc-replay-cache \
   -checkpoint=/tmp/obtc-replay-cache/obtctestnet.checkpoint.json \
   -resume \
+  -rpc-retries=5 \
   -check-reap-selection \
   -verbose \
   -progress-every=25 \
@@ -182,7 +183,8 @@ go run ./scripts/validation/replay_block_audit/main.go \
 The `-start` flag controls the reported range. The auditor may still replay
 earlier blocks to reconstruct the UTXO set, expiry accumulator, and deterministic
 REAP candidate set. Use `-checkpoint` and `-resume` when that reconstruction is
-expensive.
+expensive. Online mode retries transient RPC read failures by default; tune
+`-rpc-retries` upward for long audits over SSH tunnels or high-latency links.
 
 ## 🔧 Advanced Usage
 
