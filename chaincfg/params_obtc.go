@@ -47,6 +47,15 @@ const (
 	// ObtcMainNetForkHeight + 1.
 	ObtcMainNetForkHeight int32 = 1_000_000
 
+	// ObtcMainNetFirstBlockHeight is the first OBTC-independent mainnet
+	// block after the Bitcoin fork anchor.
+	ObtcMainNetFirstBlockHeight int32 = ObtcMainNetForkHeight + 1
+
+	// ObtcMainNetActivationHeight is the height at which OBTC mainnet expiry,
+	// REAP, and expiry commitments become mandatory. Replay protection starts
+	// at ObtcMainNetFirstBlockHeight to avoid a post-fork replay window.
+	ObtcMainNetActivationHeight int32 = ObtcMainNetForkHeight + 2016
+
 	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
 	// independent chain, not a fork of Bitcoin testnet3 history.
 	ObtcTestNetForkHeight int32 = 0
@@ -68,21 +77,26 @@ var ObtcMainNetParams = Params{
 	GenesisBlock: &genesisBlock,
 	GenesisHash:  &genesisHash,
 
-	PowLimit:                 obtcPowLimit,
-	PowLimitBits:             0x1d00ffff,
-	PoWNoRetargeting:         false,
-	EnforceBIP94:             true,
-	BIP0034Height:            1,
-	BIP0065Height:            1,
-	BIP0066Height:            1,
-	CoinbaseMaturity:         100,
-	SubsidyReductionInterval: 210000,
-	TargetTimespan:           time.Hour * 24 * 14,
-	TargetTimePerBlock:       time.Minute * 10,
-	RetargetAdjustmentFactor: 4,
-	ReduceMinDifficulty:      false,
-	MinDiffReductionTime:     0,
-	GenerateSupported:        true,
+	PowLimit:                  obtcPowLimit,
+	PowLimitBits:              0x1d00ffff,
+	PoWNoRetargeting:          false,
+	EnforceBIP94:              true,
+	BIP0034Height:             1,
+	BIP0065Height:             1,
+	BIP0066Height:             1,
+	CoinbaseMaturity:          100,
+	SubsidyReductionInterval:  210000,
+	TargetTimespan:            time.Hour * 24 * 14,
+	TargetTimePerBlock:        time.Minute * 10,
+	RetargetAdjustmentFactor:  4,
+	ReduceMinDifficulty:       false,
+	MinDiffReductionTime:      0,
+	GenerateSupported:         true,
+	ForkDAAStartHeight:        ObtcMainNetFirstBlockHeight,
+	ForkDAABootstrapEndHeight: ObtcMainNetActivationHeight,
+	ForkDAAForkResetBits:      0x1d00ffff,
+	ForkDAABootstrapHalfLife:  time.Hour,
+	ForkDAANormalHalfLife:     48 * time.Hour,
 
 	Checkpoints: []Checkpoint{},
 
@@ -369,22 +383,20 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 
 	switch params.Net {
 	case wire.ObtcMainNet:
-		mainnetActivationHeight := ObtcMainNetForkHeight + 2016
-		mainnetReplayProtectionHeight := ObtcMainNetForkHeight + 1
 		return &ExpiryParams{
 			WindowBlocks:                   362880,
 			ListBatchLimit:                 10000,
 			StartScanHeight:                0,
-			EnableAtHeight:                 mainnetActivationHeight,
-			ReapConsensusAtHeight:          mainnetActivationHeight,
-			ReplayProtectionAtHeight:       mainnetReplayProtectionHeight,
+			EnableAtHeight:                 ObtcMainNetActivationHeight,
+			ReapConsensusAtHeight:          ObtcMainNetActivationHeight,
+			ReplayProtectionAtHeight:       ObtcMainNetFirstBlockHeight,
 			ReapMaxInputs:                  256,
 			ReapDustMaxInputs:              1024,
 			ReapMaxWeight:                  400_000,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
-			ExpiryCommitmentEnableAtHeight: mainnetActivationHeight,
+			ExpiryCommitmentEnableAtHeight: ObtcMainNetActivationHeight,
 		}
 
 	case wire.ObtcTestNet:
