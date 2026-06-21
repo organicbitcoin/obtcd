@@ -55,6 +55,14 @@ func TestOBTCMainnetConsensusAndTemplateMaxInputsAligned(t *testing.T) {
 	}
 }
 
+func TestOBTCMainnetREAPWeightBudgetIs400k(t *testing.T) {
+	p := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
+	if p.WeightBudget != 400_000 {
+		t.Fatalf("unexpected OBTC mainnet REAP weight budget: got %d want %d",
+			p.WeightBudget, int64(400_000))
+	}
+}
+
 func TestOBTCMainnetTierEstimateFitsWeightBudget(t *testing.T) {
 	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
 	if ep == nil {

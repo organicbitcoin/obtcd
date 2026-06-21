@@ -66,11 +66,6 @@ func DefaultREAPParamsForNet(net *chaincfg.Params, mode SortMode) REAPParams {
 	}
 
 	switch net.Net {
-	case chaincfg.ObtcMainNetParams.Net:
-		if p.WeightBudget <= 0 {
-			// Mainnet starts conservative to avoid starving normal transactions.
-			p.WeightBudget = 200_000
-		}
 	case chaincfg.ObtcRegTestParams.Net:
 		p.ScanBatch = 2_000
 		p.DebugEnabled = true
