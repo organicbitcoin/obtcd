@@ -23,9 +23,10 @@ Before using this runbook, review [OBTC Mainnet Parameters](mainnet-params.md).
 | Replay-protection height | `1000001` (currently fork + 1) |
 | Expiry / REAP / commitment activation height | `1002016` (currently fork + 2016) |
 
-The code still contains the placeholder DNS seed `seed.obtc.example.com`.
-Mainnet-candidate bootstrap should therefore use explicit peers until final DNS
-seed or fallback-node policy is published.
+The code uses the aggregate DNS seed `seed.mainnet.organicbitcoin.org`.
+Mainnet-candidate bootstrap should also publish explicit fallback peers:
+`seed1.mainnet.organicbitcoin.org`, `seed2.mainnet.organicbitcoin.org`, and
+`seed3.mainnet.organicbitcoin.org`.
 
 ## Build
 
@@ -59,9 +60,9 @@ index state.
   --notls \
   --rpcuser=<rpc_user> \
   --rpcpass=<rpc_pass> \
-  --addpeer=<published-peer-1:9527> \
-  --addpeer=<published-peer-2:9527> \
-  --addpeer=<published-peer-3:9527>
+  --addpeer=seed1.mainnet.organicbitcoin.org:9527 \
+  --addpeer=seed2.mainnet.organicbitcoin.org:9527 \
+  --addpeer=seed3.mainnet.organicbitcoin.org:9527
 ```
 
 Use `--connect=<peer:9527>` instead of `--addpeer=<peer:9527>` only when the
@@ -140,7 +141,7 @@ criteria before it is listed in release material:
 * Confirm the node was started with `--obtcmainnet`.
 * Confirm outbound TCP access to peer port `9527`.
 * Confirm inbound TCP `9527` if this node is expected to accept peers.
-* Replace placeholder peers with the current published peer list.
+* Confirm `seed.mainnet.organicbitcoin.org` and individual fallback peers resolve.
 * Use `getaddednodeinfo true` and `getpeerinfo` to inspect connection state.
 
 ### RPC Works But Expiry RPC Fails
@@ -157,9 +158,8 @@ Confirm the run command uses `--obtcmainnet`. Mainnet addresses use Bech32 HRP
 
 Track these items before promoting this draft to a final public join guide:
 
-* [ ] Replace `seed.obtc.example.com`, or document that DNS seed is intentionally
-  unused for the candidate release. See
-  <https://github.com/organicbitcoin/obtcd/issues/2>.
+* [ ] Confirm Route 53 records for `seed.mainnet.organicbitcoin.org` and
+  `seed1`/`seed2`/`seed3` fallback nodes resolve.
 * [ ] Publish the initial `--addpeer` or `--connect` peer list.
 * [ ] Confirm at least 3 long-lived seed/fallback nodes across independent
   regions or providers.

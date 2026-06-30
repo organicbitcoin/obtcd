@@ -25,11 +25,12 @@ Source files:
 | Companion wallet RPC client port | `9528` |
 | Companion wallet RPC server port | `9554` |
 | Segwit Bech32 HRP | `obtc` |
-| DNS seed | `seed.obtc.example.com` |
+| DNS seed | `seed.mainnet.organicbitcoin.org` |
 
-`seed.obtc.example.com` is still a placeholder. Replace it with final seed
-infrastructure, or clear DNS seeds and use explicit peer bootstrapping, before
-cutting a public mainnet release.
+The seed record is intended to be backed by Route 53 A/AAAA records for public
+P2P seed nodes. See [OBTC Mainnet DNS Seed Design](mainnet-dns-seed.md). The
+record must resolve to live TCP `9527` nodes before public release artifacts are
+cut.
 
 ## Address And Key Namespaces
 
@@ -119,16 +120,16 @@ OBTC block requires OBTC replay-protected signatures.
 
 * Keep P2P on `9527`.
 * Bind RPC to a private interface, normally `127.0.0.1:9528`.
-* Treat the DNS seed placeholder as a release blocker.
-* Use explicit `--addpeer` or `--connect` entries until seed infrastructure is
-  final.
+* Treat unresolved DNS seed records as a release blocker.
+* Use explicit `--addpeer` or `--connect` entries for the individual fallback
+  seed nodes until aggregate seed discovery is verified.
 * Keep this document synchronized when changing `ObtcMainNetParams`, wire
   magic, default RPC ports, wallet net parameters, or OBTC expiry parameters.
 
 ## Verification Commands
 
 ```bash
-rg -n "ObtcMainNetParams|ObtcMainNet|9527|9528|seed.obtc.example.com|HDCoinType|PrivateKeyID" \
+rg -n "ObtcMainNetParams|ObtcMainNet|9527|9528|seed.mainnet.organicbitcoin.org|HDCoinType|PrivateKeyID" \
   chaincfg wire params.go cmd
 
 go test ./chaincfg ./wire ./cmd/btcctl ./cmd/obtc-status

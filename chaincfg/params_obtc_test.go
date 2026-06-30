@@ -558,8 +558,6 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 
 					t.Fatalf("unexpected mainnet REAP limits: %+v", p)
 				}
-			} else if p.ReapMaxWeight != 0 {
-				t.Fatalf("expected non-mainnet ReapMaxWeight to stay disabled, got %+v", p)
 			}
 			if p.ReapConsensusAtHeight < p.EnableAtHeight {
 				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
@@ -574,8 +572,8 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 			if p.ReapDustMaxInputs <= 0 {
 				t.Fatalf("expected positive ReapDustMaxInputs: %+v", p)
 			}
-			if tc.params.Net == ObtcMainNetParams.Net && p.ReapMaxWeight <= 0 {
-				t.Fatalf("expected positive mainnet ReapMaxWeight: %+v", p)
+			if p.ReapMaxWeight != 400_000 {
+				t.Fatalf("expected OBTC ReapMaxWeight 400000: %+v", p)
 			}
 			if p.ReapTaxNumerator <= 0 || p.ReapTaxDenominator <= 0 {
 				t.Fatalf("expected positive REAP tax parameters: %+v", p)
