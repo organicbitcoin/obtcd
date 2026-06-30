@@ -71,7 +71,7 @@ var ObtcMainNetParams = Params{
 	DefaultPort: "9527",
 
 	DNSSeeds: []DNSSeed{
-		{"seed.obtc.example.com", true},
+		{"seed.mainnet.organicbitcoin.org", true},
 	},
 
 	GenesisBlock: &genesisBlock,
@@ -409,6 +409,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ReplayProtectionAtHeight:       130,
 			ReapMaxInputs:                  500,
 			ReapDustMaxInputs:              1000,
+			ReapMaxWeight:                  400_000,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,
@@ -425,6 +426,7 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ReplayProtectionAtHeight:       ObtcRegTestForkHeight + 14,
 			ReapMaxInputs:                  200,
 			ReapDustMaxInputs:              400,
+			ReapMaxWeight:                  400_000,
 			ReapTaxNumerator:               30,
 			ReapTaxDenominator:             100,
 			ReapDustThresholdSat:           720,

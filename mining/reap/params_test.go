@@ -37,29 +37,51 @@ func TestDefaultREAPParamsForNet(t *testing.T) {
 	}
 }
 
-func TestOBTCMainnetConsensusAndTemplateMaxInputsAligned(t *testing.T) {
-	ep := chaincfg.GetExpiryParams(&chaincfg.ObtcMainNetParams)
-	if ep == nil {
-		t.Fatalf("expected expiry params for obtc mainnet")
-	}
+func TestOBTCConsensusAndTemplateLimitsAligned(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params *chaincfg.Params
+	}{
+		{name: "obtc mainnet", params: &chaincfg.ObtcMainNetParams},
+		{name: "obtc testnet", params: &chaincfg.ObtcTestNetParams},
+		{name: "obtc regtest", params: &chaincfg.ObtcRegTestParams},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ep := chaincfg.GetExpiryParams(tc.params)
+			if ep == nil {
+				t.Fatalf("expected expiry params")
+			}
 
-	p := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
-	if p.MaxInputs != ep.ReapMaxInputs {
-		t.Fatalf("obtc mainnet max input mismatch: template=%d consensus=%d", p.MaxInputs, ep.ReapMaxInputs)
-	}
-	if p.DustMaxInputs != ep.ReapDustMaxInputs {
-		t.Fatalf("obtc mainnet dust max input mismatch: template=%d consensus=%d", p.DustMaxInputs, ep.ReapDustMaxInputs)
-	}
-	if p.WeightBudget != ep.ReapMaxWeight {
-		t.Fatalf("obtc mainnet weight budget mismatch: template=%d consensus=%d", p.WeightBudget, ep.ReapMaxWeight)
+			p := DefaultREAPParamsForNet(tc.params, SortModeStrict)
+			if p.MaxInputs != ep.ReapMaxInputs {
+				t.Fatalf("max input mismatch: template=%d consensus=%d", p.MaxInputs, ep.ReapMaxInputs)
+			}
+			if p.DustMaxInputs != ep.ReapDustMaxInputs {
+				t.Fatalf("dust max input mismatch: template=%d consensus=%d", p.DustMaxInputs, ep.ReapDustMaxInputs)
+			}
+			if p.WeightBudget != ep.ReapMaxWeight {
+				t.Fatalf("weight budget mismatch: template=%d consensus=%d", p.WeightBudget, ep.ReapMaxWeight)
+			}
+		})
 	}
 }
 
-func TestOBTCMainnetREAPWeightBudgetIs400k(t *testing.T) {
-	p := DefaultREAPParamsForNet(&chaincfg.ObtcMainNetParams, SortModeStrict)
-	if p.WeightBudget != 400_000 {
-		t.Fatalf("unexpected OBTC mainnet REAP weight budget: got %d want %d",
-			p.WeightBudget, int64(400_000))
+func TestOBTCREAPWeightBudgetIs400k(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params *chaincfg.Params
+	}{
+		{name: "obtc mainnet", params: &chaincfg.ObtcMainNetParams},
+		{name: "obtc testnet", params: &chaincfg.ObtcTestNetParams},
+		{name: "obtc regtest", params: &chaincfg.ObtcRegTestParams},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := DefaultREAPParamsForNet(tc.params, SortModeStrict)
+			if p.WeightBudget != 400_000 {
+				t.Fatalf("unexpected OBTC REAP weight budget: got %d want %d",
+					p.WeightBudget, int64(400_000))
+			}
+		})
 	}
 }
 
