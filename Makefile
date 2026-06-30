@@ -92,6 +92,11 @@ release-install:
 #? check: Run `make unit`
 check: unit
 
+#? check-obtc-parameters: Check OBTC parameter consistency against code and docs
+check-obtc-parameters:
+	@$(call print, "Checking OBTC parameter consistency.")
+	python3 scripts/check_obtc_parameters.py
+
 #? unit: Run unit tests
 unit:
 	@$(call print, "Running unit tests.")
@@ -149,6 +154,7 @@ tidy-module:
 	default \
 	build \
 	check \
+	check-obtc-parameters \
 	unit \
 	unit-cover \
 	unit-race \

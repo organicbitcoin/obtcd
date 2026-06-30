@@ -1,0 +1,1774 @@
+{
+  "manifest_id": "obtc-mainnet-candidate-parameters",
+  "manifest_version": 1,
+  "notes": [
+    "This manifest is a consistency-check baseline, not a parameter decision record.",
+    "Values were taken from current obtcd code and already-confirmed review docs.",
+    "Any mismatch must be resolved by human review; the checker does not choose code or docs as winner."
+  ],
+  "parameters": [
+    {
+      "id": "mainnet_fork_height",
+      "name": "Mainnet fork height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1000000",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_const",
+          "name": "ObtcMainNetForkHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Fork height \\| `(?P<value>[0-9_]+)`\\*? \\|"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| OBTC mainnet fork height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| Fork height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "candidate mainnet fork height is `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "candidate mainnet fork height is `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "Candidate fork height</td><td><code>(?P<value>[0-9_]+)</code>"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| Fork height \\| `(?P<value>[0-9_]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_replay_protection_height",
+      "name": "Mainnet replay protection activation height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1000001",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ReplayProtectionAtHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "replay-protection height is `(?P<value>[0-9_]+)`"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Replay protection height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| Replay-protection height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "replay protection activates at `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "replay protection activates at `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "Replay protection</td><td><code>(?P<value>[0-9_]+)</code>"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_expiry_enable_height",
+      "name": "Mainnet expiry enable height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1002016",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "EnableAtHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "activation height is `(?P<value>[0-9_]+)`"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Expiry enforcement height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| Expiry / REAP / commitment activation height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "commitment activate at `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "commitment activate at `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "Expiry enforcement</td><td><code>(?P<value>[0-9_]+)</code>"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| Activation height \\| `(?P<value>[0-9_]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_expiry_commitment_height",
+      "name": "Mainnet expiry commitment activation height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1002016",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ExpiryCommitmentEnableAtHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Expiry commitment mandatory height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "Expiry commitment mandatory</td><td><code>(?P<value>[0-9_]+)</code>"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_reap_hardening_height",
+      "name": "Mainnet REAP hardening height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1002016",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ReapConsensusAtHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| REAP consensus height \\| `(?P<value>[0-9_]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "REAP consensus / hardening</td><td><code>(?P<value>[0-9_]+)</code>"
+        }
+      ]
+    },
+    {
+      "id": "testnet_fork_height",
+      "name": "Testnet fork height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "0",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_const",
+          "name": "ObtcTestNetForkHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Fork height \\| `[0-9_]+`\\*? \\| `(?P<value>[0-9_]+)`\\*?\\*? \\|"
+        }
+      ]
+    },
+    {
+      "id": "testnet_expiry_enable_height",
+      "name": "Testnet expiry enable height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "100",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "EnableAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "testnet_expiry_commitment_height",
+      "name": "Testnet expiry commitment activation height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "100",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ExpiryCommitmentEnableAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "testnet_reap_hardening_height",
+      "name": "Testnet REAP hardening height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "120",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ReapConsensusAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "testnet_replay_protection_height",
+      "name": "Testnet replay protection activation height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "130",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ReplayProtectionAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "regtest_fork_height",
+      "name": "Regtest fork height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "100",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_const",
+          "name": "ObtcRegTestForkHeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Fork height \\| `[0-9_]+`\\*? \\| `[0-9_]+`\\*?\\*? \\| `(?P<value>[0-9_]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "regtest_expiry_enable_height",
+      "name": "Regtest expiry enable height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "110",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "EnableAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "regtest_expiry_commitment_height",
+      "name": "Regtest expiry commitment activation height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "110",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ExpiryCommitmentEnableAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "regtest_reap_hardening_height",
+      "name": "Regtest REAP hardening height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "112",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ReapConsensusAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "regtest_replay_protection_height",
+      "name": "Regtest replay protection activation height",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "114",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ReplayProtectionAtHeight"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_window_blocks",
+      "name": "Mainnet expiry WindowBlocks",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "362880",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "WindowBlocks"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Expiry window \\| `(?P<value>[0-9_,]+)` blocks \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "Expiry window</td><td><code>(?P<value>[0-9_,]+)</code> blocks"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "docs.html",
+          "regex": "Expiry window</td><td><code>(?P<value>[0-9_,]+)</code>"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| Expiry window \\| `(?P<value>[0-9_,]+)` blocks \\|"
+        }
+      ]
+    },
+    {
+      "id": "testnet_window_blocks",
+      "name": "Testnet expiry WindowBlocks",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "144",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "WindowBlocks"
+        }
+      ]
+    },
+    {
+      "id": "regtest_window_blocks",
+      "name": "Regtest expiry WindowBlocks",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "144",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "WindowBlocks"
+        }
+      ]
+    },
+    {
+      "id": "reap_tax_ratio",
+      "name": "REAP tax ratio",
+      "category": "consensus-critical",
+      "value_type": "ratio",
+      "expected": "30/100",
+      "aliases": [
+        "30%"
+      ],
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_ratio",
+          "case": "wire.ObtcMainNet",
+          "numerator": "ReapTaxNumerator",
+          "denominator": "ReapTaxDenominator"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_ratio",
+          "case": "wire.ObtcTestNet",
+          "numerator": "ReapTaxNumerator",
+          "denominator": "ReapTaxDenominator"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_ratio",
+          "case": "wire.ObtcRegNet",
+          "numerator": "ReapTaxNumerator",
+          "denominator": "ReapTaxDenominator"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| REAP tax \\| `(?P<value>[0-9]+\\s*/\\s*[0-9]+)` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "docs.html",
+          "regex": "(?P<value>30%) security budget"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "\\| \\*\\*(?P<value>30%)\\*\\* \\| \\*\\*70%\\*\\* \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "\\| \\*\\*(?P<value>30%)\\*\\* \\| \\*\\*70%\\*\\* \\|"
+        }
+      ]
+    },
+    {
+      "id": "reap_refund_ratio",
+      "name": "REAP refund ratio",
+      "category": "consensus-critical",
+      "value_type": "ratio",
+      "expected": "70/100",
+      "aliases": [
+        "70%"
+      ],
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_ratio",
+          "case": "wire.ObtcMainNet",
+          "mode": "refund",
+          "numerator": "ReapTaxNumerator",
+          "denominator": "ReapTaxDenominator"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_ratio",
+          "case": "wire.ObtcTestNet",
+          "mode": "refund",
+          "numerator": "ReapTaxNumerator",
+          "denominator": "ReapTaxDenominator"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_ratio",
+          "case": "wire.ObtcRegNet",
+          "mode": "refund",
+          "numerator": "ReapTaxNumerator",
+          "denominator": "ReapTaxDenominator"
+        }
+      ],
+      "doc_refs": [
+        {
+          "repo": "obtc-website",
+          "path": "docs.html",
+          "regex": "(?P<value>70%) refund"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "\\| \\*\\*30%\\*\\* \\| \\*\\*(?P<value>70%)\\*\\* \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "\\| \\*\\*30%\\*\\* \\| \\*\\*(?P<value>70%)\\*\\* \\|"
+        }
+      ]
+    },
+    {
+      "id": "reap_dust_threshold_sat",
+      "name": "REAP dust threshold",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "720",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ReapDustThresholdSat"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ReapDustThresholdSat"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ReapDustThresholdSat"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| REAP dust threshold \\| `(?P<value>[0-9_,]+)` satoshis \\|"
+        },
+        {
+          "path": "docs/testnet-join.md",
+          "regex": "\\| REAP dust threshold \\| `(?P<value>[0-9_,]+) sat` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "REAP dust threshold</td><td><code>(?P<value>[0-9_,]+) sat</code>"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "docs.html",
+          "regex": "dust threshold <code>(?P<value>[0-9_,]+) sat</code>"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "Dust threshold \\| `(?P<value>[0-9_,]+) sat`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "Dust threshold \\| `(?P<value>[0-9_,]+) sat`"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_reap_normal_input_cap",
+      "name": "Mainnet REAP normal input cap",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "256",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ReapMaxInputs"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| REAP max inputs \\| `(?P<value>[0-9_,]+)` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "normal inputs \\(`v >= 720`\\): at most `(?P<value>[0-9_,]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "normal inputs \\(`v >= 720`\\): at most `(?P<value>[0-9_,]+)`"
+        }
+      ]
+    },
+    {
+      "id": "testnet_reap_normal_input_cap",
+      "name": "Testnet REAP normal input cap",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "500",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ReapMaxInputs"
+        }
+      ]
+    },
+    {
+      "id": "regtest_reap_normal_input_cap",
+      "name": "Regtest REAP normal input cap",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "200",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ReapMaxInputs"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_reap_dust_input_cap",
+      "name": "Mainnet REAP dust input cap",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1024",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ReapDustMaxInputs"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| REAP max refundless dust inputs \\| `(?P<value>[0-9_,]+)` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "refundless dust inputs \\(`0 < v < 720`\\): at most `(?P<value>[0-9_,]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "content/whitepaper-v1.md",
+          "regex": "refundless dust inputs \\(`0 < v < 720`\\): at most `(?P<value>[0-9_,]+)`"
+        }
+      ]
+    },
+    {
+      "id": "testnet_reap_dust_input_cap",
+      "name": "Testnet REAP dust input cap",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "1000",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ReapDustMaxInputs"
+        }
+      ]
+    },
+    {
+      "id": "regtest_reap_dust_input_cap",
+      "name": "Regtest REAP dust input cap",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "400",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ReapDustMaxInputs"
+        }
+      ]
+    },
+    {
+      "id": "reap_weight_budget",
+      "name": "REAP weight budget",
+      "category": "consensus-critical",
+      "value_type": "int",
+      "expected": "400000",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcMainNet",
+          "field": "ReapMaxWeight"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcTestNet",
+          "field": "ReapMaxWeight"
+        },
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_expiry_field",
+          "case": "wire.ObtcRegNet",
+          "field": "ReapMaxWeight"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| REAP max weight \\(`ReapMaxWeight`\\) \\| `(?P<value>[0-9_,]+)` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "mainnet-candidate.html",
+          "regex": "REAP max weight</td><td><code>(?P<value>[0-9_,]+)</code>"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "docs.html",
+          "regex": "max weight <code>(?P<value>[0-9_,]+)</code>"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "versions.html",
+          "regex": "Current REAP max weight: <code>(?P<value>[0-9_,]+)</code>"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_network_magic",
+      "name": "Mainnet network magic",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x4F425443",
+      "code_sources": [
+        {
+          "path": "wire/protocol.go",
+          "extractor": "go_const",
+          "name": "ObtcMainNet"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Network magic \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Wire magic \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| Wire magic \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC mainnet \\| `--obtcmainnet` \\| `[0-9]+` \\| `[0-9]+` \\| `obtc` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "Main: `(?P<value>0x[0-9A-Fa-f]+)`"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| Wire magic \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "testnet_network_magic",
+      "name": "Testnet network magic",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x4F544553",
+      "code_sources": [
+        {
+          "path": "wire/protocol.go",
+          "extractor": "go_const",
+          "name": "ObtcTestNet"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Network magic \\| `0x[0-9A-Fa-f]+` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC testnet \\| `--obtctestnet` \\| `[0-9]+` \\| `[0-9]+` \\| `obtct` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "regtest_network_magic",
+      "name": "Regtest network magic",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x4F524547",
+      "code_sources": [
+        {
+          "path": "wire/protocol.go",
+          "extractor": "go_const",
+          "name": "ObtcRegNet"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Network magic \\| `0x[0-9A-Fa-f]+` \\| `0x[0-9A-Fa-f]+` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC regtest \\| `--obtcregtest` \\| `[0-9]+` \\| `[0-9]+` \\| `obtcrt` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_p2p_port",
+      "name": "Mainnet default P2P port",
+      "category": "network-namespace",
+      "value_type": "port",
+      "expected": "9527",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "DefaultPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| P2P port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| P2P port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| P2P port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC mainnet \\| `--obtcmainnet` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| P2P port \\| `(?P<value>[0-9]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "testnet_p2p_port",
+      "name": "Testnet default P2P port",
+      "category": "network-namespace",
+      "value_type": "port",
+      "expected": "19527",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "DefaultPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| P2P port \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC testnet \\| `--obtctestnet` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/testnet-join.md",
+          "required": true,
+          "regex": "Default P2P port: `(?P<value>[0-9]+)`"
+        }
+      ]
+    },
+    {
+      "id": "regtest_p2p_port",
+      "name": "Regtest default P2P port",
+      "category": "network-namespace",
+      "value_type": "port",
+      "expected": "29527",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "DefaultPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| P2P port \\| `[0-9]+` \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC regtest \\| `--obtcregtest` \\| `(?P<value>[0-9]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_node_rpc_port",
+      "name": "Mainnet node RPC port",
+      "category": "network-namespace",
+      "value_type": "port",
+      "expected": "9528",
+      "code_sources": [
+        {
+          "path": "params.go",
+          "extractor": "go_composite_field",
+          "object": "obtcMainNetParams",
+          "field": "rpcPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| RPC port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Node RPC port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| Node RPC port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC mainnet \\| `--obtcmainnet` \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "README.md",
+          "regex": "mainnet: `(?P<value>[0-9]+)`\\n\\s+- testnet: `19528`"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| Node RPC port \\| `(?P<value>[0-9]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "testnet_node_rpc_port",
+      "name": "Testnet node RPC port",
+      "category": "network-namespace",
+      "value_type": "port",
+      "expected": "19528",
+      "code_sources": [
+        {
+          "path": "params.go",
+          "extractor": "go_composite_field",
+          "object": "obtcTestNetParams",
+          "field": "rpcPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| RPC port \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC testnet \\| `--obtctestnet` \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/testnet-join.md",
+          "required": true,
+          "regex": "Recommended RPC port for operators: `(?P<value>[0-9]+)`"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "README.md",
+          "regex": "testnet: `(?P<value>[0-9]+)`\\n\\s+- regtest: `29528`"
+        }
+      ]
+    },
+    {
+      "id": "regtest_node_rpc_port",
+      "name": "Regtest node RPC port",
+      "category": "network-namespace",
+      "value_type": "port",
+      "expected": "29528",
+      "code_sources": [
+        {
+          "path": "params.go",
+          "extractor": "go_composite_field",
+          "object": "obtcRegTestParams",
+          "field": "rpcPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| RPC port \\| `[0-9]+` \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC regtest \\| `--obtcregtest` \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "README.md",
+          "regex": "regtest: `(?P<value>[0-9]+)`\\n- OBTC wallet legacy RPC defaults"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_wallet_rpc_port",
+      "name": "Mainnet wallet legacy RPC port",
+      "category": "wallet-policy-default",
+      "value_type": "port",
+      "expected": "9554",
+      "code_sources": [
+        {
+          "repo": "obtcwallet",
+          "path": "netparams/params.go",
+          "required": false,
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "RPCServerPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Companion wallet RPC server port \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "README.md",
+          "regex": "mainnet: `(?P<value>[0-9]+)`\\n\\s+- testnet: `19554`"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "docs/mainnet-readiness.md",
+          "regex": "legacy JSON-RPC default port is `(?P<value>[0-9]+)`"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "Default wallet legacy RPC port: `(?P<value>[0-9]+) / 19554 / 29554`"
+        }
+      ]
+    },
+    {
+      "id": "testnet_wallet_rpc_port",
+      "name": "Testnet wallet legacy RPC port",
+      "category": "wallet-policy-default",
+      "value_type": "port",
+      "expected": "19554",
+      "code_sources": [
+        {
+          "repo": "obtcwallet",
+          "path": "netparams/params.go",
+          "required": false,
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "RPCServerPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "repo": "obtcwallet",
+          "path": "README.md",
+          "regex": "testnet: `(?P<value>[0-9]+)`\\n\\s+- regtest: `29554`"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "docs/releases/obtcwallet-testnet-v0.1.0.md",
+          "regex": "Default wallet legacy RPC ports:[\\s\\S]*?OBTC testnet: `(?P<value>[0-9]+)`",
+          "flags": "s"
+        }
+      ]
+    },
+    {
+      "id": "regtest_wallet_rpc_port",
+      "name": "Regtest wallet legacy RPC port",
+      "category": "wallet-policy-default",
+      "value_type": "port",
+      "expected": "29554",
+      "code_sources": [
+        {
+          "repo": "obtcwallet",
+          "path": "netparams/params.go",
+          "required": false,
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "RPCServerPort"
+        }
+      ],
+      "doc_refs": [
+        {
+          "repo": "obtcwallet",
+          "path": "README.md",
+          "regex": "regtest: `(?P<value>[0-9]+)`\\n- Legacy RPC methods"
+        },
+        {
+          "repo": "obtcwallet",
+          "path": "docs/releases/obtcwallet-testnet-v0.1.0.md",
+          "regex": "Default wallet legacy RPC ports:[\\s\\S]*?OBTC regtest: `(?P<value>[0-9]+)`",
+          "flags": "s"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_bech32_hrp",
+      "name": "Mainnet Bech32 HRP",
+      "category": "network-namespace",
+      "value_type": "string",
+      "expected": "obtc",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "Bech32HRPSegwit"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Bech32 HRP \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Segwit Bech32 HRP \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "\\| Bech32 HRP \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC mainnet \\| `--obtcmainnet` \\| `[0-9]+` \\| `[0-9]+` \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "repo": "obtc-control-plane",
+          "path": "docs/release/mainnet_candidate_release_notes.md",
+          "regex": "\\| Bech32 HRP \\| `(?P<value>[^`]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "testnet_bech32_hrp",
+      "name": "Testnet Bech32 HRP",
+      "category": "network-namespace",
+      "value_type": "string",
+      "expected": "obtct",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "Bech32HRPSegwit"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Bech32 HRP \\| `[^`]+` \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC testnet \\| `--obtctestnet` \\| `[0-9]+` \\| `[0-9]+` \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/testnet-join.md",
+          "required": true,
+          "regex": "Bech32 HRP: `(?P<value>[^`]+)`"
+        }
+      ]
+    },
+    {
+      "id": "regtest_bech32_hrp",
+      "name": "Regtest Bech32 HRP",
+      "category": "network-namespace",
+      "value_type": "string",
+      "expected": "obtcrt",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "Bech32HRPSegwit"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| Bech32 HRP \\| `[^`]+` \\| `[^`]+` \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| OBTC regtest \\| `--obtcregtest` \\| `[0-9]+` \\| `[0-9]+` \\| `(?P<value>[^`]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_p2pkh_prefix",
+      "name": "Mainnet P2PKH prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x47",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "PubKeyHashAddrID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| P2PKH `PubKeyHashAddrID` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_p2sh_prefix",
+      "name": "Mainnet P2SH prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x32",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "ScriptHashAddrID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| P2SH `ScriptHashAddrID` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_wif_prefix",
+      "name": "Mainnet WIF private key prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x9A",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "PrivateKeyID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| WIF `PrivateKeyID` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_witness_pubkey_prefix",
+      "name": "Mainnet witness pubkey hash namespace",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x2A",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "WitnessPubKeyHashAddrID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Witness pubkey hash `WitnessPubKeyHashAddrID` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_witness_script_prefix",
+      "name": "Mainnet witness script hash namespace",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x2B",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "WitnessScriptHashAddrID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| Witness script hash `WitnessScriptHashAddrID` \\| `(?P<value>0x[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_hd_private_key_version",
+      "name": "Mainnet HD private key version",
+      "category": "network-namespace",
+      "value_type": "hd_key",
+      "expected": "0B47B01E",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "HDPrivateKeyID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| HD private key version \\| `(?P<value>[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_hd_public_key_version",
+      "name": "Mainnet HD public key version",
+      "category": "network-namespace",
+      "value_type": "hd_key",
+      "expected": "0B47B5D4",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "HDPublicKeyID"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| HD public key version \\| `(?P<value>[0-9A-Fa-f]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_bip44_coin_type",
+      "name": "Mainnet BIP44 coin type",
+      "category": "wallet-policy-default",
+      "value_type": "int",
+      "expected": "20260",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcMainNetParams",
+          "field": "HDCoinType"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| BIP44 coin type \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| BIP44 coin type \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "path": "docs/network-parameters.md",
+          "required": true,
+          "regex": "\\| BIP44 coin type \\| `(?P<value>[0-9]+)` \\|"
+        },
+        {
+          "repo": "obtc-website",
+          "path": "whitepaper.md",
+          "regex": "BIP44 coin type: `(?P<value>[0-9]+) / 20261 / 20262`"
+        }
+      ]
+    },
+    {
+      "id": "testnet_p2pkh_prefix",
+      "name": "Testnet P2PKH prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x71",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "PubKeyHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_p2sh_prefix",
+      "name": "Testnet P2SH prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0xD1",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "ScriptHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_wif_prefix",
+      "name": "Testnet WIF private key prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0xF1",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "PrivateKeyID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_witness_pubkey_prefix",
+      "name": "Testnet witness pubkey hash namespace",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x2C",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "WitnessPubKeyHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_witness_script_prefix",
+      "name": "Testnet witness script hash namespace",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x2D",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "WitnessScriptHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_hd_private_key_version",
+      "name": "Testnet HD private key version",
+      "category": "network-namespace",
+      "value_type": "hd_key",
+      "expected": "0B48B01E",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "HDPrivateKeyID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_hd_public_key_version",
+      "name": "Testnet HD public key version",
+      "category": "network-namespace",
+      "value_type": "hd_key",
+      "expected": "0B48B5D4",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "HDPublicKeyID"
+        }
+      ]
+    },
+    {
+      "id": "testnet_bip44_coin_type",
+      "name": "Testnet BIP44 coin type",
+      "category": "wallet-policy-default",
+      "value_type": "int",
+      "expected": "20261",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcTestNetParams",
+          "field": "HDCoinType"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| BIP44 coin type \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "regtest_p2pkh_prefix",
+      "name": "Regtest P2PKH prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x72",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "PubKeyHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_p2sh_prefix",
+      "name": "Regtest P2SH prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0xD2",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "ScriptHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_wif_prefix",
+      "name": "Regtest WIF private key prefix",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0xF2",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "PrivateKeyID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_witness_pubkey_prefix",
+      "name": "Regtest witness pubkey hash namespace",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x2E",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "WitnessPubKeyHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_witness_script_prefix",
+      "name": "Regtest witness script hash namespace",
+      "category": "network-namespace",
+      "value_type": "hex",
+      "expected": "0x2F",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "WitnessScriptHashAddrID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_hd_private_key_version",
+      "name": "Regtest HD private key version",
+      "category": "network-namespace",
+      "value_type": "hd_key",
+      "expected": "0B49B01E",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "HDPrivateKeyID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_hd_public_key_version",
+      "name": "Regtest HD public key version",
+      "category": "network-namespace",
+      "value_type": "hd_key",
+      "expected": "0B49B5D4",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "HDPublicKeyID"
+        }
+      ]
+    },
+    {
+      "id": "regtest_bip44_coin_type",
+      "name": "Regtest BIP44 coin type",
+      "category": "wallet-policy-default",
+      "value_type": "int",
+      "expected": "20262",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "go_composite_field",
+          "object": "ObtcRegTestParams",
+          "field": "HDCoinType"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "README.md",
+          "required": true,
+          "regex": "\\| BIP44 coin type \\| `[0-9]+` \\| `[0-9]+` \\| `(?P<value>[0-9]+)` \\|"
+        }
+      ]
+    },
+    {
+      "id": "mainnet_dns_seed",
+      "name": "Mainnet DNS seed",
+      "category": "network-namespace",
+      "value_type": "string",
+      "expected": "seed.mainnet.organicbitcoin.org",
+      "code_sources": [
+        {
+          "path": "chaincfg/params_obtc.go",
+          "extractor": "regex",
+          "regex": "\\{\"(?P<value>seed\\.mainnet\\.organicbitcoin\\.org)\",\\s*true\\}"
+        }
+      ],
+      "doc_refs": [
+        {
+          "path": "docs/mainnet-params.md",
+          "required": true,
+          "regex": "\\| DNS seed \\| `(?P<value>[^`]+)` \\|"
+        },
+        {
+          "path": "docs/mainnet-dns-seed.md",
+          "required": true,
+          "regex": "\\| `(?P<value>seed\\.mainnet\\.organicbitcoin\\.org)` \\| Aggregate DNS seed"
+        },
+        {
+          "path": "docs/mainnet-join.md",
+          "required": true,
+          "regex": "aggregate DNS seed `(?P<value>seed\\.mainnet\\.organicbitcoin\\.org)`"
+        }
+      ]
+    }
+  ]
+}

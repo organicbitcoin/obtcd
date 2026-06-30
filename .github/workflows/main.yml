@@ -157,6 +157,11 @@ jobs:
           EOF
           go run validate_obtc.go
 
+      - name: Check OBTC Parameter Consistency
+        run: |
+          echo "Checking OBTC parameter consistency..."
+          make check-obtc-parameters
+
       - name: Check DevNet and Phase6 scripts
         run: |
           echo "Validating script entrypoints..."
