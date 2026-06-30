@@ -48,7 +48,10 @@ a synced BTC mainnet node and OBTC `expiryindex` is not enabled.
 
 Direct export reads the on-disk live UTXO set, skips immature coinbase outputs,
 derives OBTC `create_height`, `expiry_height`, and `blocks_to_expiry`, and
-writes the same snapshot/manifest format as RPC export.
+writes the same snapshot/manifest format as RPC export. Direct export also
+includes input-level script metadata needed for research reproduction:
+`outpoint`, `is_coinbase`, `script_type`, `script_pubkey_length`, and
+`script_pubkey_sha256`. It does not write the full raw `scriptPubKey`.
 
 Safety checks:
 

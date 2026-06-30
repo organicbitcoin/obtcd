@@ -7,14 +7,19 @@ package main
 import "time"
 
 type utxoRow struct {
-	TxID           string `json:"txid"`
-	Vout           uint32 `json:"vout"`
-	AmountSat      int64  `json:"amount_sat"`
-	CreateHeight   uint64 `json:"create_height"`
-	ExpiryHeight   uint64 `json:"expiry_height"`
-	BlocksToExpiry int64  `json:"blocks_to_expiry"`
-	SnapshotHeight int32  `json:"snapshot_height"`
-	SnapshotHash   string `json:"snapshot_hash"`
+	TxID                  string `json:"txid"`
+	Vout                  uint32 `json:"vout"`
+	Outpoint              string `json:"outpoint"`
+	AmountSat             int64  `json:"amount_sat"`
+	CreateHeight          uint64 `json:"create_height"`
+	ExpiryHeight          uint64 `json:"expiry_height"`
+	BlocksToExpiry        int64  `json:"blocks_to_expiry"`
+	SnapshotHeight        int32  `json:"snapshot_height"`
+	SnapshotHash          string `json:"snapshot_hash"`
+	IsCoinbase            bool   `json:"is_coinbase"`
+	ScriptType            string `json:"script_type"`
+	ScriptPubKeyLength    int    `json:"script_pubkey_length"`
+	ScriptPubKeySHA256Hex string `json:"script_pubkey_sha256"`
 }
 
 type exportManifest struct {

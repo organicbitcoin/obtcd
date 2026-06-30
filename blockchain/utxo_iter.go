@@ -19,6 +19,7 @@ type UTXOSnapshotEntry struct {
 	BlockHeight int32
 	Amount      int64
 	IsCoinBase  bool
+	PkScript    []byte
 }
 
 // DBBestSnapshot is the best chain state read directly from the block
@@ -159,12 +160,17 @@ func ForEachUTXOInDB(db database.DB, fn func(entry UTXOSnapshotEntry) error) err
 				continue // skip corrupt entries to preserve legacy iterator behavior.
 			}
 
+			pkScript := entry.PkScript()
+			pkScriptCopy := make([]byte, len(pkScript))
+			copy(pkScriptCopy, pkScript)
+
 			op := wire.OutPoint{Hash: hash, Index: uint32(idx)}
 			if err := fn(UTXOSnapshotEntry{
 				OutPoint:    op,
 				BlockHeight: entry.BlockHeight(),
 				Amount:      entry.Amount(),
 				IsCoinBase:  entry.IsCoinBase(),
+				PkScript:    pkScriptCopy,
 			}); err != nil {
 				return err
 			}

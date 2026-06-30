@@ -5,6 +5,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
 	_ "github.com/btcsuite/btcd/database/ffldb"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -165,15 +168,22 @@ func rowFromDirectUTXO(entry blockchain.UTXOSnapshotEntry, snapshotHeight int32,
 		return utxoRow{}, false, false, nil
 	}
 
+	scriptHash := sha256.Sum256(entry.PkScript)
+
 	return utxoRow{
-		TxID:           entry.OutPoint.Hash.String(),
-		Vout:           entry.OutPoint.Index,
-		AmountSat:      entry.Amount,
-		CreateHeight:   createHeight,
-		ExpiryHeight:   expiryHeight,
-		BlocksToExpiry: int64(expiryHeight) - int64(snapshotHeight),
-		SnapshotHeight: snapshotHeight,
-		SnapshotHash:   snapshotHash,
+		TxID:                  entry.OutPoint.Hash.String(),
+		Vout:                  entry.OutPoint.Index,
+		Outpoint:              entry.OutPoint.String(),
+		AmountSat:             entry.Amount,
+		CreateHeight:          createHeight,
+		ExpiryHeight:          expiryHeight,
+		BlocksToExpiry:        int64(expiryHeight) - int64(snapshotHeight),
+		SnapshotHeight:        snapshotHeight,
+		SnapshotHash:          snapshotHash,
+		IsCoinbase:            entry.IsCoinBase,
+		ScriptType:            txscript.GetScriptClass(entry.PkScript).String(),
+		ScriptPubKeyLength:    len(entry.PkScript),
+		ScriptPubKeySHA256Hex: hex.EncodeToString(scriptHash[:]),
 	}, true, false, nil
 }
 

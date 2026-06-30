@@ -314,6 +314,7 @@ func exportOnline(cfg *config) (string, *exportManifest, error) {
 			row := utxoRow{
 				TxID:           item.TxID,
 				Vout:           item.Vout,
+				Outpoint:       fmt.Sprintf("%s:%d", item.TxID, item.Vout),
 				AmountSat:      item.AmountSat,
 				CreateHeight:   item.CreateHeight,
 				ExpiryHeight:   item.ExpiryHeight,
