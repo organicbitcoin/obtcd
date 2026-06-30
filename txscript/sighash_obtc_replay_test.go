@@ -8,6 +8,9 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -118,5 +121,189 @@ func TestCalcWitnessSigHashOBTCReplayProtectionWrapper(t *testing.T) {
 
 	if !bytes.Equal(got, want) {
 		t.Fatalf("expected witness wrapper hash to match raw helper")
+	}
+}
+
+func makeOBTCReplayEngineSpendTx(value int64) *wire.MsgTx {
+	tx := wire.NewMsgTx(2)
+
+	var prevHash chainhash.Hash
+	prevHash[0] = 0x41
+	tx.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Hash: prevHash, Index: 0},
+	})
+	tx.AddTxOut(&wire.TxOut{
+		Value:    value - 1000,
+		PkScript: []byte{OP_TRUE},
+	})
+
+	return tx
+}
+
+func makeOBTCReplayP2PKHScript(t *testing.T,
+	privKey *btcec.PrivateKey) []byte {
+
+	t.Helper()
+
+	pubKeyHash := btcutil.Hash160(privKey.PubKey().SerializeCompressed())
+	addr, err := btcutil.NewAddressPubKeyHash(pubKeyHash, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("NewAddressPubKeyHash: %v", err)
+	}
+	pkScript, err := PayToAddrScript(addr)
+	if err != nil {
+		t.Fatalf("PayToAddrScript: %v", err)
+	}
+	return pkScript
+}
+
+func makeOBTCReplayP2WPKHScripts(t *testing.T,
+	privKey *btcec.PrivateKey) (fundingScript, subScript []byte) {
+
+	t.Helper()
+
+	pubKeyHash := btcutil.Hash160(privKey.PubKey().SerializeCompressed())
+	witnessAddr, err := btcutil.NewAddressWitnessPubKeyHash(
+		pubKeyHash, &chaincfg.ObtcRegTestParams,
+	)
+	if err != nil {
+		t.Fatalf("NewAddressWitnessPubKeyHash: %v", err)
+	}
+	fundingScript, err = PayToAddrScript(witnessAddr)
+	if err != nil {
+		t.Fatalf("PayToAddrScript witness: %v", err)
+	}
+
+	pubKeyAddr, err := btcutil.NewAddressPubKeyHash(
+		pubKeyHash, &chaincfg.ObtcRegTestParams,
+	)
+	if err != nil {
+		t.Fatalf("NewAddressPubKeyHash: %v", err)
+	}
+	subScript, err = PayToAddrScript(pubKeyAddr)
+	if err != nil {
+		t.Fatalf("PayToAddrScript p2pkh subscript: %v", err)
+	}
+
+	return fundingScript, subScript
+}
+
+func TestLegacyVMRequiresOBTCReplayProtectedHashType(t *testing.T) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	pkScript := makeOBTCReplayP2PKHScript(t, privKey)
+	const prevValue = int64(10_000)
+
+	tests := []struct {
+		name    string
+		hash    SigHashType
+		wantErr bool
+	}{
+		{
+			name:    "legacy sighash rejected after replay activation",
+			hash:    SigHashAll,
+			wantErr: true,
+		},
+		{
+			name: "replay-protected sighash accepted",
+			hash: SigHashOBTCReplayProtection | SigHashAll,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			sigScript, err := SignatureScript(
+				tx, 0, pkScript, test.hash, privKey, true,
+			)
+			if err != nil {
+				t.Fatalf("SignatureScript: %v", err)
+			}
+			tx.TxIn[0].SignatureScript = sigScript
+
+			vm, err := NewEngine(
+				pkScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, nil, prevValue, nil,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+
+			err = vm.Execute()
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("expected replay-protection failure")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected replay-protected legacy spend to pass: %v", err)
+			}
+		})
+	}
+}
+
+func TestSegWitV0VMRequiresOBTCReplayProtectedHashType(t *testing.T) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	fundingScript, subScript := makeOBTCReplayP2WPKHScripts(t, privKey)
+	const prevValue = int64(10_000)
+
+	tests := []struct {
+		name    string
+		hash    SigHashType
+		wantErr bool
+	}{
+		{
+			name:    "legacy segwit sighash rejected after replay activation",
+			hash:    SigHashAll,
+			wantErr: true,
+		},
+		{
+			name: "replay-protected segwit sighash accepted",
+			hash: SigHashOBTCReplayProtection | SigHashAll,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			prevFetcher := NewCannedPrevOutputFetcher(fundingScript, prevValue)
+			sigHashes := NewTxSigHashes(tx, prevFetcher)
+			witness, err := WitnessSignature(
+				tx, sigHashes, 0, prevValue, subScript, test.hash,
+				privKey, true,
+			)
+			if err != nil {
+				t.Fatalf("WitnessSignature: %v", err)
+			}
+			tx.TxIn[0].Witness = witness
+
+			vm, err := NewEngine(
+				fundingScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyWitness|
+					ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevValue, prevFetcher,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+
+			err = vm.Execute()
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("expected replay-protection failure")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected replay-protected segwit spend to pass: %v", err)
+			}
+		})
 	}
 }
