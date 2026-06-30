@@ -1,4 +1,4 @@
-# OBTC Limited Public Testnet User Test
+# OBTC Public Testnet Self-Test
 
 This page is for invited testers who are helping try the OBTC limited public
 testnet.
@@ -8,8 +8,7 @@ Use that page for new tests; this page is kept as a compatibility entry point
 for older limited-review links.
 
 This is not a public launch, not a mainnet release, not an investment or yield
-program, and not a request for promotion or endorsement. Testnet coins have no
-real-world value.
+program, and not a request for promotion or endorsement. Testnet coins have no real-world value.
 
 Expected time for a first pass: 30-90 minutes. Thank you for taking the time to
 try this; short, honest feedback is enough.
