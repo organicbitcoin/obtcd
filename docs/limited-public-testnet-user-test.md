@@ -1,11 +1,15 @@
-# OBTC Limited Public Testnet User Test
+# OBTC Public Testnet Self-Test
 
 This page is for invited testers who are helping try the OBTC limited public
 testnet.
 
+Use this page as the canonical public testnet self-test entry for external
+node and wallet testers. It covers source builds, seed peers, node startup,
+wallet creation, manual test coin requests, `obtc.getexpiry`, `obtc.renew`, and
+the no-value testnet coin boundary.
+
 This is not a public launch, not a mainnet release, not an investment or yield
-program, and not a request for promotion or endorsement. Testnet coins have no
-real-world value.
+program, and not a request for promotion or endorsement. Testnet coins have no real-world value.
 
 Expected time for a first pass: 30-90 minutes. Thank you for taking the time to
 try this; short, honest feedback is enough.
@@ -40,7 +44,7 @@ Copy this prompt into your AI assistant:
 Please help me try the OBTC limited public testnet on this machine.
 
 Follow this guide:
-https://github.com/organicbitcoin/obtcd/blob/bypass/docs/limited-public-testnet-user-test.md
+https://github.com/organicbitcoin/obtcd/blob/master/docs/limited-public-testnet-user-test.md
 
 Rules:
 - Use ~/obtc-testnet as the working directory.

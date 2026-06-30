@@ -23,6 +23,10 @@ go build ./...
 - Default P2P port: `19527`
 - Recommended RPC port for operators: `19528`
 - Bech32 HRP: `obtct`
+- Public seed peers:
+  - `seed1.testnet.organicbitcoin.org:19527`
+  - `seed2.testnet.organicbitcoin.org:19527`
+  - `seed3.testnet.organicbitcoin.org:19527`
 
 ## 2.1 Testnet lifecycle parameters
 
@@ -59,7 +63,7 @@ With custom peers and credentials:
 
 ```bash
 RPC_USER=myuser RPC_PASS=mypass \
-ADDPEERS=seed1.example.com:19527,seed2.example.com:19527 \
+ADDPEERS=seed1.testnet.organicbitcoin.org:19527,seed2.testnet.organicbitcoin.org:19527,seed3.testnet.organicbitcoin.org:19527 \
 scripts/phase6/run_testnet_node.sh start
 ```
 
@@ -76,8 +80,9 @@ scripts/phase6/run_testnet_node.sh start
   --notls \
   --rpcuser=<rpc_user> \
   --rpcpass=<rpc_pass> \
-  --addpeer=<peer1:19527> \
-  --addpeer=<peer2:19527>
+  --addpeer=seed1.testnet.organicbitcoin.org:19527 \
+  --addpeer=seed2.testnet.organicbitcoin.org:19527 \
+  --addpeer=seed3.testnet.organicbitcoin.org:19527
 ```
 
 ### Option C: generate a config file first
@@ -86,7 +91,7 @@ scripts/phase6/run_testnet_node.sh start
 scripts/phase6/gen_testnet_conf.sh \
   --rpcuser=<rpc_user> \
   --rpcpass=<rpc_pass> \
-  --addpeers=<peer1:19527>,<peer2:19527>
+  --addpeers=seed1.testnet.organicbitcoin.org:19527,seed2.testnet.organicbitcoin.org:19527,seed3.testnet.organicbitcoin.org:19527
 
 # then start node with generated config
 ./btcd --configfile=./phase6-obtctestnet.conf
@@ -143,7 +148,8 @@ scripts/phase6/collect_validation_snapshot.sh \
 ## 6. Seed/peering notes (Phase 6)
 
 - Seed readiness requires **2-3 long-lived nodes** (preferably multi-region).
-- At this stage, bootstrap should rely on explicit `--addpeer` entries until seed rollout is finalized.
+- At this stage, bootstrap should rely on the explicit public `--addpeer`
+  entries listed above. Do not assume DNS seeds are hardcoded into `chaincfg`.
 - Keep at least one observability node with `--expiryindex` enabled.
 
 Run a preflight check before accepting a seed candidate:

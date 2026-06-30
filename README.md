@@ -41,6 +41,7 @@ Reviewer entry points:
 
 - [Reviewer Quick Start](docs/reviewer-quickstart.md)
 - [Mining Review Checklist](docs/mining-review-checklist.md)
+- [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md)
 - [Testnet Join Guide](docs/testnet-join.md)
 - [Mainnet Join Runbook](docs/mainnet-join.md)
 - [Network Parameters](docs/network-parameters.md)
@@ -138,6 +139,17 @@ go test ./mempool -run 'REAP|RejectREAPSystemTxFromMempool' -count=1
 go test ./mining -run 'REAP|Accounting|Witness' -count=1
 ```
 
+## Public testnet entry
+
+Use [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md) as the
+canonical public testnet self-test entry for external node and wallet testers.
+It covers `obtcd` and `obtcwallet` builds, seed peers, node startup, wallet
+creation, manual test coin requests, `obtc.getexpiry`, `obtc.renew`, and the
+no-value testnet coin boundary.
+
+The lower-level [Testnet Join Guide](docs/testnet-join.md) remains available for
+seed candidates and operator-oriented network details.
+
 ## Minimal testnet node
 
 ```bash
@@ -148,7 +160,10 @@ go test ./mining -run 'REAP|Accounting|Witness' -count=1
   --rpcpass=testpass \
   --txindex \
   --expiryindex \
-  --notls
+  --notls \
+  --addpeer=seed1.testnet.organicbitcoin.org:19527 \
+  --addpeer=seed2.testnet.organicbitcoin.org:19527 \
+  --addpeer=seed3.testnet.organicbitcoin.org:19527
 ```
 
 Check basic RPC connectivity:
@@ -217,8 +232,13 @@ traffic and restart testing:
 
 - [OBTC Node Documentation](docs/)
 - [OBTC Mainnet Join Runbook](docs/mainnet-join.md)
+- [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md)
 - [OBTC Testnet Join Guide](docs/testnet-join.md)
 - [Network Parameters](docs/network-parameters.md)
+
+Public testnet coins have no real-world value. There is no public faucet at
+this stage; test coins are sent manually for node, wallet, expiry, and renewal
+testing.
 
 ## Issues
 
