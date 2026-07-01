@@ -93,7 +93,7 @@ location, and decide whether manual review needs additional evidence.
 
 | Item | Expected behavior | Test location | Manual review note |
 |---|---|---|---|
-| Pruned mode claims | No unsupported pruned-node claim is made in this package | `KNOWN_LIMITATIONS.md` | TODO-HUMAN-CONFIRM if pruned support becomes release scope |
+| Pruned mode claims | No unsupported pruned-node claim is made in this package | `KNOWN_LIMITATIONS.md` | Require separate evidence if pruned support becomes release scope |
 | Snapshot restore | No snapshot restore support is claimed here | `KNOWN_LIMITATIONS.md` | Require separate evidence before documenting |
 
 ## Logging/Observability Checklist
@@ -102,7 +102,7 @@ location, and decide whether manual review needs additional evidence.
 |---|---|---|---|
 | Node status | `obtc-status` reports chain, peers, expiry, commitment, and REAP plan | `cmd/obtc-status/status_test.go` | Confirm RPC bound to private interface |
 | Seed preflight | Seed script checks peers, tip, P2P, and optional expiry index | `scripts/phase6/seed_preflight.sh` | Capture output for release evidence |
-| 72h observation | Collector appends repeated node snapshots | `scripts/phase6/collect_72h_observation.sh` | TODO-HUMAN-CONFIRM final observation window |
+| 72h observation | Collector appends repeated node snapshots | `scripts/phase6/collect_72h_observation.sh` | Requires operator-run public observation window |
 
 ## Known Attack Scenarios
 

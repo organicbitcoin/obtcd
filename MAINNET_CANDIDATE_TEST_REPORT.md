@@ -1,7 +1,8 @@
 # OBTC Mainnet Candidate Test Report
 
-Status: ready for external technical review, with human confirmation items
-listed below. This is not a production mainnet launch report.
+Status: ready for external technical review, with release evidence and remaining
+operator-scope limits listed below. This is not a production mainnet launch
+report.
 
 ## Test Environment
 
@@ -10,10 +11,10 @@ listed below. This is not a production mainnet launch report.
 | Date | `2026-07-01` |
 | Host OS | `Darwin mac.lan 25.5.0 Darwin Kernel Version 25.5.0 ... RELEASE_ARM64_T8112 arm64` |
 | Go runtime | `go version go1.25.3 darwin/arm64` |
-| `obtcd` commit | `2ad6af61176b9f23e9eb3dc0574c6c15600eb939` |
+| `obtcd` commit | `0bdb3f1671756e75a20cb4807684491c25b6367e` |
 | `obtcwallet` commit | `c0e8a03fd7fac02a831a65f117679d05aa4625ef` |
 | `obtc-website` commit | `55649a5fe960aa9da5ed8f34b1714c4d21a42fbd` |
-| Branch used for this package | `codex/plan-08-mainnet-candidate-release-package` |
+| Candidate tag | `mainnet-candidate-2026-07` |
 
 ## Build Commands
 
@@ -81,7 +82,7 @@ ok github.com/btcsuite/btcwallet/cmd/renewall
 
 ## Integration And Regtest Demo Result
 
-Plan 07 reproducible local demo evidence exists in PR #14:
+Plan 07 reproducible local demo files were merged in PR #14:
 
 <https://github.com/organicbitcoin/obtcd/pull/14>
 
@@ -96,8 +97,14 @@ Observed there:
 - printed status JSON with `last_reap`, marker, commitment root, and next
   `reap_plan`.
 
-TODO-HUMAN-CONFIRM: merge PR #14 or re-run the demo from the final release
-package branch before publishing a release draft.
+Final tag evidence was captured on `mainnet-candidate-2026-07`:
+
+- tag commit:
+  `0bdb3f1671756e75a20cb4807684491c25b6367e`;
+- command:
+  `RESET=1 KEEP_NODE=0 scripts/demo-regtest-expiry-reap.sh`;
+- result: passed, including a block at height `145` with a version `3` REAP
+  transaction and status JSON reporting `last_reap`.
 
 ## CI Result
 
@@ -105,10 +112,8 @@ Latest related CI evidence:
 
 - PR #14 `docs: add reproducible demo and testnet runbooks` completed all
   Build and Test checks successfully.
-
-Plan 08 package CI:
-
-- TODO-HUMAN-CONFIRM after this PR opens and checks complete.
+- PR #15 `docs: add mainnet candidate review package` completed all Build and
+  Test checks successfully.
 
 ## Manual Test Steps
 
@@ -117,8 +122,7 @@ Recommended manual review before publishing release artifacts:
 1. Build release artifacts with `scripts/phase6/build_release_artifacts.sh`.
 2. Verify `SHA256SUMS` and `MANIFEST.md`.
 3. Start an `obtctestnet` node with `--txindex --expiryindex`.
-4. Start a clean `obtcregtest` node and run the reproducible demo after PR #14
-   is merged or equivalent commands are available.
+4. Start a clean `obtcregtest` node and run the reproducible demo.
 5. Create a fresh test wallet in `obtcwallet`; run `obtc.getexpiry`,
    `obtc.renew` dry review, and `renewall --dry-run`.
 6. Run seed preflight and firewall preflight against candidate seed nodes.
@@ -128,13 +132,14 @@ Recommended manual review before publishing release artifacts:
 ## Uncovered Or Evidence-Gated Scenarios
 
 - No independent third-party implementation evidence is recorded in this repo.
-- Formal external security audit evidence is `TODO-HUMAN-CONFIRM`.
+- Formal external security audit evidence is not recorded in this repository.
 - Funded mainnet-candidate wallet renewal evidence is not claimed here.
 - Long-running public mainnet-candidate seed observation is not included in this
   local report.
 - Snapshot/pruned-node behavior is not claimed beyond existing code/test scope.
-- Final release tag, artifacts, checksums, and signatures remain
-  `TODO-HUMAN-CONFIRM`.
+- Final release tag, local artifacts, checksums, and SSH detached signatures were
+  generated on 2026-07-01. Public GitHub Release upload is not included in this
+  local report.
 
 ## Failed Tests
 
@@ -143,7 +148,6 @@ No failed commands were recorded in the local focused test set above.
 ## Conclusion
 
 Based on the commands above, this package is ready for external technical
-review. It is not yet a production launch package. The release should not be
-published as final until the TODO-HUMAN-CONFIRM items are resolved, especially
-final tags/artifacts, Plan 08 CI, Plan 07 demo merge or equivalent demo evidence,
-security contact confirmation, and public node observation evidence.
+review. It is not yet a production launch package. Public release publication
+still requires artifact upload, secure-contact confirmation, and any desired
+public node observation evidence.

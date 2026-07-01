@@ -170,10 +170,10 @@ Known attack scenarios to review:
 
 Current release branch note:
 
-- Plan 07 local demo files are in PR #14:
+- Plan 07 local demo files were merged in PR #14:
   <https://github.com/organicbitcoin/obtcd/pull/14>
-- TODO-HUMAN-CONFIRM: merge PR #14 or copy equivalent demo evidence into the
-  final release branch before publishing the candidate packet.
+- Final tag `mainnet-candidate-2026-07` includes the local demo script and
+  runbooks. A final-tag regtest demo run was captured on 2026-07-01.
 
 Existing local devnet tools on this branch:
 

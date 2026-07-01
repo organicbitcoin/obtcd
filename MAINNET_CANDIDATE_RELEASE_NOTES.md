@@ -11,22 +11,23 @@ custody integration notice.
 | Field | Value |
 |---|---|
 | Candidate version | `mainnet-candidate-2026-07` |
-| Candidate tag | `TODO-HUMAN-CONFIRM: mainnet-candidate-2026-07` |
+| Candidate tag | `mainnet-candidate-2026-07` |
 | Release date | `2026-07-01` |
 | Release status | Mainnet Candidate for external technical review |
 | Production launch status | Not a production mainnet launch |
-| `obtcd` commit reviewed for this draft | `2ad6af61176b9f23e9eb3dc0574c6c15600eb939` |
+| `obtcd` commit reviewed for this draft | `0bdb3f1671756e75a20cb4807684491c25b6367e` |
 | `obtcwallet` commit observed locally | `c0e8a03fd7fac02a831a65f117679d05aa4625ef` |
 | `obtc-website` commit observed locally | `55649a5fe960aa9da5ed8f34b1714c4d21a42fbd` |
-| Final release artifact URLs | `TODO-HUMAN-CONFIRM` |
-| Final checksums/signatures | `TODO-HUMAN-CONFIRM` |
+| Final release artifact URLs | Not published to a GitHub Release yet |
+| Final checksums/signatures | Generated locally with `SHA256SUMS`, `SHA256SUMS.sig`, and `MANIFEST.md.sig` |
 | Security contact | GitHub private vulnerability reporting if enabled; otherwise open a minimal public issue asking for a secure channel |
 
 Repository entry points:
 
 - `obtcd`: <https://github.com/organicbitcoin/obtcd>
 - `obtcwallet`: <https://github.com/organicbitcoin/obtcwallet>
-- website/docs: <https://organicbitcoin.org> and `TODO-HUMAN-CONFIRM` final docs URL
+- website/docs: <https://organicbitcoin.org>; repository docs remain the
+  review source until a final public docs URL is published.
 
 ## Included Components
 
@@ -109,22 +110,24 @@ Summary for this draft:
 - parameter checker passed with 68 exact matches;
 - focused consensus, mempool, mining/template, expiry index, and wallet
   lifecycle commands passed;
-- Plan 07 reproducible regtest demo PR #14 passed CI and remains a dependency
-  to confirm if the final packet should link to its root-level demo files;
-- Plan 08 PR CI is `TODO-HUMAN-CONFIRM` after this package PR opens.
+- Plan 07 reproducible regtest demo PR #14 was merged into `master`;
+- Plan 08 release package PR #15 was merged into `master`;
+- final tag `mainnet-candidate-2026-07` points to
+  `0bdb3f1671756e75a20cb4807684491c25b6367e`;
+- final-tag local regtest demo evidence was captured on 2026-07-01.
 
 ## Known Limitations
 
 See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md). Important limits:
 
 - this is candidate review material, not a production mainnet launch;
-- independent third-party implementation and formal security audit evidence
-  remain `TODO-HUMAN-CONFIRM`;
+- independent third-party implementation and formal external security audit
+  evidence are not recorded in this repository;
 - testnet and regtest behavior are accelerated review environments and should
   not be treated as mainnet economics or timing evidence;
 - wallet UI and status dashboards are engineering-oriented;
-- seed/DNS, release artifact signatures, 72h observation evidence, and final tag
-  publication require human release confirmation.
+- seed/DNS and 72h public observation evidence still require operator capture;
+- public GitHub Release artifact upload remains a release operation.
 
 ## Review Focus Areas
 
@@ -178,11 +181,12 @@ scripts/phase6/build_release_artifacts.sh \
   --goarch amd64
 ```
 
-TODO-HUMAN-CONFIRM before publishing a GitHub release draft:
+Release operations still required before a public GitHub Release:
 
-- final tag name and tag commit;
-- artifact URLs and checksums;
-- signed manifest or equivalent verification material;
-- final wallet release tag and commit;
-- final website/docs commit and publication URL;
-- final security contact wording.
+- upload the generated artifact packages, checksums, and signatures;
+- decide whether the companion wallet should receive a matching Git tag;
+- publish the final website/docs URL if the review packet should link outside
+  this repository;
+- confirm GitHub private vulnerability reporting or publish the preferred
+  secure contact path;
+- capture public seed/DNS and 72h observation evidence if those are in scope.
