@@ -64,8 +64,9 @@ Status: candidate for external technical review.
 ### Known Limitations
 
 - This is not a production mainnet launch.
-- Final release tag, artifact URLs, checksums, signatures, and security contact
-  wording are `TODO-HUMAN-CONFIRM`.
+- Final release tag, local artifact packages, checksums, and SSH detached
+  signatures were generated on 2026-07-01. Public GitHub Release upload and
+  secure-contact wording remain release operations.
 - Independent third-party implementation and formal security audit evidence are
   not recorded in this repository.
 - Public seed/DNS and 72h observation evidence require final operator capture.

@@ -15,7 +15,7 @@ marketing document.
 ## Implementation And Review Limits
 
 - Independent third-party implementation evidence is not recorded here.
-- Formal external security audit evidence is `TODO-HUMAN-CONFIRM`.
+- Formal external security audit evidence is not recorded in this repository.
 - Third-party miner, pool, exchange, custody, and explorer integrations are not
   in the current release scope.
 - Miner adoption is not assumed.
@@ -25,23 +25,23 @@ marketing document.
 
 ## Network And Parameter Limits
 
-- Mainnet fork height `1000000` is a provisional candidate value and may change
-  before final release artifacts.
+- Mainnet fork height `1000000` is the value in the
+  `mainnet-candidate-2026-07` tag. A later candidate or production release would
+  require explicit review before changing it.
 - Expiry / REAP / commitment activation height `1002016` is derived from the
   provisional fork height.
-- Parameter freeze state is `TODO-HUMAN-CONFIRM` for final release tagging.
+- Parameter freeze state is represented by the `mainnet-candidate-2026-07` tag.
 - DNS seed and fallback-peer publication require final operator evidence.
 - A fresh-node sync through final published bootstrap peers is
-  `TODO-HUMAN-CONFIRM`.
+  not demonstrated in this repository.
 
 ## Test Environment Limits
 
 - Testnet has accelerated parameters and does not represent mainnet timing.
 - Regtest has accelerated expiry and does not represent mainnet time horizon.
 - Local focused tests do not replace long-running public node observation.
-- Plan 07 reproducible demo files are in PR #14 at the time of this package and
-  require final merge or equivalent release-branch evidence.
-- CI for the Plan 08 package PR is `TODO-HUMAN-CONFIRM`.
+- Plan 07 reproducible demo files are merged into `master`.
+- PR #14 and PR #15 CI completed successfully before merge.
 
 ## Wallet Limits
 

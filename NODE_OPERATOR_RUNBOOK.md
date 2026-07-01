@@ -25,8 +25,9 @@ scripts/phase6/build_release_artifacts.sh \
   --goarch amd64
 ```
 
-TODO-HUMAN-CONFIRM final release tag, checksums, and signed manifest before
-publishing artifacts.
+The candidate tag is `mainnet-candidate-2026-07`. Local release packages,
+checksums, and SSH detached signatures were generated for review on 2026-07-01.
+Public GitHub Release upload remains a release operation.
 
 ## Configure Mainnet Candidate Parameters
 
@@ -95,8 +96,9 @@ MINING_ADDR="<obtcregtest address>"
   --miningaddr="$MINING_ADDR"
 ```
 
-Plan 07 reproducible demo scripts are in PR #14 at the time of this package.
-TODO-HUMAN-CONFIRM merge or equivalent final branch demo evidence.
+Plan 07 reproducible demo scripts are merged into `master` and included in the
+`mainnet-candidate-2026-07` tag. Final-tag local demo evidence was captured on
+2026-07-01.
 
 ## View Peers
 
