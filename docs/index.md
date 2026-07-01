@@ -11,6 +11,13 @@ mining, or development practices that are still shared with btcd.
 
 ## Start Here
 
+* [Mainnet Candidate External Review Packet](../EXTERNAL_REVIEW_PACKET.md)
+* [Mainnet Candidate Release Notes](../MAINNET_CANDIDATE_RELEASE_NOTES.md)
+* [Mainnet Candidate Test Report](../MAINNET_CANDIDATE_TEST_REPORT.md)
+* [Known Limitations](../KNOWN_LIMITATIONS.md)
+* [Security Review Checklist](../SECURITY_REVIEW_CHECKLIST.md)
+* [Node Operator Runbook](../NODE_OPERATOR_RUNBOOK.md)
+* [Wallet Operator Runbook](../WALLET_OPERATOR_RUNBOOK.md)
 * [Reviewer Quick Start](reviewer-quickstart.md)
 * [Getting Started](getting-started.md)
 * [OBTC Mainnet Join Runbook](mainnet-join.md)
