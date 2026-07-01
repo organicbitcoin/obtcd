@@ -163,3 +163,56 @@ func TestREAPMarkerNonLastOutputNotRejected(t *testing.T) {
 		t.Fatalf("REAP marker in non-last position should not trigger rejection: %v", err)
 	}
 }
+
+func TestREAPFakeMarkersRejectedBeforeMempoolAdmission(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{
+			name:    "digest_mismatch_shape",
+			payload: "REAP:244:1:deadbeef",
+		},
+		{
+			name:    "non_expired_like_height",
+			payload: "REAP:999999:1:0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:    "unparseable_marker",
+			payload: "REAP:not-a-height:1:not-a-digest",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			harness, _, err := newPoolHarness(&chaincfg.MainNetParams)
+			if err != nil {
+				t.Fatalf("unable to create pool harness: %v", err)
+			}
+			harness.txPool.cfg.Policy.MaxTxVersion = 3
+
+			msg := wire.NewMsgTx(3)
+			msg.AddTxIn(&wire.TxIn{PreviousOutPoint: wire.OutPoint{Index: 1}})
+			msg.AddTxOut(&wire.TxOut{Value: 1000, PkScript: []byte{txscript.OP_TRUE}})
+			marker, _ := txscript.NewScriptBuilder().
+				AddOp(txscript.OP_RETURN).
+				AddData([]byte(tc.payload)).Script()
+			msg.AddTxOut(&wire.TxOut{Value: 0, PkScript: marker})
+
+			tx := btcutil.NewTx(msg)
+			_, err = harness.txPool.ProcessTransaction(tx, false, false, 0)
+			if err == nil {
+				t.Fatalf("expected fake REAP marker to be rejected")
+			}
+			if !strings.Contains(err.Error(), "reap system transaction") {
+				t.Fatalf("expected reap system transaction error, got: %v", err)
+			}
+			if harness.txPool.IsTransactionInPool(tx.Hash()) {
+				t.Fatalf("fake REAP marker tx should not enter mempool")
+			}
+			if harness.txPool.IsOrphanInPool(tx.Hash()) {
+				t.Fatalf("fake REAP marker tx should not enter orphan pool")
+			}
+		})
+	}
+}
