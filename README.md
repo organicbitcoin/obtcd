@@ -39,6 +39,13 @@ If you are new to OBTC, start here:
 
 Reviewer entry points:
 
+- [Mainnet Candidate External Review Packet](EXTERNAL_REVIEW_PACKET.md)
+- [Mainnet Candidate Release Notes](MAINNET_CANDIDATE_RELEASE_NOTES.md)
+- [Mainnet Candidate Test Report](MAINNET_CANDIDATE_TEST_REPORT.md)
+- [Known Limitations](KNOWN_LIMITATIONS.md)
+- [Security Review Checklist](SECURITY_REVIEW_CHECKLIST.md)
+- [Node Operator Runbook](NODE_OPERATOR_RUNBOOK.md)
+- [Wallet Operator Runbook](WALLET_OPERATOR_RUNBOOK.md)
 - [Reviewer Quick Start](docs/reviewer-quickstart.md)
 - [Mining Review Checklist](docs/mining-review-checklist.md)
 - [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md)
@@ -234,6 +241,10 @@ traffic and restart testing:
 
 ## Documentation
 
+- [Mainnet Candidate External Review Packet](EXTERNAL_REVIEW_PACKET.md)
+- [Mainnet Candidate Release Notes](MAINNET_CANDIDATE_RELEASE_NOTES.md)
+- [Mainnet Candidate Test Report](MAINNET_CANDIDATE_TEST_REPORT.md)
+- [Known Limitations](KNOWN_LIMITATIONS.md)
 - [OBTC Node Documentation](docs/)
 - [OBTC Public Testnet User Test](docs/public-testnet-user-test.md)
 - [OBTC Mainnet Join Runbook](docs/mainnet-join.md)
