@@ -67,8 +67,9 @@ Status: candidate for external technical review.
 - Final release tag, local artifact packages, checksums, and SSH detached
   signatures were generated on 2026-07-01. Public GitHub Release upload and
   secure-contact wording remain release operations.
-- Independent third-party implementation and formal security audit evidence are
-  not recorded in this repository.
+- Independent third-party implementation evidence is not recorded here.
+- No formal third-party security audit has been completed or recorded for the
+  current candidate.
 - Public seed/DNS and 72h observation evidence require final operator capture.
 - Companion wallet non-dry-run funded evidence remains release-scope dependent.
 

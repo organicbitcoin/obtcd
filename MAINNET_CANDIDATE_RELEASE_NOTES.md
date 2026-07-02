@@ -121,8 +121,9 @@ Summary for this draft:
 See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md). Important limits:
 
 - this is candidate review material, not a production mainnet launch;
-- independent third-party implementation and formal external security audit
-  evidence are not recorded in this repository;
+- independent third-party implementation evidence is not recorded here;
+- no formal third-party security audit has been completed or recorded for the
+  current candidate;
 - testnet and regtest behavior are accelerated review environments and should
   not be treated as mainnet economics or timing evidence;
 - wallet UI and status dashboards are engineering-oriented;
