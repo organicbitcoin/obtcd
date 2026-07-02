@@ -141,6 +141,145 @@ func TestRawTxInTaprootSignatureOBTCReplayProtectionOption(t *testing.T) {
 	require.NoError(t, vm.Execute())
 }
 
+func TestTaprootKeyPathVMOBTCReplayProtectedSigHashMatrix(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range obtcReplayProtectedSigHashMatrix() {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			privKey, tx, prevOut, prevFetcher, sigHashes :=
+				makeOBTCReplayTaprootKeySpendTestTx(t)
+			sig, err := RawTxInTaprootSignature(
+				tx, sigHashes, 0, prevOut.Value, prevOut.PkScript,
+				nil, test.hash, privKey,
+				WithOBTCReplayProtectionSighash(),
+			)
+			require.NoError(t, err)
+
+			txCopy := tx.Copy()
+			txCopy.TxIn[0].Witness = wire.TxWitness{sig}
+			vm, err := NewEngine(
+				prevOut.PkScript, txCopy, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevOut.Value, prevFetcher,
+			)
+			require.NoError(t, err)
+			require.NoError(t, vm.Execute())
+		})
+	}
+}
+
+func TestTaprootKeyPathVMRejectsInvalidOBTCReplayHashTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		makeSig func(t *testing.T, privKey *btcec.PrivateKey,
+			tx *wire.MsgTx, prevOut *wire.TxOut,
+			sigHashes *TxSigHashes) []byte
+	}{
+		{
+			name: "missing replay bit",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTaprootSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, nil, SigHashAll, privKey,
+				)
+				require.NoError(t, err)
+				return sig
+			},
+		},
+		{
+			name: "taproot default",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTaprootSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, nil, SigHashDefault,
+					privKey,
+				)
+				require.NoError(t, err)
+				return sig
+			},
+		},
+		{
+			name: "unknown extra bits",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTaprootSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, nil,
+					SigHashOBTCReplayProtection|SigHashAll,
+					privKey, WithOBTCReplayProtectionSighash(),
+				)
+				require.NoError(t, err)
+				require.Len(t, sig, schnorr.SignatureSize+1)
+				sig[schnorr.SignatureSize] = byte(
+					SigHashOBTCReplayProtection | 0x20 | SigHashAll,
+				)
+				return sig
+			},
+		},
+		{
+			name: "base type zero",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTaprootSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, nil,
+					SigHashOBTCReplayProtection|SigHashAll,
+					privKey, WithOBTCReplayProtectionSighash(),
+				)
+				require.NoError(t, err)
+				require.Len(t, sig, schnorr.SignatureSize+1)
+				sig[schnorr.SignatureSize] = byte(
+					SigHashOBTCReplayProtection | SigHashDefault,
+				)
+				return sig
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			privKey, tx, prevOut, prevFetcher, sigHashes :=
+				makeOBTCReplayTaprootKeySpendTestTx(t)
+			tx.TxIn[0].Witness = wire.TxWitness{
+				test.makeSig(t, privKey, tx, prevOut, sigHashes),
+			}
+			vm, err := NewEngine(
+				prevOut.PkScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevOut.Value, prevFetcher,
+			)
+			require.NoError(t, err)
+			require.Error(t, vm.Execute())
+		})
+	}
+}
+
 func TestCalcTapscriptSignatureHashOBTCReplayProtectionOption(t *testing.T) {
 	t.Parallel()
 
@@ -192,4 +331,156 @@ func TestRawTxInTapscriptSignatureOBTCReplayProtectionOption(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NoError(t, vm.Execute())
+}
+
+func TestTaprootScriptPathVMOBTCReplayProtectedSigHashMatrix(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range obtcReplayProtectedSigHashMatrix() {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			privKey, tx, prevOut, tapLeaf, ctrlBlockBytes,
+				prevFetcher, sigHashes :=
+				makeOBTCReplayTapscriptSpendTestTx(t)
+			sig, err := RawTxInTapscriptSignature(
+				tx, sigHashes, 0, prevOut.Value, prevOut.PkScript,
+				tapLeaf, test.hash, privKey,
+				WithOBTCReplayProtectionSighash(),
+			)
+			require.NoError(t, err)
+
+			txCopy := tx.Copy()
+			txCopy.TxIn[0].Witness = wire.TxWitness{
+				sig, tapLeaf.Script, ctrlBlockBytes,
+			}
+			vm, err := NewEngine(
+				prevOut.PkScript, txCopy, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevOut.Value, prevFetcher,
+			)
+			require.NoError(t, err)
+			require.NoError(t, vm.Execute())
+		})
+	}
+}
+
+func TestTaprootScriptPathVMRejectsInvalidOBTCReplayHashTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		makeSig func(t *testing.T, privKey *btcec.PrivateKey,
+			tx *wire.MsgTx, prevOut *wire.TxOut, tapLeaf TapLeaf,
+			sigHashes *TxSigHashes) []byte
+	}{
+		{
+			name: "missing replay bit",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				tapLeaf TapLeaf,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTapscriptSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, tapLeaf, SigHashAll,
+					privKey,
+				)
+				require.NoError(t, err)
+				return sig
+			},
+		},
+		{
+			name: "taproot default",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				tapLeaf TapLeaf,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTapscriptSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, tapLeaf, SigHashDefault,
+					privKey,
+				)
+				require.NoError(t, err)
+				return sig
+			},
+		},
+		{
+			name: "unknown extra bits",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				tapLeaf TapLeaf,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTapscriptSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, tapLeaf,
+					SigHashOBTCReplayProtection|SigHashAll,
+					privKey, WithOBTCReplayProtectionSighash(),
+				)
+				require.NoError(t, err)
+				require.Len(t, sig, schnorr.SignatureSize+1)
+				sig[schnorr.SignatureSize] = byte(
+					SigHashOBTCReplayProtection | 0x20 | SigHashAll,
+				)
+				return sig
+			},
+		},
+		{
+			name: "base type zero",
+			makeSig: func(t *testing.T, privKey *btcec.PrivateKey,
+				tx *wire.MsgTx, prevOut *wire.TxOut,
+				tapLeaf TapLeaf,
+				sigHashes *TxSigHashes) []byte {
+
+				t.Helper()
+
+				sig, err := RawTxInTapscriptSignature(
+					tx, sigHashes, 0, prevOut.Value,
+					prevOut.PkScript, tapLeaf,
+					SigHashOBTCReplayProtection|SigHashAll,
+					privKey, WithOBTCReplayProtectionSighash(),
+				)
+				require.NoError(t, err)
+				require.Len(t, sig, schnorr.SignatureSize+1)
+				sig[schnorr.SignatureSize] = byte(
+					SigHashOBTCReplayProtection | SigHashDefault,
+				)
+				return sig
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			privKey, tx, prevOut, tapLeaf, ctrlBlockBytes,
+				prevFetcher, sigHashes :=
+				makeOBTCReplayTapscriptSpendTestTx(t)
+			tx.TxIn[0].Witness = wire.TxWitness{
+				test.makeSig(
+					t, privKey, tx, prevOut, tapLeaf, sigHashes,
+				),
+				tapLeaf.Script,
+				ctrlBlockBytes,
+			}
+			vm, err := NewEngine(
+				prevOut.PkScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevOut.Value, prevFetcher,
+			)
+			require.NoError(t, err)
+			require.Error(t, vm.Execute())
+		})
+	}
 }

@@ -22,6 +22,35 @@ Useful starting points:
 
 For a focused review, start with one file in `review-cards/`.
 
+For exact test fixtures, use `REVIEW_TEST_VECTORS.md` as the executable-test
+index and `REVIEW_FIXTURE_VECTORS.md` for copyable concrete inputs.
+
+## Reviewer Personas
+
+| Reviewer | Start With | Useful First Question |
+|---|---|---|
+| Programmer new to Bitcoin internals | This primer through `Coinbase`, then `docs/reviewer-quickstart.md` | Can I explain UTXO, OutPoint, coinbase, mempool, and block template before reading OBTC-specific code? |
+| Bitcoin protocol reviewer | `chaincfg/params_obtc.go`, `blockchain/validation_reap.go`, `txscript/` replay tests | Do activation, sighash, expired-spend, and REAP rules fail closed at boundaries? |
+| Wallet reviewer | `OBTC_REVIEWER_PRIMER.md`, then sibling `obtcwallet` renewal tests | Can a holder see expiry, renew before risk, and avoid unsafe automatic signing? |
+| Mining or pool reviewer | `docs/mining-review-checklist.md`, `mining/template_reap.go`, `mining/reap/` | Does template construction preserve coinbase accounting, commitments, and REAP ordering? |
+| Documentation or operator reviewer | `EXTERNAL_REVIEW_PACKET.md`, `RUN_LOCAL_DEMO.md`, `docs/testnet-join.md` | Can a clean reviewer reproduce the stated behavior without hidden context? |
+
+## Glossary
+
+| Term | Meaning |
+|---|---|
+| expiry key | The block height at which a confirmed UTXO becomes expired for OBTC lifecycle rules. |
+| create height | The block height that created a UTXO. OBTC computes expiry from this height. |
+| activation height | The height where a rule becomes active for a network. Different OBTC mechanisms can have different activation heights. |
+| REAP | The constrained reclaim transaction path for expired UTXOs. |
+| marker digest | The hash in the REAP marker that commits to the ordered REAP input list. |
+| canonical prefix | The first N eligible expired UTXOs in deterministic order; REAP can take a prefix but cannot skip earlier candidates. |
+| dust fold | The rule that folds sub-threshold REAP refund value into tax instead of creating a dust refund output. |
+| tax | The protocol-defined REAP share that is miner-claimable through coinbase accounting. |
+| refund | The REAP share returned to scripts from the expired inputs when it is not folded as dust. |
+| security budget | The miner-claimable portion of REAP value, intended as block security compensation rather than a user refund. |
+| renewal risk | The risk that a holder waits too long, pays too little fee, or has unavailable wallet state and fails to create a fresh UTXO before expiry. |
+
 ## UTXO
 
 A UTXO is an unspent transaction output. A transaction creates outputs, and a
@@ -47,6 +76,10 @@ The implementation lives in `chaincfg/params_obtc.go` as
 `(*ExpiryParams).CalculateExpiryKey`. Mainnet-candidate `WindowBlocks` is
 `362880` blocks. Testnet and regtest use shorter windows so reviewers can run
 local tests.
+
+Important: expiry is block-height-based. Wall-clock waiting alone changes
+nothing. A UTXO's status changes only when the active chain height advances or
+reorganizes across the relevant height.
 
 After expiry activation, a normal transaction must not spend an expired UTXO.
 A REAP transaction must not spend a non-expired UTXO. That split is enforced in
@@ -81,7 +114,15 @@ expired backlog exists.
 ## Coinbase
 
 The coinbase transaction is the first transaction in a block. It creates the
-block subsidy and claims fees. It has no normal inputs.
+block subsidy and claims fees. It has no normal inputs. Ordinary transactions
+spend existing UTXOs; coinbase transactions create new value permitted by the
+subsidy and fee rules for that block.
+
+Coinbase outputs are not spendable immediately. They must mature for
+`CoinbaseMaturity` blocks before ordinary spending. Current OBTC values are
+`100` blocks on mainnet and regtest, and `20` blocks on public testnet. Local
+mining demos that spend mined outputs must either mine through that maturity
+window or use helper tooling that prepares matured local outputs.
 
 OBTC adds two coinbase-sensitive review areas:
 
@@ -105,6 +146,12 @@ OBTC uses the mempool for ordinary user transactions, but REAP transactions are
 system transactions constructed for blocks. A fake or user-broadcast REAP-like
 transaction should not enter the mempool. Review `mempool/reap_policy_test.go`
 and `mempool/policy_matrix_test.go` for the isolation rules.
+
+The rationale is that REAP is derived from current chain and expiry-index state
+and changes coinbase accounting. Accepting arbitrary REAP-like transactions
+through ordinary relay would give the mempool a stale or unverifiable view of a
+template-derived system transaction, so ordinary mempool relay intentionally
+rejects REAP-like submissions.
 
 Replay protection also appears in mempool policy. After replay activation,
 transactions must use the OBTC replay-protected signature hash domain.

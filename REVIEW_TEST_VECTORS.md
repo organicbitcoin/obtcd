@@ -5,6 +5,9 @@ canonical executable vectors are the listed tests. Reviewers are encouraged to
 add smaller standalone fixtures if a case is difficult to reproduce from the
 current unit or integration tests.
 
+For copyable concrete inputs and expected results, see
+[REVIEW_FIXTURE_VECTORS.md](REVIEW_FIXTURE_VECTORS.md).
+
 This is not a formal audit report.
 
 ## Common Commands
@@ -29,8 +32,9 @@ go test ./wallet ./rpc/legacyrpc ./rpc/rpcserver ./cmd/renewall -run 'Expiry|Ren
 | RP-V-001 | OBTC replay flag activates at the configured OBTC height | Valid protected signatures are accepted after activation | `blockchain/validation_obtc_replay_test.go`, `chaincfg/params_obtc_test.go` |
 | RP-I-001 | Bitcoin network params at the same height | OBTC replay flag is not enabled | `blockchain/validation_obtc_replay_test.go` |
 | RP-I-002 | Post-activation signature without OBTC replay domain | Rejected by script validation | `txscript/sighash_obtc_replay_test.go`, `blockchain/scriptval_obtc_test.go` |
-| RP-V-002 | Legacy, SegWit v0, and Taproot protected hash variants | Each protected domain is distinct from the base domain | `txscript/sighash_obtc_replay_test.go`, `txscript/taproot_obtc_replay_test.go` |
+| RP-V-002 | Legacy, SegWit v0 P2WPKH, SegWit v0 P2WSH multisig, Taproot key path, and Taproot script path protected hash matrix | `SIGHASH_ALL`, `SIGHASH_NONE`, `SIGHASH_SINGLE`, and all valid `ANYONECANPAY` combinations are accepted with the OBTC replay bit | `txscript/sighash_obtc_replay_test.go`, `txscript/taproot_obtc_replay_test.go` |
 | RP-I-003 | Mempool transaction crosses activation without protected domain | Rejected by mempool policy | `mempool/policy_matrix_test.go` |
+| RP-I-004 | Missing replay bit, unknown extra bits, Taproot default, or base type `0` after activation | Rejected by script validation | `txscript/sighash_obtc_replay_test.go`, `txscript/taproot_obtc_replay_test.go` |
 
 ## Expiry Index
 

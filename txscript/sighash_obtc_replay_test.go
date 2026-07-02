@@ -6,6 +6,7 @@ package txscript
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -14,6 +15,67 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
+
+func obtcReplayProtectedSigHashMatrix() []struct {
+	name string
+	hash SigHashType
+} {
+	return []struct {
+		name string
+		hash SigHashType
+	}{
+		{
+			name: "all",
+			hash: SigHashOBTCReplayProtection | SigHashAll,
+		},
+		{
+			name: "none",
+			hash: SigHashOBTCReplayProtection | SigHashNone,
+		},
+		{
+			name: "single",
+			hash: SigHashOBTCReplayProtection | SigHashSingle,
+		},
+		{
+			name: "anyonecanpay_all",
+			hash: SigHashOBTCReplayProtection | SigHashAnyOneCanPay |
+				SigHashAll,
+		},
+		{
+			name: "anyonecanpay_none",
+			hash: SigHashOBTCReplayProtection | SigHashAnyOneCanPay |
+				SigHashNone,
+		},
+		{
+			name: "anyonecanpay_single",
+			hash: SigHashOBTCReplayProtection | SigHashAnyOneCanPay |
+				SigHashSingle,
+		},
+	}
+}
+
+func obtcReplayInvalidSigHashMatrix() []struct {
+	name string
+	hash SigHashType
+} {
+	return []struct {
+		name string
+		hash SigHashType
+	}{
+		{
+			name: "missing replay bit",
+			hash: SigHashAll,
+		},
+		{
+			name: "unknown extra bits",
+			hash: SigHashOBTCReplayProtection | 0x20 | SigHashAll,
+		},
+		{
+			name: "base type zero",
+			hash: SigHashOBTCReplayProtection | SigHashDefault,
+		},
+	}
+}
 
 func makeOBTCReplaySighashTestTx() (*wire.MsgTx, PrevOutputFetcher, *TxSigHashes) {
 	tx := wire.NewMsgTx(2)
@@ -188,6 +250,69 @@ func makeOBTCReplayP2WPKHScripts(t *testing.T,
 	return fundingScript, subScript
 }
 
+func makeOBTCReplayP2WSHMultisigScripts(t *testing.T,
+	privKey *btcec.PrivateKey) (fundingScript, witnessScript []byte) {
+
+	t.Helper()
+
+	pubKeyOne, err := btcutil.NewAddressPubKey(
+		privKey.PubKey().SerializeCompressed(),
+		&chaincfg.ObtcRegTestParams,
+	)
+	if err != nil {
+		t.Fatalf("NewAddressPubKey one: %v", err)
+	}
+
+	secondKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey second: %v", err)
+	}
+	pubKeyTwo, err := btcutil.NewAddressPubKey(
+		secondKey.PubKey().SerializeCompressed(),
+		&chaincfg.ObtcRegTestParams,
+	)
+	if err != nil {
+		t.Fatalf("NewAddressPubKey two: %v", err)
+	}
+
+	witnessScript, err = MultiSigScript(
+		[]*btcutil.AddressPubKey{pubKeyOne, pubKeyTwo}, 1,
+	)
+	if err != nil {
+		t.Fatalf("MultiSigScript: %v", err)
+	}
+
+	scriptHash := sha256.Sum256(witnessScript)
+	witnessAddr, err := btcutil.NewAddressWitnessScriptHash(
+		scriptHash[:], &chaincfg.ObtcRegTestParams,
+	)
+	if err != nil {
+		t.Fatalf("NewAddressWitnessScriptHash: %v", err)
+	}
+	fundingScript, err = PayToAddrScript(witnessAddr)
+	if err != nil {
+		t.Fatalf("PayToAddrScript p2wsh: %v", err)
+	}
+
+	return fundingScript, witnessScript
+}
+
+func signOBTCReplayP2WSHMultisigWitness(t *testing.T, tx *wire.MsgTx,
+	sigHashes *TxSigHashes, prevValue int64, witnessScript []byte,
+	hashType SigHashType, privKey *btcec.PrivateKey) wire.TxWitness {
+
+	t.Helper()
+
+	sig, err := RawTxInWitnessSignature(
+		tx, sigHashes, 0, prevValue, witnessScript, hashType, privKey,
+	)
+	if err != nil {
+		t.Fatalf("RawTxInWitnessSignature: %v", err)
+	}
+
+	return wire.TxWitness{nil, sig, witnessScript}
+}
+
 func TestLegacyVMRequiresOBTCReplayProtectedHashType(t *testing.T) {
 	privKey, err := btcec.NewPrivateKey()
 	if err != nil {
@@ -241,6 +366,76 @@ func TestLegacyVMRequiresOBTCReplayProtectedHashType(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("expected replay-protected legacy spend to pass: %v", err)
+			}
+		})
+	}
+}
+
+func TestLegacyVMOBTCReplayProtectedSigHashMatrix(t *testing.T) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	pkScript := makeOBTCReplayP2PKHScript(t, privKey)
+	const prevValue = int64(10_000)
+
+	for _, test := range obtcReplayProtectedSigHashMatrix() {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			sigScript, err := SignatureScript(
+				tx, 0, pkScript, test.hash, privKey, true,
+			)
+			if err != nil {
+				t.Fatalf("SignatureScript: %v", err)
+			}
+			tx.TxIn[0].SignatureScript = sigScript
+
+			vm, err := NewEngine(
+				pkScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, nil, prevValue, nil,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+			if err := vm.Execute(); err != nil {
+				t.Fatalf("expected legacy %s spend to pass: %v",
+					test.name, err)
+			}
+		})
+	}
+}
+
+func TestLegacyVMRejectsInvalidOBTCReplayHashTypes(t *testing.T) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	pkScript := makeOBTCReplayP2PKHScript(t, privKey)
+	const prevValue = int64(10_000)
+
+	for _, test := range obtcReplayInvalidSigHashMatrix() {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			sigScript, err := SignatureScript(
+				tx, 0, pkScript, test.hash, privKey, true,
+			)
+			if err != nil {
+				t.Fatalf("SignatureScript: %v", err)
+			}
+			tx.TxIn[0].SignatureScript = sigScript
+
+			vm, err := NewEngine(
+				pkScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, nil, prevValue, nil,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+			if err := vm.Execute(); err == nil {
+				t.Fatalf("expected legacy %s spend to fail",
+					test.name)
 			}
 		})
 	}
@@ -303,6 +498,166 @@ func TestSegWitV0VMRequiresOBTCReplayProtectedHashType(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("expected replay-protected segwit spend to pass: %v", err)
+			}
+		})
+	}
+}
+
+func TestSegWitV0P2WPKHVMOBTCReplayProtectedSigHashMatrix(t *testing.T) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	fundingScript, subScript := makeOBTCReplayP2WPKHScripts(t, privKey)
+	const prevValue = int64(10_000)
+
+	for _, test := range obtcReplayProtectedSigHashMatrix() {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			prevFetcher := NewCannedPrevOutputFetcher(
+				fundingScript, prevValue,
+			)
+			sigHashes := NewTxSigHashes(tx, prevFetcher)
+			witness, err := WitnessSignature(
+				tx, sigHashes, 0, prevValue, subScript, test.hash,
+				privKey, true,
+			)
+			if err != nil {
+				t.Fatalf("WitnessSignature: %v", err)
+			}
+			tx.TxIn[0].Witness = witness
+
+			vm, err := NewEngine(
+				fundingScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevValue, prevFetcher,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+			if err := vm.Execute(); err != nil {
+				t.Fatalf("expected p2wpkh %s spend to pass: %v",
+					test.name, err)
+			}
+		})
+	}
+}
+
+func TestSegWitV0P2WPKHVMRejectsInvalidOBTCReplayHashTypes(t *testing.T) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	fundingScript, subScript := makeOBTCReplayP2WPKHScripts(t, privKey)
+	const prevValue = int64(10_000)
+
+	for _, test := range obtcReplayInvalidSigHashMatrix() {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			prevFetcher := NewCannedPrevOutputFetcher(
+				fundingScript, prevValue,
+			)
+			sigHashes := NewTxSigHashes(tx, prevFetcher)
+			witness, err := WitnessSignature(
+				tx, sigHashes, 0, prevValue, subScript, test.hash,
+				privKey, true,
+			)
+			if err != nil {
+				t.Fatalf("WitnessSignature: %v", err)
+			}
+			tx.TxIn[0].Witness = witness
+
+			vm, err := NewEngine(
+				fundingScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevValue, prevFetcher,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+			if err := vm.Execute(); err == nil {
+				t.Fatalf("expected p2wpkh %s spend to fail",
+					test.name)
+			}
+		})
+	}
+}
+
+func TestSegWitV0P2WSHMultisigVMOBTCReplayProtectedSigHashMatrix(
+	t *testing.T) {
+
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	fundingScript, witnessScript := makeOBTCReplayP2WSHMultisigScripts(
+		t, privKey,
+	)
+	const prevValue = int64(10_000)
+
+	for _, test := range obtcReplayProtectedSigHashMatrix() {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			prevFetcher := NewCannedPrevOutputFetcher(
+				fundingScript, prevValue,
+			)
+			sigHashes := NewTxSigHashes(tx, prevFetcher)
+			tx.TxIn[0].Witness = signOBTCReplayP2WSHMultisigWitness(
+				t, tx, sigHashes, prevValue, witnessScript,
+				test.hash, privKey,
+			)
+
+			vm, err := NewEngine(
+				fundingScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevValue, prevFetcher,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+			if err := vm.Execute(); err != nil {
+				t.Fatalf("expected p2wsh multisig %s spend to pass: %v",
+					test.name, err)
+			}
+		})
+	}
+}
+
+func TestSegWitV0P2WSHMultisigVMRejectsInvalidOBTCReplayHashTypes(
+	t *testing.T) {
+
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		t.Fatalf("NewPrivateKey: %v", err)
+	}
+	fundingScript, witnessScript := makeOBTCReplayP2WSHMultisigScripts(
+		t, privKey,
+	)
+	const prevValue = int64(10_000)
+
+	for _, test := range obtcReplayInvalidSigHashMatrix() {
+		t.Run(test.name, func(t *testing.T) {
+			tx := makeOBTCReplayEngineSpendTx(prevValue)
+			prevFetcher := NewCannedPrevOutputFetcher(
+				fundingScript, prevValue,
+			)
+			sigHashes := NewTxSigHashes(tx, prevFetcher)
+			tx.TxIn[0].Witness = signOBTCReplayP2WSHMultisigWitness(
+				t, tx, sigHashes, prevValue, witnessScript,
+				test.hash, privKey,
+			)
+
+			vm, err := NewEngine(
+				fundingScript, tx, 0,
+				StandardVerifyFlags|ScriptVerifyOBTCReplayProtection,
+				nil, sigHashes, prevValue, prevFetcher,
+			)
+			if err != nil {
+				t.Fatalf("NewEngine: %v", err)
+			}
+			if err := vm.Execute(); err == nil {
+				t.Fatalf("expected p2wsh multisig %s spend to fail",
+					test.name)
 			}
 		})
 	}

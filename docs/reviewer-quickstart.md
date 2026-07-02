@@ -30,13 +30,17 @@ valuable funds.
 
 1. [Repository README](../README.md) for the project scope, status, and
    non-goals.
-2. [Testnet Join Guide](testnet-join.md) for the fastest external node path.
-3. [Mining Review Checklist](mining-review-checklist.md) if your review touches
+2. [OBTC Reviewer Primer](../OBTC_REVIEWER_PRIMER.md) if you are new to Bitcoin
+   internals or want the compact glossary first.
+3. [Review Fixture Vectors](../REVIEW_FIXTURE_VECTORS.md) for concrete replay,
+   expiry, REAP, and coinbase examples.
+4. [Testnet Join Guide](testnet-join.md) for the fastest external node path.
+5. [Mining Review Checklist](mining-review-checklist.md) if your review touches
    `getblocktemplate`, coinbase construction, pools, or Stratum assumptions.
-4. [Mainnet Join Runbook](mainnet-join.md) and
+6. [Mainnet Join Runbook](mainnet-join.md) and
    [Mainnet Parameters](mainnet-params.md) if you are reviewing the
    mainnet-candidate boundary.
-5. [Network Parameters](network-parameters.md) for ports, address namespaces,
+7. [Network Parameters](network-parameters.md) for ports, address namespaces,
    and activation heights.
 
 ## 3. What to review
