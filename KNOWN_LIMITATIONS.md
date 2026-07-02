@@ -15,7 +15,10 @@ marketing document.
 ## Implementation And Review Limits
 
 - Independent third-party implementation evidence is not recorded here.
-- Formal external security audit evidence is not recorded in this repository.
+- No formal third-party security audit has been completed or recorded for the
+  current candidate.
+- Release and review materials must not describe the current candidate as
+  audited unless a formal third-party audit is actually completed and published.
 - Third-party miner, pool, exchange, custody, and explorer integrations are not
   in the current release scope.
 - Miner adoption is not assumed.
