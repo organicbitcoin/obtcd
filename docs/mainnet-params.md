@@ -29,8 +29,9 @@ Source files:
 
 The seed record is intended to be backed by Route 53 A/AAAA records for public
 P2P seed nodes. See [OBTC Mainnet DNS Seed Design](mainnet-dns-seed.md). The
-record must resolve to live TCP `9527` nodes before public release artifacts are
-cut.
+record is not required for the source-only MC1 external technical review
+release, but it must resolve to live TCP `9527` nodes before any seed-backed
+public operating network or production launch claim.
 
 ## Address And Key Namespaces
 
@@ -120,7 +121,8 @@ OBTC block requires OBTC replay-protected signatures.
 
 * Keep P2P on `9527`.
 * Bind RPC to a private interface, normally `127.0.0.1:9528`.
-* Treat unresolved DNS seed records as a release blocker.
+* Treat unresolved DNS seed records as a blocker for seed-backed public
+  operation, not for source-only MC1 external technical review.
 * Use explicit `--addpeer` or `--connect` entries for the individual fallback
   seed nodes until aggregate seed discovery is verified.
 * Keep this document synchronized when changing `ObtcMainNetParams`, wire

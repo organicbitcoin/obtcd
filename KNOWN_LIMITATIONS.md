@@ -1,16 +1,27 @@
 # OBTC Mainnet Candidate Known Limitations
 
-This file lists limitations that reviewers and operators should see before
-evaluating the Mainnet Candidate. It is intentionally direct. It is not a
-marketing document.
+This file lists limitations for `v0.1.0-mainnet-candidate.1`. It is intentionally
+direct. It is not marketing material.
 
 ## Release Scope
 
-- Current status is Mainnet Candidate for external technical review.
+- Current status is source-only Mainnet Candidate for external technical review.
 - This is not a production mainnet launch.
+- This is not a seed-backed public mainnet operating network.
 - This is not investment material.
 - Testnet coins have no real-world value.
-- Regtest and testnet behavior are review tools, not mainnet operating evidence.
+- Regtest and testnet behavior are review tools, not production evidence.
+
+## Source-Only Policy
+
+- MC1 distributes source references, not project-built binary artifacts.
+- `obtcd` source commit:
+  `115c9255919f8f266e1b7c7ed2ede8df47087807`.
+- `obtcwallet` source commit:
+  `0bde8d27b8853fd9cf58e0084dba12788a32fab2`.
+- No project `SHA256SUMS` file is produced for MC1 because no project-built
+  binary archives are distributed for this release scope.
+- Reviewers should verify the Git commits and build locally.
 
 ## Implementation And Review Limits
 
@@ -18,7 +29,7 @@ marketing document.
 - No formal third-party security audit has been completed or recorded for the
   current candidate.
 - Release and review materials must not describe the current candidate as
-  audited unless a formal third-party audit is actually completed and published.
+  audited unless a formal third-party audit is completed and published.
 - Third-party miner, pool, exchange, custody, and explorer integrations are not
   in the current release scope.
 - Miner adoption is not assumed.
@@ -28,42 +39,47 @@ marketing document.
 
 ## Network And Parameter Limits
 
-- Mainnet fork height `1000000` is the value in the
-  `mainnet-candidate-2026-07` tag. A later candidate or production release would
-  require explicit review before changing it.
+- Mainnet fork height `1000000` remains the candidate value under review.
 - Expiry / REAP / commitment activation height `1002016` is derived from the
-  provisional fork height.
-- Parameter freeze state is represented by the `mainnet-candidate-2026-07` tag.
-- DNS seed and fallback-peer publication require final operator evidence.
-- A fresh-node sync through final published bootstrap peers is
-  not demonstrated in this repository.
+  candidate fork height.
+- Consensus rules, mainnet parameters, replay protection, expiry, and REAP rules
+  were not changed during final issue-gate cleanup.
+- DNS seed A/AAAA records are not live for MC1.
+- Long-lived public seed/fallback nodes are not deployed for MC1.
+- Fresh-node sync through the final published mainnet bootstrap policy is not
+  demonstrated for MC1.
+- A 72h observation window for the final mainnet-candidate node set is not
+  recorded for MC1.
 
-## Test Environment Limits
-
-- Testnet has accelerated parameters and does not represent mainnet timing.
-- Regtest has accelerated expiry and does not represent mainnet time horizon.
-- Local focused tests do not replace long-running public node observation.
-- Plan 07 reproducible demo files are merged into `master`.
-- PR #14 and PR #15 CI completed successfully before merge.
+These network items are non-blocking for source-only external review, but they
+remain blockers before seed-backed public operation or production launch claims.
 
 ## Wallet Limits
 
-- Wallet UI and walletapp are engineering-oriented.
-- Non-dry-run funded renewal evidence remains release-scope dependent.
-- Auto-renew is opt-in and should stay disabled unless explicitly tested for the
-  operator environment.
-- Auto-renew persistence and long wall-clock scheduler evidence remain human
-  review items in the companion wallet notes.
+- `obtcwallet` is a controlled operator/reviewer wallet path, not a production
+  wallet for valuable funds.
+- Auto-renew is disabled by default and is not recommended as an MC1 operator
+  path.
+- Funded auto-renew scheduler evidence is deferred to a later RC/production
+  readiness gate.
+- Manual renewal and `renewall` review paths exist, but operators should treat
+  funded runs as controlled-environment drills unless a later reviewed release
+  expands the scope.
+- Remote signer usage remains outside the MC1 recommended operator path unless
+  a separate end-to-end operator run is recorded.
 - Never import a Bitcoin seed phrase, Bitcoin private key, or real wallet backup
   into experimental OBTC software.
+
+The wallet failure-mode guidance is recorded in the companion repository:
+`WALLET_OPERATOR_RISK_REVIEW.md`.
 
 ## Observability Limits
 
 - `obtc-status` is a minimal operator status page, not a full explorer.
 - Explorer/status dashboard coverage is minimal and should not be treated as a
   complete public monitoring system.
-- REAP candidate counts are currently exposed through node RPC summaries and
-  related tooling, not a full public analytics surface.
+- REAP candidate counts are exposed through node RPC summaries and related
+  tooling, not a full public analytics surface.
 
 ## Out Of Scope
 
@@ -87,3 +103,4 @@ marketing document.
 Sensitive reports should use GitHub private vulnerability reporting if enabled.
 If not enabled, open a minimal public issue asking for a secure reporting path
 and include no exploit details or secrets.
+

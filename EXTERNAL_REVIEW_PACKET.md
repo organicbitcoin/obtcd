@@ -1,9 +1,10 @@
 # OBTC Mainnet Candidate External Review Packet
 
 This packet is the starting point for modular external technical review of
-`mainnet-candidate-2026-07`. It is not a production launch announcement, not
-investment material, and not an exchange listing document. It is also not a
-claim that a formal third-party security audit has been completed.
+`v0.1.0-mainnet-candidate.1`. It is a source-only external technical review
+release. It is not a production launch announcement, not investment material,
+and not an exchange listing document. It is also not a claim that a formal
+third-party security audit has been completed.
 
 ## What This Packet Is
 
@@ -26,16 +27,17 @@ and tests, run the commands, and report a reproducible finding or challenge.
 
 1. [MAINNET_CANDIDATE_RELEASE_NOTES.md](MAINNET_CANDIDATE_RELEASE_NOTES.md)
 2. [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
-3. [OBTC_REVIEWER_PRIMER.md](OBTC_REVIEWER_PRIMER.md)
-4. [review-cards/](review-cards/)
-5. [REVIEW_TEST_VECTORS.md](REVIEW_TEST_VECTORS.md)
-6. [REVIEW_FIXTURE_VECTORS.md](REVIEW_FIXTURE_VECTORS.md)
-7. [MAINNET_RC_ENTRY_CRITERIA.md](MAINNET_RC_ENTRY_CRITERIA.md)
-8. [MAINNET_CANDIDATE_TEST_REPORT.md](MAINNET_CANDIDATE_TEST_REPORT.md)
-9. [docs/mainnet-params.md](docs/mainnet-params.md)
-10. [SECURITY_REVIEW_CHECKLIST.md](SECURITY_REVIEW_CHECKLIST.md)
-11. [NODE_OPERATOR_RUNBOOK.md](NODE_OPERATOR_RUNBOOK.md)
-12. [WALLET_OPERATOR_RUNBOOK.md](WALLET_OPERATOR_RUNBOOK.md)
+3. [FINAL_ISSUE_GATE_REVIEW.md](FINAL_ISSUE_GATE_REVIEW.md)
+4. [OBTC_REVIEWER_PRIMER.md](OBTC_REVIEWER_PRIMER.md)
+5. [review-cards/](review-cards/)
+6. [REVIEW_TEST_VECTORS.md](REVIEW_TEST_VECTORS.md)
+7. [REVIEW_FIXTURE_VECTORS.md](REVIEW_FIXTURE_VECTORS.md)
+8. [MAINNET_RC_ENTRY_CRITERIA.md](MAINNET_RC_ENTRY_CRITERIA.md)
+9. [MAINNET_CANDIDATE_TEST_REPORT.md](MAINNET_CANDIDATE_TEST_REPORT.md)
+10. [docs/mainnet-params.md](docs/mainnet-params.md)
+11. [SECURITY_REVIEW_CHECKLIST.md](SECURITY_REVIEW_CHECKLIST.md)
+12. [NODE_OPERATOR_RUNBOOK.md](NODE_OPERATOR_RUNBOOK.md)
+13. [WALLET_OPERATOR_RUNBOOK.md](WALLET_OPERATOR_RUNBOOK.md)
 
 Existing lower-level documents:
 
@@ -217,8 +219,10 @@ Current release branch note:
 
 - Plan 07 local demo files were merged in PR #14:
   <https://github.com/organicbitcoin/obtcd/pull/14>
-- Final tag `mainnet-candidate-2026-07` includes the local demo script and
-  runbooks. A final-tag regtest demo run was captured on 2026-07-01.
+- The current MC1 source commit includes the local demo script and runbooks. A
+  regtest demo run for the earlier candidate tag was captured on 2026-07-01;
+  reviewers should rerun the demo locally from the current source commit if
+  they need fresh reproduction evidence.
 
 Existing local devnet tools on this branch:
 
@@ -281,6 +285,17 @@ not include exploit details or secrets.
 This packet provides public review materials, test vectors, reproducibility
 commands, and testnet-validation entry points. It does not record a formal
 third-party security audit for the current candidate.
+
+## Source-Only Release Scope
+
+MC1 distributes source references, not project-built binary artifacts. Reviewers
+should build from:
+
+- `obtcd` commit `115c9255919f8f266e1b7c7ed2ede8df47087807`;
+- `obtcwallet` commit `0bde8d27b8853fd9cf58e0084dba12788a32fab2`.
+
+No project `SHA256SUMS` file is produced for MC1 because no project-built
+binary archives are distributed for this scope.
 
 ## Out Of Scope
 
