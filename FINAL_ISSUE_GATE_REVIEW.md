@@ -10,10 +10,14 @@ mainnet operation, and not a real-funds wallet release.
 
 ## Source State
 
+These are the gate-cleanup merge commits used for this final issue-gate
+decision. Any later issue-status-only documentation commit does not change the
+implementation baseline or the source-only release policy.
+
 | Repository | Assessed commit | Branch state |
 |---|---|---|
-| `organicbitcoin/obtcd` | `115c9255919f8f266e1b7c7ed2ede8df47087807` | `master` at `origin/master` before this gate branch |
-| `organicbitcoin/obtcwallet` | `0bde8d27b8853fd9cf58e0084dba12788a32fab2` | PR #12 merged to `origin/master` |
+| `organicbitcoin/obtcd` | `2828dad2aeba136ae1539ccc47b0a28c331a8729` | PR #20 merged to `master` |
+| `organicbitcoin/obtcwallet` | `ea0070517641fa9f0ba5731b903aae1c57f24d5a` | PR #13 merged to `master` |
 
 ## Gate Rule
 
@@ -40,15 +44,41 @@ closed or publicly downgraded with a written reason.
 | Issue | Title | Labels at review | Milestone | MC1 external review blocker | RC / production blocker | Recommended action | Reason |
 |---|---|---|---|---|---|---|---|
 | #4 | Validate autorenew in funded controlled environment | `mainnet-blocker`, `evidence`, `operator-readiness` | `mainnet-candidate-2026-07` | No | Yes, if auto-renew is in scope | Downgrade to `post-launch` / operator-readiness follow-up | Auto-renew is disabled by default and not recommended for the MC1 operator path. Existing tests cover disabled default, config validation, selection limits, and backoff behavior. Funded scheduler evidence remains required before recommending auto-renew. |
-| #7 | Publish release artifacts and checksums for operator commit | `mainnet-blocker`, `evidence`, `operator-readiness` | `mainnet-candidate-2026-07` | Resolved by scope decision | Later binary releases only | Close after docs update | MC1 wallet release is source-only at merged commit `0bde8d27b8853fd9cf58e0084dba12788a32fab2`. No wallet binary artifact is distributed, so no project `SHA256SUMS` is produced for MC1. |
+| #7 | Publish release artifacts and checksums for operator commit | `mainnet-blocker`, `evidence`, `operator-readiness` | `mainnet-candidate-2026-07` | Resolved by scope decision | Later binary releases only | Close after docs update | MC1 wallet release is source-only at gate-cleanup baseline `ea0070517641fa9f0ba5731b903aae1c57f24d5a`. No wallet binary artifact is distributed, so no project `SHA256SUMS` is produced for MC1. |
 | #8 | Review funded-wallet failure modes before mainnet-candidate | `mainnet-blocker`, `operator-readiness` | `mainnet-candidate-2026-07` | Resolved by `WALLET_OPERATOR_RISK_REVIEW.md` | Follow-up evidence remains useful | Close after risk note lands | The required risk note now covers wrong passphrase, stale chain, RPC failure, expired-boundary fail-closed behavior, backup/restore/rescan, wrong network, wrong endpoint, TLS, exposed RPC, confirmations, renewal amount, and wallet DB/network directory mixups. |
+
+## Final GitHub Issue Actions
+
+Issue updates were posted on 2026-07-02 with explicit scope rationale. No open
+issue remains labeled `mainnet-blocker`.
+
+### `organicbitcoin/obtcd`
+
+| Issue | Final state | Final labels | Final milestone | Final action |
+|---|---|---|---|---|
+| #2 | Open | `evidence`, `post-launch` | none | Downgraded to RC / production-mainnet evidence follow-up. |
+| #3 | Open | `evidence`, `post-launch` | none | Downgraded to RC / production-mainnet evidence follow-up. |
+| #4 | Open | `evidence`, `post-launch` | none | Downgraded to RC / production-mainnet evidence follow-up. |
+| #5 | Open | `evidence`, `post-launch` | none | Downgraded to RC / production-mainnet evidence follow-up. |
+| #6 | Closed as completed | `mainnet-blocker`, `evidence` | `mainnet-candidate-2026-07` | Resolved by MC1 source-only policy; no obtcd binary artifacts or `SHA256SUMS` are distributed for MC1. |
+| #7 | Open | none | none | Kept open as non-blocking feedback intake. |
+
+### `organicbitcoin/obtcwallet`
+
+| Issue | Final state | Final labels | Final milestone | Final action |
+|---|---|---|---|---|
+| #4 | Open | `evidence`, `operator-readiness`, `post-launch` | none | Downgraded to MC2 / RC operator-readiness follow-up; Auto-Renew is disabled by default and not recommended for MC1. |
+| #7 | Closed as completed | `mainnet-blocker`, `evidence`, `operator-readiness` | `mainnet-candidate-2026-07` | Resolved by MC1 source-only policy; no wallet binary artifacts or `SHA256SUMS` are distributed for MC1. |
+| #8 | Closed as completed | `mainnet-blocker`, `operator-readiness` | `mainnet-candidate-2026-07` | Resolved by `WALLET_OPERATOR_RISK_REVIEW.md`. |
 
 ## Artifact And Checksum Policy
 
 MC1 is source-only.
 
-- `obtcd` source commit: `115c9255919f8f266e1b7c7ed2ede8df47087807`.
-- `obtcwallet` source commit: `0bde8d27b8853fd9cf58e0084dba12788a32fab2`.
+- `obtcd` gate-cleanup merge commit:
+  `2828dad2aeba136ae1539ccc47b0a28c331a8729`.
+- `obtcwallet` gate-cleanup merge commit:
+  `ea0070517641fa9f0ba5731b903aae1c57f24d5a`.
 - No project-built binary archive is distributed for MC1.
 - No project `SHA256SUMS` file is produced for MC1 because there are no
   project-built release archives to checksum.
@@ -72,12 +102,10 @@ seed-backed public mainnet operation or production launch wording:
 
 ## Decision
 
-Recommended decision after issue labels are updated:
+Final decision:
 
 **GO WITH NON-BLOCKING LIMITATIONS** for `v0.1.0-mainnet-candidate.1` as a
 source-only external technical review release.
 
-Required condition: no open issue may retain `mainnet-blocker` after the
-downgrade/closure comments are posted. If any issue remains open with
-`mainnet-blocker`, the decision must be **NO-GO**.
-
+Required condition satisfied: after the downgrade/closure comments were posted,
+no open issue retained `mainnet-blocker`.

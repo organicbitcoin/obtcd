@@ -291,8 +291,10 @@ third-party security audit for the current candidate.
 MC1 distributes source references, not project-built binary artifacts. Reviewers
 should build from:
 
-- `obtcd` commit `115c9255919f8f266e1b7c7ed2ede8df47087807`;
-- `obtcwallet` commit `0bde8d27b8853fd9cf58e0084dba12788a32fab2`.
+- `obtcd` gate-cleanup baseline
+  `2828dad2aeba136ae1539ccc47b0a28c331a8729`;
+- `obtcwallet` gate-cleanup baseline
+  `ea0070517641fa9f0ba5731b903aae1c57f24d5a`.
 
 No project `SHA256SUMS` file is produced for MC1 because no project-built
 binary archives are distributed for this scope.
