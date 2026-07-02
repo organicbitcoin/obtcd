@@ -27,13 +27,14 @@ ready.
 | Candidate name | `v0.1.0-mainnet-candidate.1` |
 | Release type | source-only external technical review release |
 | `obtcd` repository | `organicbitcoin/obtcd` |
-| `obtcd` source commit | `115c9255919f8f266e1b7c7ed2ede8df47087807` |
+| `obtcd` gate-cleanup baseline | `2828dad2aeba136ae1539ccc47b0a28c331a8729` |
 | `obtcwallet` repository | `organicbitcoin/obtcwallet` |
-| `obtcwallet` source commit | `0bde8d27b8853fd9cf58e0084dba12788a32fab2` |
+| `obtcwallet` gate-cleanup baseline | `ea0070517641fa9f0ba5731b903aae1c57f24d5a` |
 | Binary artifacts | not distributed for MC1 |
 | Project `SHA256SUMS` | not produced because MC1 has no project-built archives |
 
-Reviewers should build locally from the source commits above. Later RC or
+Reviewers should build locally from the source baselines above, or from a later
+docs-only seal commit if one is created from the same gate state. Later RC or
 production-scope releases may add binary archives, checksums, and signatures as
 a separate gate.
 

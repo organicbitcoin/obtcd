@@ -10,8 +10,8 @@ limitations. This is not a production mainnet launch report.
 | Date | `2026-07-02` |
 | Host OS | `Darwin mac.lan 25.5.0 Darwin Kernel Version 25.5.0 RELEASE_ARM64_T8112 arm64` |
 | Go runtime | `go version go1.25.3 darwin/arm64` |
-| `obtcd` commit | `115c9255919f8f266e1b7c7ed2ede8df47087807` |
-| `obtcwallet` commit | `0bde8d27b8853fd9cf58e0084dba12788a32fab2` |
+| `obtcd` gate-cleanup baseline | `2828dad2aeba136ae1539ccc47b0a28c331a8729` |
+| `obtcwallet` gate-cleanup baseline | `ea0070517641fa9f0ba5731b903aae1c57f24d5a` |
 | Candidate | `v0.1.0-mainnet-candidate.1` |
 
 ## Build Scope
@@ -71,4 +71,3 @@ No failed commands were recorded in the final gate command set above.
 Based on the commands above, the current source commits are ready for external
 technical review with the limitations listed in `KNOWN_LIMITATIONS.md` and
 `FINAL_ISSUE_GATE_REVIEW.md`. They are not a production launch package.
-

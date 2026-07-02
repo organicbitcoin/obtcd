@@ -15,8 +15,8 @@ integration notice.
 | Release date | `2026-07-02` |
 | Release status | source-only external technical review |
 | Production launch status | not a production mainnet launch |
-| `obtcd` source commit | `115c9255919f8f266e1b7c7ed2ede8df47087807` |
-| `obtcwallet` source commit | `0bde8d27b8853fd9cf58e0084dba12788a32fab2` |
+| `obtcd` gate-cleanup baseline | `2828dad2aeba136ae1539ccc47b0a28c331a8729` |
+| `obtcwallet` gate-cleanup baseline | `ea0070517641fa9f0ba5731b903aae1c57f24d5a` |
 | Binary artifacts | not distributed for MC1 |
 | Project checksums | not produced because no project-built archives are distributed |
 | Security contact | GitHub private vulnerability reporting if enabled; otherwise open a minimal public issue asking for a secure channel |
@@ -165,4 +165,3 @@ The companion wallet is built from its repository:
 go build -o ./btcwallet .
 go build -o ./renewall ./cmd/renewall
 ```
-
