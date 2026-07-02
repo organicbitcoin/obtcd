@@ -40,6 +40,9 @@ If you are new to OBTC, start here:
 Reviewer entry points:
 
 - [Mainnet Candidate External Review Packet](EXTERNAL_REVIEW_PACKET.md)
+- [OBTC Reviewer Primer](OBTC_REVIEWER_PRIMER.md)
+- [Review Test Vectors](REVIEW_TEST_VECTORS.md)
+- [Concrete Review Fixture Vectors](REVIEW_FIXTURE_VECTORS.md)
 - [Mainnet Candidate Release Notes](MAINNET_CANDIDATE_RELEASE_NOTES.md)
 - [Mainnet Candidate Test Report](MAINNET_CANDIDATE_TEST_REPORT.md)
 - [Known Limitations](KNOWN_LIMITATIONS.md)

@@ -6,7 +6,9 @@ OBTC networks are selected explicitly with `--obtcmainnet`, `--obtctestnet`, or
 
 ## Requirements
 
-[Go](http://golang.org) 1.22 or newer.
+[Go](https://go.dev/doc/install) 1.24.0 or newer for `obtcd`, matching
+`obtcd/go.mod`. If you also build the sibling `obtcwallet` repository, use Go
+1.24.6 or newer to match `obtcwallet/go.mod`.
 
 ## Build From Source
 
