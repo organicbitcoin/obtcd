@@ -102,6 +102,7 @@ type config struct {
 	ProxyUser      string `long:"proxyuser" description:"Username for proxy server"`
 	RegressionTest bool   `long:"regtest" description:"Connect to the regression test network"`
 	ObtcMainNet    bool   `long:"obtcmainnet" description:"Connect to the OBTC main network"`
+	ObtcMainNet72h bool   `long:"obtcmainnet72h" description:"Connect to the private OBTC mainnet 72h rehearsal network"`
 	ObtcTestNet    bool   `long:"obtctestnet" description:"Connect to the OBTC test network"`
 	ObtcRegTest    bool   `long:"obtcregtest" description:"Connect to the OBTC regression test network"`
 	RPCCert        string `short:"c" long:"rpccert" description:"RPC server certificate chain for validation"`
@@ -155,6 +156,12 @@ func normalizeAddress(addr string, chain *chaincfg.Params, useWallet bool) (stri
 				defaultPort = "9554"
 			} else {
 				defaultPort = "9528"
+			}
+		case &chaincfg.ObtcMainNet72hParams:
+			if useWallet {
+				defaultPort = "39554"
+			} else {
+				defaultPort = "39528"
 			}
 		case &chaincfg.ObtcTestNetParams:
 			if useWallet {
@@ -320,6 +327,10 @@ func loadConfig() (*config, []string, error) {
 	if cfg.ObtcMainNet {
 		numNets++
 		network = &chaincfg.ObtcMainNetParams
+	}
+	if cfg.ObtcMainNet72h {
+		numNets++
+		network = &chaincfg.ObtcMainNet72hParams
 	}
 	if cfg.ObtcTestNet {
 		numNets++

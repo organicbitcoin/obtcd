@@ -3,8 +3,9 @@
 set -euo pipefail
 
 HOST="${HOST:-}"
-P2P_PORT="${P2P_PORT:-9527}"
-RPC_PORT="${RPC_PORT:-9528}"
+NETWORK="${NETWORK:-obtcmainnet}"
+P2P_PORT="${P2P_PORT:-}"
+RPC_PORT="${RPC_PORT:-}"
 EXPECT_RPC_CLOSED=1
 PLAN=0
 
@@ -18,9 +19,11 @@ Usage:
 Options:
   --host <host>             node hostname or IP to check
   --host=<host>
-  --p2p-port <port>         expected public P2P port (default: 9527)
+  --network <name>          obtcmainnet or obtcmainnet72h (default: obtcmainnet)
+  --network=<name>
+  --p2p-port <port>         expected public P2P port (default depends on network)
   --p2p-port=<port>
-  --rpc-port <port>         RPC port that should remain private (default: 9528)
+  --rpc-port <port>         RPC port that should remain private (default depends on network)
   --rpc-port=<port>
   --allow-public-rpc        mark public RPC reachability as expected
   --plan                    print checklist without network probes
@@ -30,6 +33,7 @@ Examples:
   $0 --plan --host seed1.example.com
   $0 --host seed1.example.com
   $0 --host 203.0.113.10 --p2p-port=9527 --rpc-port=9528
+  $0 --network=obtcmainnet72h --host 203.0.113.10
 EOF
 }
 
@@ -41,6 +45,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --host=*)
             HOST="${1#*=}"
+            shift
+            ;;
+        --network)
+            NETWORK="$2"
+            shift 2
+            ;;
+        --network=*)
+            NETWORK="${1#*=}"
             shift
             ;;
         --p2p-port)
@@ -79,6 +91,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "${NETWORK}" in
+obtcmainnet)
+    DEFAULT_P2P_PORT="9527"
+    DEFAULT_RPC_PORT="9528"
+    ;;
+obtcmainnet72h)
+    DEFAULT_P2P_PORT="39527"
+    DEFAULT_RPC_PORT="39528"
+    ;;
+*)
+    echo "[ERROR] NETWORK must be obtcmainnet or obtcmainnet72h" >&2
+    exit 1
+    ;;
+esac
+
+P2P_PORT="${P2P_PORT:-${DEFAULT_P2P_PORT}}"
+RPC_PORT="${RPC_PORT:-${DEFAULT_RPC_PORT}}"
+
 positive_port() {
     [[ "$1" =~ ^[1-9][0-9]*$ ]] && [[ "$1" -le 65535 ]]
 }
@@ -102,12 +132,13 @@ positive_port "${RPC_PORT}" || {
 print_plan() {
     cat <<EOF
 [INFO] firewall preflight plan
+  network: ${NETWORK}
   host: ${HOST}
   expected public P2P: ${P2P_PORT}/tcp reachable
   expected RPC exposure: ${RPC_PORT}/tcp $([[ ${EXPECT_RPC_CLOSED} -eq 1 ]] && printf 'closed from public networks' || printf 'publicly reachable by explicit exception')
 
 Manual host-side checklist:
-  - systemd unit uses --obtcmainnet and --listen=0.0.0.0:${P2P_PORT}
+  - systemd unit uses the expected network flag and --listen=0.0.0.0:${P2P_PORT}
   - RPC is bound to 127.0.0.1:${RPC_PORT} or a private management interface
   - firewall allows inbound ${P2P_PORT}/tcp
   - firewall denies inbound ${RPC_PORT}/tcp from the public Internet

@@ -202,7 +202,7 @@ func parseFlags() (*config, error) {
 	flag.StringVar(&cfg.RPCUser, "rpcuser", "", "RPC username")
 	flag.StringVar(&cfg.RPCPass, "rpcpass", "", "RPC password")
 	flag.StringVar(&cfg.RPCCert, "rpccert", "", "RPC TLS certificate path")
-	flag.StringVar(&cfg.Network, "network", "obtcregtest", "network: obtcregtest|obtctestnet|obtcmainnet|regtest|testnet|mainnet")
+	flag.StringVar(&cfg.Network, "network", "obtcregtest", "network: obtcregtest|obtctestnet|obtcmainnet|obtcmainnet72h|regtest|testnet|mainnet")
 	flag.IntVar(&startHeight, "start", 0, "first block height to count in the audit report")
 	flag.IntVar(&endHeight, "end", -1, "last block height to audit (defaults to tip)")
 	flag.BoolVar(&cfg.Verbose, "verbose", false, "print progress to stderr")
@@ -252,6 +252,8 @@ func parseFlags() (*config, error) {
 			cfg.RPCHost = "127.0.0.1:19528"
 		case "obtcmainnet":
 			cfg.RPCHost = "127.0.0.1:9528"
+		case "obtcmainnet72h":
+			cfg.RPCHost = "127.0.0.1:39528"
 		case "regtest":
 			cfg.RPCHost = "127.0.0.1:18334"
 		case "testnet":
@@ -274,6 +276,8 @@ func resolveNetwork(name string) (*chaincfg.Params, error) {
 		return &chaincfg.ObtcTestNetParams, nil
 	case "obtcmainnet", "obtc-mainnet":
 		return &chaincfg.ObtcMainNetParams, nil
+	case "obtcmainnet72h", "obtc-mainnet-72h":
+		return &chaincfg.ObtcMainNet72hParams, nil
 	case "regtest":
 		return &chaincfg.RegressionNetParams, nil
 	case "testnet", "testnet3":

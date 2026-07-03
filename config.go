@@ -128,7 +128,7 @@ type config struct {
 	ExternalIPs          []string      `long:"externalip" description:"Add an ip to the list of local addresses we claim to listen on to peers"`
 	Generate             bool          `long:"generate" description:"Generate (mine) bitcoins using the CPU"`
 	FreeTxRelayLimit     float64       `long:"limitfreerelay" description:"Limit relay of transactions with no transaction fee to the given amount in thousands of bytes per minute"`
-	Listeners            []string      `long:"listen" description:"Add an interface/port to listen for connections (default all interfaces port: mainnet 8333, testnet 18333, obtcmainnet 9527, obtctestnet 19527, obtcregtest 29527)"`
+	Listeners            []string      `long:"listen" description:"Add an interface/port to listen for connections (default all interfaces port: mainnet 8333, testnet 18333, obtcmainnet 9527, obtcmainnet72h 39527, obtctestnet 19527, obtcregtest 29527)"`
 	LogDir               string        `long:"logdir" description:"Directory to log output."`
 	MaxOrphanTxs         int           `long:"maxorphantx" description:"Max number of orphan transactions to keep in memory"`
 	MaxPeers             int           `long:"maxpeers" description:"Max number of inbound and outbound peers"`
@@ -156,6 +156,7 @@ type config struct {
 	Prune                uint64        `long:"prune" description:"Prune already validated blocks from the database. Must specify a target size in MiB (minimum value of 1536, default value of 0 will disable pruning)"`
 	RegressionTest       bool          `long:"regtest" description:"Use the regression test network"`
 	ObtcMainNet          bool          `long:"obtcmainnet" description:"Use the OBTC main network"`
+	ObtcMainNet72h       bool          `long:"obtcmainnet72h" description:"Use the private OBTC mainnet 72h rehearsal network"`
 	ObtcTestNet          bool          `long:"obtctestnet" description:"Use the OBTC test network"`
 	ObtcRegTest          bool          `long:"obtcregtest" description:"Use the OBTC regression test network"`
 	RejectNonStd         bool          `long:"rejectnonstd" description:"Reject non-standard transactions regardless of the default settings for the active network."`
@@ -165,7 +166,7 @@ type config struct {
 	RPCKey               string        `long:"rpckey" description:"File containing the certificate key"`
 	RPCLimitPass         string        `long:"rpclimitpass" default-mask:"-" description:"Password for limited RPC connections"`
 	RPCLimitUser         string        `long:"rpclimituser" description:"Username for limited RPC connections"`
-	RPCListeners         []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: mainnet 8334, testnet 18334, obtcmainnet 9528, obtctestnet 19528, obtcregtest 29528)"`
+	RPCListeners         []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: mainnet 8334, testnet 18334, obtcmainnet 9528, obtcmainnet72h 39528, obtctestnet 19528, obtcregtest 29528)"`
 	RPCMaxClients        int           `long:"rpcmaxclients" description:"Max number of RPC clients for standard connections"`
 	RPCMaxConcurrentReqs int           `long:"rpcmaxconcurrentreqs" description:"Max number of concurrent RPC requests that may be processed concurrently"`
 	RPCMaxWebsockets     int           `long:"rpcmaxwebsockets" description:"Max number of RPC websocket connections"`
@@ -569,6 +570,10 @@ func loadConfig() (*config, []string, error) {
 		numNets++
 		activeNetParams = &obtcMainNetParams
 	}
+	if cfg.ObtcMainNet72h {
+		numNets++
+		activeNetParams = &obtcMainNet72hParams
+	}
 	if cfg.ObtcTestNet {
 		numNets++
 		activeNetParams = &obtcTestNetParams
@@ -625,7 +630,7 @@ func loadConfig() (*config, []string, error) {
 	if numNets > 1 {
 		str := "%s: Network params can't be used together -- " +
 			"choose only one of testnet, testnet4, regtest, signet, " +
-			"simnet, obtcmainnet, obtctestnet, obtcregtest"
+			"simnet, obtcmainnet, obtcmainnet72h, obtctestnet, obtcregtest"
 		err := fmt.Errorf(str, funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
@@ -954,7 +959,7 @@ func loadConfig() (*config, []string, error) {
 	// ExpiryIndex is only supported on OBTC networks.
 	if cfg.ExpiryIndex && !chaincfg.IsOBTC(activeNetParams.Params) {
 		err := fmt.Errorf("%s: the --expiryindex option is only "+
-			"supported on OBTC networks (obtcmainnet, obtctestnet, obtcregtest)",
+			"supported on OBTC networks (obtcmainnet, obtcmainnet72h, obtctestnet, obtcregtest)",
 			funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)
@@ -962,7 +967,7 @@ func loadConfig() (*config, []string, error) {
 	}
 	if cfg.ReindexExpiry && !chaincfg.IsOBTC(activeNetParams.Params) {
 		err := fmt.Errorf("%s: the --reindex-expiry option is only "+
-			"supported on OBTC networks (obtcmainnet, obtctestnet, obtcregtest)",
+			"supported on OBTC networks (obtcmainnet, obtcmainnet72h, obtctestnet, obtcregtest)",
 			funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)

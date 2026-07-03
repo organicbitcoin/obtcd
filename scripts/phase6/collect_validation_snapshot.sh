@@ -23,10 +23,10 @@ Usage:
   $0 --rpcuser <user> --rpcpass <pass> [options]
 
 Options:
-  --network <name>         OBTC network: obtctestnet or obtcmainnet (default: obtctestnet)
-  --rpcuser <user>          RPC username (required)
+  --network <name>         OBTC network: obtctestnet, obtcmainnet, or obtcmainnet72h (default: obtctestnet)
+  --rpcuser <user>         RPC username (required)
   --rpcpass <pass>          RPC password (required)
-  --rpcserver <host:port>   RPC endpoint (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528)
+  --rpcserver <host:port>  RPC endpoint (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528, mainnet72h 127.0.0.1:39528)
   --btcctl <path>           btcctl binary path (default: ./cmd/btcctl/btcctl)
   --out <file>              write snapshot markdown to this file
   --append <file>           append snapshot markdown to this file
@@ -121,8 +121,11 @@ case "${NETWORK}" in
     obtcmainnet)
         RPC_SERVER="${RPC_SERVER:-127.0.0.1:9528}"
         ;;
+    obtcmainnet72h)
+        RPC_SERVER="${RPC_SERVER:-127.0.0.1:39528}"
+        ;;
     *)
-        echo "[ERROR] --network must be obtctestnet or obtcmainnet" >&2
+        echo "[ERROR] --network must be obtctestnet, obtcmainnet, or obtcmainnet72h" >&2
         exit 1
         ;;
 esac
@@ -206,9 +209,13 @@ render_snapshot() {
     local peer_info="$3"
     local chain_tips="$4"
     local mempool_info="$5"
-    local expiry_stats="$6"
-    local expiry_status="$7"
-    local peer_count="$8"
+    local network_info="$6"
+    local mining_info="$7"
+    local expiry_stats="$8"
+    local expiry_status="$9"
+    local reap_plan="${10}"
+    local reap_status="${11}"
+    local peer_count="${12}"
 
     cat <<EOF
 ## Phase 6 Snapshot (${ts})
@@ -242,10 +249,30 @@ ${chain_tips}
 ${mempool_info}
 ```
 
+### getnetworkinfo
+
+```json
+${network_info}
+```
+
+### getmininginfo
+
+```json
+${mining_info}
+```
+
 ### getexpiryindexstats
 
 ```json
 ${expiry_stats}
+```
+
+### getreapplan
+
+Status: ${reap_status}
+
+```json
+${reap_plan}
 ```
 
 EOF
@@ -256,11 +283,13 @@ main() {
     ts="$(to_unix_utc)"
 
     echo "[INFO] collecting required RPC outputs..."
-    local chain_info peer_info chain_tips mempool_info
+    local chain_info peer_info chain_tips mempool_info network_info mining_info
     chain_info="$(must_rpc getblockchaininfo)"
     peer_info="$(must_rpc getpeerinfo)"
     chain_tips="$(must_rpc getchaintips)"
     mempool_info="$(must_rpc getmempoolinfo)"
+    network_info="$(must_rpc getnetworkinfo)"
+    mining_info="$(must_rpc getmininginfo)"
 
     local expiry_stats expiry_status
     if expiry_stats="$(optional_rpc getexpiryindexstats)"; then
@@ -270,11 +299,19 @@ main() {
         expiry_stats="(not available: node may be running without --expiryindex)"
     fi
 
+    local reap_plan reap_status
+    if reap_plan="$(optional_rpc getreapplan)"; then
+        reap_status="available"
+    else
+        reap_status="unavailable"
+        reap_plan="(not available: node may be running without --expiryindex or before OBTC activation)"
+    fi
+
     local peer_count
     peer_count="$(peer_count_from_json "${peer_info}")"
 
     local snapshot
-    snapshot="$(render_snapshot "${ts}" "${chain_info}" "${peer_info}" "${chain_tips}" "${mempool_info}" "${expiry_stats}" "${expiry_status}" "${peer_count}")"
+    snapshot="$(render_snapshot "${ts}" "${chain_info}" "${peer_info}" "${chain_tips}" "${mempool_info}" "${network_info}" "${mining_info}" "${expiry_stats}" "${expiry_status}" "${reap_plan}" "${reap_status}" "${peer_count}")"
 
     if [[ -n "${OUT_FILE}" ]]; then
         mkdir -p "$(dirname "${OUT_FILE}")"

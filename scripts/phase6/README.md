@@ -13,7 +13,8 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
 - `collect_validation_snapshot.sh`
   - Capture a markdown snapshot of key RPC evidence to a local file. Defaults
     to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate
-    nodes that use local no-TLS RPC.
+    nodes that use local no-TLS RPC, or `--network obtcmainnet72h --notls` for
+    the private 72h REAP-active rehearsal network.
 - `collect_72h_observation.sh`
   - Repeatedly append validation snapshots for a 72h mainnet-candidate
     observation window. Use `--plan` to verify the schedule without RPC calls.
@@ -23,9 +24,13 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
 - `firewall_preflight.sh`
   - Check public P2P reachability and RPC non-exposure for seed/fallback nodes.
 - `seed_preflight.sh`
-  - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener). Defaults to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate nodes.
+  - Run seed-candidate readiness checks (RPC health, peers, active tip, optional expiryindex, local P2P listener). Defaults to OBTC testnet; pass `--network obtcmainnet --notls` for mainnet-candidate nodes or `--network obtcmainnet72h --notls` for private rehearsal nodes.
 - `gen_testnet_conf.sh`
-  - Generate a minimal `btcd` config template for OBTC testnet or mainnet-candidate seed/observer nodes.
+  - Generate a minimal `btcd` config template for OBTC testnet, mainnet-candidate, or private rehearsal seed/observer nodes.
+- `verify_72h_fork_anchor.sh`
+  - Verify the rehearsal fork anchor hash against public BTC APIs and optionally a local Bitcoin Core source.
+- `generate_72h_rehearsal_manifest.sh`
+  - Generate a redacted run manifest with commits, parameters, nodes, timing, and private artifact URI.
 
 ## Quick start
 
@@ -65,6 +70,17 @@ scripts/phase6/collect_validation_snapshot.sh \
   --append /tmp/obtc-mainnet-72h.md
 ```
 
+For private 72h REAP-active rehearsal:
+
+```bash
+scripts/phase6/collect_validation_snapshot.sh \
+  --network=obtcmainnet72h \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --append /tmp/obtc-mainnet72h-reap.md
+```
+
 Plan a 72h observation run:
 
 ```bash
@@ -82,6 +98,19 @@ scripts/phase6/collect_72h_observation.sh \
   --rpcserver=127.0.0.1:9528 \
   --new-file \
   --out /tmp/obtc-mainnet-72h-observation.md
+```
+
+Run the private 72h REAP-active observation collector:
+
+```bash
+scripts/phase6/collect_72h_observation.sh \
+  --network=obtcmainnet72h \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --rpcserver=127.0.0.1:39528 \
+  --new-file \
+  --out /tmp/obtc-mainnet72h-reap-observation.md
 ```
 
 Run seed-candidate preflight checks:
@@ -109,6 +138,19 @@ scripts/phase6/seed_preflight.sh \
   --strict-expiryindex
 ```
 
+For private 72h REAP-active rehearsal:
+
+```bash
+scripts/phase6/seed_preflight.sh \
+  --network=obtcmainnet72h \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --rpcserver=127.0.0.1:39528 \
+  --p2p-port=39527 \
+  --strict-expiryindex
+```
+
 Generate a baseline config file:
 
 ```bash
@@ -128,6 +170,34 @@ scripts/phase6/gen_testnet_conf.sh \
   --addpeers=seed1.example.com:9527,seed2.example.com:9527
 ```
 
+For private 72h REAP-active rehearsal:
+
+```bash
+scripts/phase6/gen_testnet_conf.sh \
+  --network=obtcmainnet72h \
+  --rpcuser=u \
+  --rpcpass=p \
+  --addpeers=node1.internal:39527,node2.internal:39527
+```
+
+Verify the provisional rehearsal fork anchor before starting nodes:
+
+```bash
+scripts/phase6/verify_72h_fork_anchor.sh \
+  --height=956542 \
+  --hash=0000000000000000000200bad2d8d62a198f06b4390e7ca9be8f15581b42102e
+```
+
+Generate a redacted manifest after the run:
+
+```bash
+scripts/phase6/generate_72h_rehearsal_manifest.sh \
+  --run-id=mainnet72h-reap-956542-20260703T000000Z \
+  --raw-artifact-uri=s3://obtc-private-rehearsal-artifacts/mainnet-72h-reap-active/mainnet72h-reap-956542-20260703T000000Z/ \
+  --node=observer-1 \
+  --out=/tmp/manifest.redacted.json
+```
+
 Build release artifacts and checksums:
 
 ```bash
@@ -145,6 +215,7 @@ Check seed/fallback firewall exposure:
 
 ```bash
 scripts/phase6/firewall_preflight.sh --host seed1.example.com
+scripts/phase6/firewall_preflight.sh --network=obtcmainnet72h --host node1.internal --plan
 ```
 
 ## Common environment overrides

@@ -94,6 +94,7 @@ the following constants:
 	wire.SigNet   (Signet, default)
 	wire.SimNet   (Simulation test network)
 	wire.ObtcMainNet (OBTC main network)
+	wire.ObtcMainNet72h (OBTC private mainnet 72h rehearsal network)
 	wire.ObtcTestNet (OBTC test network)
 	wire.ObtcRegNet  (OBTC regression test network)
 

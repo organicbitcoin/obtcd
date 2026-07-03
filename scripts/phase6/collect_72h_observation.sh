@@ -27,7 +27,7 @@ Usage:
   $0 --rpcuser <user> --rpcpass <pass> [options]
 
 Options:
-  --network <name>             OBTC network: obtctestnet or obtcmainnet (default: obtcmainnet)
+  --network <name>             OBTC network: obtctestnet, obtcmainnet, or obtcmainnet72h (default: obtcmainnet)
   --network=<name>
   --rpcuser <user>             RPC username
   --rpcuser=<user>
@@ -166,10 +166,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${NETWORK}" in
-    obtctestnet|obtcmainnet)
+    obtctestnet|obtcmainnet|obtcmainnet72h)
         ;;
     *)
-        echo "[ERROR] --network must be obtctestnet or obtcmainnet" >&2
+        echo "[ERROR] --network must be obtctestnet, obtcmainnet, or obtcmainnet72h" >&2
         exit 1
         ;;
 esac
