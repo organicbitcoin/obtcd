@@ -225,9 +225,13 @@ func TestAssertNoTimeWarpInvariants(t *testing.T) {
 		remainders := rapid.Int32Range(1, blocksPerRetarget-1).Draw(
 			t, "remainder",
 		)
-		height := rapid.Int32Range(0, 1000000).Draw(
+		const maxInt32 = int64(1<<31 - 1)
+		maxBase := int32((maxInt32 - int64(remainders)) /
+			int64(blocksPerRetarget))
+		base := rapid.Int32Range(0, maxBase).Draw(
 			t, "base",
-		)*blocksPerRetarget + remainders
+		)
+		height := base*blocksPerRetarget + remainders
 
 		// Generate any timestamps, even invalid ones.
 		headerTime := time.Unix(rapid.Int64().Draw(t, "header_time"), 0)
