@@ -31,6 +31,10 @@ This directory contains minimal scripts/templates for Phase 6 testnet deployment
   - Verify the rehearsal fork anchor hash against public BTC APIs and optionally a local Bitcoin Core source.
 - `generate_72h_rehearsal_manifest.sh`
   - Generate a redacted run manifest with commits, parameters, nodes, timing, and private artifact URI.
+- `monitor_mainnet72h_sync.sh`
+  - Capture machine-readable multi-node sync, expiryindex, REAP, and RPC latency evidence for the private `obtcmainnet72h` rehearsal. This is the command to attach to Codex Automation every 4 hours.
+- `export_reap_block_evidence.sh`
+  - Export actual blocks containing REAP marker payloads and confirm that an independent validator node has accepted the same hash at the same height.
 
 ## Quick start
 
@@ -111,6 +115,39 @@ scripts/phase6/collect_72h_observation.sh \
   --rpcserver=127.0.0.1:39528 \
   --new-file \
   --out /tmp/obtc-mainnet72h-reap-observation.md
+```
+
+Run the 4-hour sync monitor command used by Codex Automation:
+
+```bash
+scripts/phase6/monitor_mainnet72h_sync.sh \
+  --network=obtcmainnet72h \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --run-id=mainnet72h-reap-956542-20260704T000000Z \
+  --node='miner-1|127.0.0.1:39528|miner' \
+  --node='validator-1|10.0.1.12:39528|validator' \
+  --s3-uri=s3://obtc-private-rehearsal-artifacts/mainnet-72h-reap-active/mainnet72h-reap-956542-20260704T000000Z/ \
+  --upload
+```
+
+Export and independently confirm actual REAP blocks:
+
+```bash
+scripts/phase6/export_reap_block_evidence.sh \
+  --network=obtcmainnet72h \
+  --notls \
+  --rpcuser=u \
+  --rpcpass=p \
+  --source-rpc=127.0.0.1:39528 \
+  --validator-rpc=10.0.1.12:39528 \
+  --from-height=956566 \
+  --to-height=956700 \
+  --run-id=mainnet72h-reap-956542-20260704T000000Z \
+  --s3-uri=s3://obtc-private-rehearsal-artifacts/mainnet-72h-reap-active/mainnet72h-reap-956542-20260704T000000Z/ \
+  --upload \
+  --strict
 ```
 
 Run seed-candidate preflight checks:
