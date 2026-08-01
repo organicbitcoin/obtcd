@@ -19,11 +19,19 @@ cpu_percent=null
 memory_percent=null
 rss_bytes=null
 elapsed_seconds=null
+process_read_bytes=null
+process_write_bytes=null
+process_cancelled_write_bytes=null
 if [[ "${pid}" =~ ^[1-9][0-9]*$ ]] && [[ -r "/proc/${pid}/status" ]]; then
     read -r cpu_percent memory_percent rss_kib elapsed_seconds < <(
         ps -p "${pid}" -o %cpu=,%mem=,rss=,etimes= | xargs
     )
     rss_bytes=$((rss_kib * 1024))
+    if [[ -r "/proc/${pid}/io" ]]; then
+        process_read_bytes="$(awk '$1=="read_bytes:" {print $2}' "/proc/${pid}/io")"
+        process_write_bytes="$(awk '$1=="write_bytes:" {print $2}' "/proc/${pid}/io")"
+        process_cancelled_write_bytes="$(awk '$1=="cancelled_write_bytes:" {print $2}' "/proc/${pid}/io")"
+    fi
 fi
 
 read -r disk_total_bytes disk_used_bytes disk_available_bytes < <(
@@ -36,6 +44,28 @@ if mountpoint -q "${INDEX_MOUNT}"; then
     read -r index_disk_total_bytes index_disk_used_bytes index_disk_available_bytes < <(
         df -B1 --output=size,used,avail "${INDEX_MOUNT}" | tail -1 | xargs
     )
+fi
+index_device="$(findmnt -n -o SOURCE --target "${INDEX_MOUNT}" 2>/dev/null || true)"
+index_device="${index_device%%[*}"
+index_device="${index_device##*/}"
+index_device_stats=null
+if [[ -n "${index_device}" ]]; then
+    diskstats_line="$(awk -v device="${index_device}" '$3==device {print}' /proc/diskstats)"
+    if [[ -n "${diskstats_line}" ]]; then
+        index_device_stats="$(jq -cn --arg line "${diskstats_line}" '
+          ($line|split(" ")|map(select(length>0))) as $v |
+          {
+            reads_completed:($v[3]|tonumber),
+            sectors_read:($v[5]|tonumber),
+            read_time_ms:($v[6]|tonumber),
+            writes_completed:($v[7]|tonumber),
+            sectors_written:($v[9]|tonumber),
+            write_time_ms:($v[10]|tonumber),
+            io_in_progress:($v[11]|tonumber),
+            io_time_ms:($v[12]|tonumber),
+            weighted_io_time_ms:($v[13]|tonumber)
+          }')"
+    fi
 fi
 # LevelDB compaction can remove files while du is walking the directory.  Keep
 # the sample and mark the size unavailable instead of failing the collector.
@@ -62,12 +92,17 @@ jq -cn \
     --argjson memory_percent "${memory_percent}" \
     --argjson rss_bytes "${rss_bytes}" \
     --argjson elapsed_seconds "${elapsed_seconds}" \
+    --argjson process_read_bytes "${process_read_bytes}" \
+    --argjson process_write_bytes "${process_write_bytes}" \
+    --argjson process_cancelled_write_bytes "${process_cancelled_write_bytes}" \
     --argjson disk_total_bytes "${disk_total_bytes}" \
     --argjson disk_used_bytes "${disk_used_bytes}" \
     --argjson disk_available_bytes "${disk_available_bytes}" \
     --argjson index_disk_total_bytes "${index_disk_total_bytes}" \
     --argjson index_disk_used_bytes "${index_disk_used_bytes}" \
     --argjson index_disk_available_bytes "${index_disk_available_bytes}" \
+    --arg index_device "${index_device}" \
+    --argjson index_device_stats "${index_device_stats}" \
     --argjson db_bytes "${db_bytes}" \
     --argjson metadata_bytes "${metadata_bytes}" \
     '{
@@ -80,12 +115,17 @@ jq -cn \
       memory_percent:$memory_percent,
       rss_bytes:$rss_bytes,
       elapsed_seconds:$elapsed_seconds,
+      process_read_bytes:$process_read_bytes,
+      process_write_bytes:$process_write_bytes,
+      process_cancelled_write_bytes:$process_cancelled_write_bytes,
       disk_total_bytes:$disk_total_bytes,
       disk_used_bytes:$disk_used_bytes,
       disk_available_bytes:$disk_available_bytes,
       index_disk_total_bytes:$index_disk_total_bytes,
       index_disk_used_bytes:$index_disk_used_bytes,
       index_disk_available_bytes:$index_disk_available_bytes,
+      index_device:$index_device,
+      index_device_stats:$index_device_stats,
       db_bytes:$db_bytes,
       metadata_bytes:$metadata_bytes,
       progress_line:$progress_line
