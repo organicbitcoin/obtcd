@@ -18,11 +18,13 @@ ACTIVATION_HEIGHT="${ACTIVATION_HEIGHT:-956566}"
 OBSERVATION_SECONDS="${OBSERVATION_SECONDS:-259200}"
 SNAPSHOT_INTERVAL_SECONDS="${SNAPSHOT_INTERVAL_SECONDS:-7200}"
 REAP_SCAN_INTERVAL_SECONDS="${REAP_SCAN_INTERVAL_SECONDS:-600}"
+PRESIGNED_UPLOADS_FILE="${PRESIGNED_UPLOADS_FILE:-}"
 
 STATE_FILE="${RUN_DIR}/controller-state.json"
 EVENTS_FILE="${RUN_DIR}/controller-events.jsonl"
 BOUNDARY_DIR="${RUN_DIR}/boundaries"
 SYSTEM_DIR="${RUN_DIR}/system"
+UPLOAD_DIR="${RUN_DIR}/periodic-upload"
 
 for required in "${BTCCTL_BIN}" "${MONITOR_BIN}" "${EXPORT_BIN}"; do
     if [[ ! -x "${required}" ]]; then
@@ -41,7 +43,7 @@ if ! [[ "${OBSERVATION_SECONDS}" =~ ^[1-9][0-9]*$ &&
     exit 1
 fi
 
-mkdir -p "${RUN_DIR}" "${BOUNDARY_DIR}" "${SYSTEM_DIR}"
+mkdir -p "${RUN_DIR}" "${BOUNDARY_DIR}" "${SYSTEM_DIR}" "${UPLOAD_DIR}"
 
 rpc() {
     timeout 1800 "${BTCCTL_BIN}" --configfile="${BTCCTL_CONFIG}" "$@"
@@ -55,6 +57,67 @@ event() {
         --arg kind "${kind}" \
         --arg detail "${detail}" \
         '{captured_at:$captured_at,kind:$kind,detail:$detail}' >>"${EVENTS_FILE}"
+}
+
+upload_evidence_slot() {
+    [[ -n "${PRESIGNED_UPLOADS_FILE}" ]] || return 0
+    if [[ ! -r "${PRESIGNED_UPLOADS_FILE}" ]]; then
+        event "evidence_upload_failed" "presigned upload file is not readable"
+        return 1
+    fi
+
+    local slot url key marker cutoff list bundle receipt
+    slot="$(jq -r '.next_upload_slot // 0' "${STATE_FILE}")"
+    url="$(jq -r --arg slot "${slot}" '.slots[$slot].url // empty' \
+        "${PRESIGNED_UPLOADS_FILE}")"
+    key="$(jq -r --arg slot "${slot}" '.slots[$slot].key // empty' \
+        "${PRESIGNED_UPLOADS_FILE}")"
+    if [[ -z "${url}" || -z "${key}" ]]; then
+        event "evidence_upload_failed" "no presigned URL for slot ${slot}"
+        return 1
+    fi
+
+    marker="${UPLOAD_DIR}/last-success.marker"
+    [[ -e "${marker}" ]] || touch -d '@0' "${marker}"
+    cutoff="$(mktemp "${UPLOAD_DIR}/cutoff.XXXXXX")"
+    list="$(mktemp "${UPLOAD_DIR}/files.XXXXXX")"
+    bundle="${UPLOAD_DIR}/slot-$(printf '%03d' "${slot}").tar.gz"
+    receipt="${UPLOAD_DIR}/slot-$(printf '%03d' "${slot}").receipt.json"
+
+    (
+        cd "${ARTIFACT_ROOT}"
+        find "${RUN_ID}" -type f -newer "${marker}" \
+            ! -path "${RUN_ID}/periodic-upload/*" -print0 >"${list}"
+        tar --null --files-from="${list}" -czf "${bundle}"
+    )
+    sha256sum "${bundle}" >"${bundle}.sha256"
+
+    if ! curl --fail --silent --show-error -X PUT \
+        -H 'x-amz-server-side-encryption: AES256' \
+        -H "x-amz-tagging: Project=OBTC&RunID=${RUN_ID}&DataClass=PrivateRehearsal" \
+        --upload-file "${bundle}" "${url}"; then
+        rm -f "${cutoff}" "${list}"
+        event "evidence_upload_failed" "slot ${slot}"
+        return 1
+    fi
+
+    jq -n \
+        --argjson slot "${slot}" \
+        --arg key "${key}" \
+        --arg uploaded_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+        --arg sha256 "$(sha256sum "${bundle}" | awk '{print $1}')" \
+        --argjson size_bytes "$(stat -c %s "${bundle}")" \
+        '{slot:$slot,key:$key,uploaded_at:$uploaded_at,sha256:$sha256,size_bytes:$size_bytes}' \
+        >"${receipt}"
+    mv "${cutoff}" "${marker}"
+    rm -f "${list}"
+
+    local tmp
+    tmp="$(mktemp)"
+    jq --argjson next_slot "$((slot + 1))" '.next_upload_slot=$next_slot' \
+        "${STATE_FILE}" >"${tmp}"
+    mv "${tmp}" "${STATE_FILE}"
+    event "evidence_uploaded" "slot ${slot}: ${key}"
 }
 
 wait_for_rpc() {
@@ -181,7 +244,9 @@ initialize_observation() {
           started_epoch:$started_epoch,
           deadline_epoch:$deadline_epoch,
           last_reap_scan_height:$last_reap_scan_height,
-          next_snapshot_epoch:$next_snapshot_epoch
+          next_snapshot_epoch:$next_snapshot_epoch,
+          next_upload_epoch:$started_epoch,
+          next_upload_slot:0
         }' >"${tmp}"
     mv "${tmp}" "${STATE_FILE}"
 
@@ -223,6 +288,7 @@ finalize_observation() {
         find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum
     ) >"${RUN_DIR}/SHA256SUMS"
     event "observation_complete" "tip=${after_height}:${after_hash}"
+    upload_evidence_slot || true
 }
 
 wait_for_rpc
@@ -253,6 +319,16 @@ while (( $(date -u +%s) < $(jq -r '.deadline_epoch' "${STATE_FILE}") )); do
             mv "${tmp}" "${STATE_FILE}"
         fi
         archive_new_reap_blocks || event "reap_archive_failed" "retrying later"
+
+        next_upload="$(jq -r '.next_upload_epoch' "${STATE_FILE}")"
+        if (( now >= next_upload )); then
+            if upload_evidence_slot; then
+                tmp="$(mktemp)"
+                jq --argjson next "$((now + SNAPSHOT_INTERVAL_SECONDS))" \
+                    '.next_upload_epoch=$next' "${STATE_FILE}" >"${tmp}"
+                mv "${tmp}" "${STATE_FILE}"
+            fi
+        fi
     else
         event "rpc_unavailable" "controller loop"
     fi
