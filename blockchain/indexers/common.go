@@ -40,6 +40,12 @@ type TipSource interface {
 	IndexTip() (*chainhash.Hash, int32, error)
 }
 
+// InterruptibleIndexer allows long-running index initialization to respond to
+// node shutdown requests.
+type InterruptibleIndexer interface {
+	SetInterrupt(<-chan struct{})
+}
+
 // Indexer provides a generic interface for an indexer that is managed by an
 // index manager such as the Manager type provided by this package.
 type Indexer interface {

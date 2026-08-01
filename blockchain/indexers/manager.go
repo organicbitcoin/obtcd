@@ -291,6 +291,9 @@ func (m *Manager) Init(chain *blockchain.BlockChain, interrupt <-chan struct{}) 
 
 	// Initialize each of the enabled indexes.
 	for _, indexer := range m.enabledIndexes {
+		if interruptible, ok := indexer.(InterruptibleIndexer); ok {
+			interruptible.SetInterrupt(interrupt)
+		}
 		if err := indexer.Init(); err != nil {
 			return err
 		}

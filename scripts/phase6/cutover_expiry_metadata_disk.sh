@@ -7,6 +7,7 @@ SOURCE_DIR="${SOURCE_DIR:-/mnt/obtc-data/btc-mainnet/mainnet/blocks_ffldb/metada
 INDEX_MOUNT="${INDEX_MOUNT:-/mnt/obtc-expiry-temp}"
 TARGET_DIR="${TARGET_DIR:-${INDEX_MOUNT}/metadata}"
 RECEIPT_FILE="${RECEIPT_FILE:-${INDEX_MOUNT}/metadata-cutover-receipt.json}"
+START_NODE="${START_NODE:-1}"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "[ERROR] expiry metadata cutover must run as root" >&2
@@ -73,5 +74,7 @@ jq -n \
       bind_mount_verified:true
     }' >"${RECEIPT_FILE}"
 
-systemctl start "${NODE_SERVICE}"
+if [[ "${START_NODE}" == "1" ]]; then
+    systemctl start "${NODE_SERVICE}"
+fi
 echo "[OK] expiry metadata cutover complete"

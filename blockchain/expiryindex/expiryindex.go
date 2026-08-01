@@ -6,6 +6,7 @@ package expiryindex
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,6 +24,8 @@ const (
 	// indexName is the human-readable name for the index.
 	indexName = "expiry index"
 )
+
+var errRebuildInterrupted = errors.New("expiry index rebuild interrupted")
 
 // ChainAccessor provides read-only access to blockchain state needed by the
 // expiry index for rebuild and catch-up operations. This interface decouples
@@ -54,6 +57,7 @@ type amountAwareChainAccessor interface {
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
 var _ indexers.TipSource = (*ExpiryIndex)(nil)
+var _ indexers.InterruptibleIndexer = (*ExpiryIndex)(nil)
 
 // ExpiryIndex tracks UTXOs by expiry height.
 type ExpiryIndex struct {
@@ -79,6 +83,27 @@ type ExpiryIndex struct {
 	// initialized prevents an accessor injected during blockchain startup
 	// from rebuilding before Init has loaded the persisted index state.
 	initialized bool
+
+	// interrupt is closed when node shutdown is requested.
+	interrupt <-chan struct{}
+}
+
+// SetInterrupt provides the node shutdown signal used by long-running rebuild
+// and catch-up operations.
+func (idx *ExpiryIndex) SetInterrupt(interrupt <-chan struct{}) {
+	idx.interrupt = interrupt
+}
+
+func (idx *ExpiryIndex) interruptRequested() bool {
+	if idx.interrupt == nil {
+		return false
+	}
+	select {
+	case <-idx.interrupt:
+		return true
+	default:
+		return false
+	}
 }
 
 // SetChainAccessor injects the blockchain accessor. When called before Init,
@@ -1027,6 +1052,9 @@ func (idx *ExpiryIndex) tryFastRebuildOrFallback(chainTipHeight int32) error {
 		log.Infof("ExpiryIndex: Fast rebuild completed successfully")
 		return nil
 	}
+	if errors.Is(err, errRebuildInterrupted) {
+		return err
+	}
 
 	// Log the fast rebuild failure and fall back
 	log.Warnf("ExpiryIndex: Fast rebuild failed (%v), falling back to incremental", err)
@@ -1038,6 +1066,9 @@ func (idx *ExpiryIndex) tryFastRebuildOrFallback(chainTipHeight int32) error {
 func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	if err := idx.requireChain(); err != nil {
 		return err
+	}
+	if idx.interruptRequested() {
+		return errRebuildInterrupted
 	}
 
 	startTime := time.Now()
@@ -1080,6 +1111,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		if len(batch) == 0 {
 			return nil
 		}
+		if idx.interruptRequested() {
+			return errRebuildInterrupted
+		}
 
 		if err := idx.db.Update(func(dbTx database.Tx) error {
 			for i := range batch {
@@ -1099,6 +1133,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	}
 
 	processUTXO := func(outpoint wire.OutPoint, createHeight int32, amount int64) error {
+		if idx.interruptRequested() {
+			return errRebuildInterrupted
+		}
 		// Only index UTXOs represented by validation's spendable UTXO set.
 		if !idx.shouldIndexCreateHeight(createHeight) {
 			return nil
@@ -1192,11 +1229,17 @@ func (idx *ExpiryIndex) incrementalCatchUp(fromHeight, toHeight int32) error {
 	if fromHeight >= toHeight {
 		return nil
 	}
+	if idx.interruptRequested() {
+		return errRebuildInterrupted
+	}
 
 	log.Infof("ExpiryIndex: Incremental catch-up from %d to %d", fromHeight, toHeight)
 	startTime := time.Now()
 
 	for height := fromHeight + 1; height <= toHeight; height++ {
+		if idx.interruptRequested() {
+			return errRebuildInterrupted
+		}
 		// Get block at height
 		block, err := idx.getBlockByHeight(height)
 		if err != nil {
