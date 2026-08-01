@@ -9,6 +9,7 @@ This tool is for rehearsal only. It does not publish or modify chain state.
 go build -o ./obtc-fork-rehearsal ./cmd/obtc-fork-rehearsal
 
 ./obtc-fork-rehearsal \
+  --network=obtcmainnet72h \
   --dbpath=/var/lib/obtcd/mainnet/blocks_ffldb \
   --dbnet=mainnet \
   --fork-height=<btc_anchor_height> \
