@@ -28,8 +28,12 @@ fi
 read -r disk_total_bytes disk_used_bytes disk_available_bytes < <(
     df -B1 --output=size,used,avail "${DATA_MOUNT}" | tail -1 | xargs
 )
-db_bytes="$(du -sb "${DB_DIR}" | awk '{print $1}')"
-metadata_bytes="$(du -sb "${DB_DIR}/metadata" | awk '{print $1}')"
+# LevelDB compaction can remove files while du is walking the directory.  Keep
+# the sample and mark the size unavailable instead of failing the collector.
+db_bytes="$(du -sb "${DB_DIR}" 2>/dev/null | awk '{print $1}' || true)"
+metadata_bytes="$(du -sb "${DB_DIR}/metadata" 2>/dev/null | awk '{print $1}' || true)"
+db_bytes="${db_bytes:-null}"
+metadata_bytes="${metadata_bytes:-null}"
 progress_line="$(journalctl -u "${SERVICE}" --since '10 minutes ago' --no-pager \
     | grep 'ExpiryIndex: Processed\|Fast rebuild completed' | tail -1 || true)"
 
