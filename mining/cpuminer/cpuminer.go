@@ -316,7 +316,7 @@ out:
 		// Wait until there is a connection to at least one other peer
 		// since there is no way to relay a found block or receive
 		// transactions to work on when there are no connected peers.
-		if m.cfg.ConnectedCount() == 0 {
+		if m.requiresNetworkReadiness() && m.cfg.ConnectedCount() == 0 {
 			time.Sleep(time.Second)
 			continue
 		}
@@ -328,7 +328,8 @@ out:
 		// a block that is in the process of becoming stale.
 		m.submitBlockLock.Lock()
 		curHeight := m.g.BestSnapshot().Height
-		if curHeight != 0 && !m.cfg.IsCurrent() {
+		if m.requiresNetworkReadiness() && curHeight != 0 &&
+			!m.cfg.IsCurrent() {
 			m.submitBlockLock.Unlock()
 			time.Sleep(time.Second)
 			continue
@@ -362,6 +363,15 @@ out:
 
 	m.workerWg.Done()
 	log.Tracef("Generate blocks worker done")
+}
+
+// requiresNetworkReadiness reports whether continuous mining requires an
+// external peer and a current chain tip.  The private mainnet72h rehearsal is
+// intentionally isolated at an old BTC fork anchor, so requiring either would
+// prevent its controlled local miner from ever starting.
+func (m *CPUMiner) requiresNetworkReadiness() bool {
+	return m.cfg.ChainParams == nil ||
+		m.cfg.ChainParams.Net != wire.ObtcMainNet72h
 }
 
 // miningWorkerController launches the worker goroutines that are used to

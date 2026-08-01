@@ -17,11 +17,15 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/blockchain/indexers"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
 	"github.com/btcsuite/btcd/limits"
 	"github.com/btcsuite/btcd/ossec"
+	"github.com/btcsuite/btcd/wire"
 )
 
 const (
@@ -137,6 +141,10 @@ func btcdMain(serverChan chan<- *server) error {
 		btcdLog.Infof("Gracefully shutting down the database...")
 		db.Close()
 	}()
+	if err := verifyObtcMainNet72hDatabase(db); err != nil {
+		btcdLog.Errorf("%v", err)
+		return err
+	}
 
 	// Return now if an interrupt signal was triggered.
 	if interruptRequested(interrupt) {
@@ -334,8 +342,73 @@ func blockDbPath(dbType string) string {
 	if dbType == "sqlite" {
 		dbName = dbName + ".db"
 	}
-	dbPath := filepath.Join(cfg.DataDir, dbName)
+	dbDir := cfg.DataDir
+	if reuseMainNetDBForObtcMainNet72h() {
+		dbDir = filepath.Join(filepath.Dir(cfg.DataDir), netName(&mainNetParams))
+	}
+	dbPath := filepath.Join(dbDir, dbName)
 	return dbPath
+}
+
+// blockDbNetwork returns the framing network used by ffldb.  The private 72h
+// rehearsal can explicitly reuse a Bitcoin mainnet database at its fork
+// anchor, so its storage framing remains Bitcoin mainnet even though its P2P
+// network magic is isolated.
+func blockDbNetwork() wire.BitcoinNet {
+	if reuseMainNetDBForObtcMainNet72h() {
+		return wire.MainNet
+	}
+	return activeNetParams.Net
+}
+
+func reuseMainNetDBForObtcMainNet72h() bool {
+	return cfg != nil && cfg.ObtcMainNet72h &&
+		cfg.ReuseMainNetDB72h &&
+		activeNetParams.Net == wire.ObtcMainNet72h
+}
+
+func verifyObtcMainNet72hDatabase(db database.DB) error {
+	if !reuseMainNetDBForObtcMainNet72h() {
+		return nil
+	}
+
+	snapshot, err := blockchain.BestSnapshotFromDB(db)
+	if err != nil {
+		return fmt.Errorf("verify obtcmainnet72h database state: %w", err)
+	}
+	forkHeight := chaincfg.ObtcMainNet72hForkHeight
+	if snapshot.Height < forkHeight {
+		return fmt.Errorf("obtcmainnet72h database height %d is below fork anchor %d",
+			snapshot.Height, forkHeight)
+	}
+
+	expectedHash, err := chainhash.NewHashFromStr(chaincfg.ObtcMainNet72hForkHash)
+	if err != nil {
+		return fmt.Errorf("parse obtcmainnet72h fork hash: %w", err)
+	}
+	actualHash, err := blockchain.HashByHeightFromDB(db, forkHeight)
+	if err != nil {
+		return fmt.Errorf("read obtcmainnet72h fork anchor: %w", err)
+	}
+	if !actualHash.IsEqual(expectedHash) {
+		return fmt.Errorf("obtcmainnet72h fork anchor mismatch at height %d: got %s want %s",
+			forkHeight, actualHash, expectedHash)
+	}
+
+	if snapshot.Height > forkHeight {
+		firstHeader, err := blockchain.HeaderByHeightFromDB(
+			db, chaincfg.ObtcMainNet72hFirstBlockHeight,
+		)
+		if err != nil {
+			return fmt.Errorf("read obtcmainnet72h first block header: %w", err)
+		}
+		if firstHeader.Bits != chaincfg.ObtcMainNet72hParams.ForkDAAForkResetBits {
+			return fmt.Errorf("obtcmainnet72h first block has bits %08x, want %08x",
+				firstHeader.Bits, chaincfg.ObtcMainNet72hParams.ForkDAAForkResetBits)
+		}
+	}
+
+	return nil
 }
 
 // warnMultipleDBs shows a warning if multiple block database types are detected.
@@ -399,7 +472,11 @@ func loadBlockDB() (database.DB, error) {
 	removeRegressionDB(dbPath)
 
 	btcdLog.Infof("Loading block database from '%s'", dbPath)
-	db, err := database.Open(cfg.DbType, dbPath, activeNetParams.Net)
+	if reuseMainNetDBForObtcMainNet72h() && !fileExists(dbPath) {
+		return nil, fmt.Errorf("obtcmainnet72h mainnet database does not exist at %s",
+			dbPath)
+	}
+	db, err := database.Open(cfg.DbType, dbPath, blockDbNetwork())
 	if err != nil {
 		// Return the error if it's not because the database doesn't
 		// exist.
@@ -414,7 +491,7 @@ func loadBlockDB() (database.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		db, err = database.Create(cfg.DbType, dbPath, activeNetParams.Net)
+		db, err = database.Create(cfg.DbType, dbPath, blockDbNetwork())
 		if err != nil {
 			return nil, err
 		}

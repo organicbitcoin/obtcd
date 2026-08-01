@@ -157,6 +157,7 @@ type config struct {
 	RegressionTest       bool          `long:"regtest" description:"Use the regression test network"`
 	ObtcMainNet          bool          `long:"obtcmainnet" description:"Use the OBTC main network"`
 	ObtcMainNet72h       bool          `long:"obtcmainnet72h" description:"Use the private OBTC mainnet 72h rehearsal network"`
+	ReuseMainNetDB72h    bool          `long:"obtcmainnet72hreusemainnetdb" description:"Rehearsal only: reuse the Bitcoin mainnet ffldb at the fork anchor"`
 	ObtcTestNet          bool          `long:"obtctestnet" description:"Use the OBTC test network"`
 	ObtcRegTest          bool          `long:"obtcregtest" description:"Use the OBTC regression test network"`
 	RejectNonStd         bool          `long:"rejectnonstd" description:"Reject non-standard transactions regardless of the default settings for the active network."`
@@ -631,6 +632,13 @@ func loadConfig() (*config, []string, error) {
 		str := "%s: Network params can't be used together -- " +
 			"choose only one of testnet, testnet4, regtest, signet, " +
 			"simnet, obtcmainnet, obtcmainnet72h, obtctestnet, obtcregtest"
+		err := fmt.Errorf(str, funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, nil, err
+	}
+	if cfg.ReuseMainNetDB72h && !cfg.ObtcMainNet72h {
+		str := "%s: obtcmainnet72hreusemainnetdb requires obtcmainnet72h"
 		err := fmt.Errorf(str, funcName)
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr, usageMessage)

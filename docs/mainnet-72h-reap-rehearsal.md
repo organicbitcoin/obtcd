@@ -18,6 +18,27 @@ network.
 The network uses isolated address and HD namespaces so rehearsal wallets and
 addresses do not look like official OBTC mainnet wallets or addresses.
 
+## Reusing The BTC History Database
+
+The rehearsal node may reuse a cleanly stopped Bitcoin mainnet ffldb at the
+fixed fork anchor without copying the historical block database. This requires
+both rehearsal flags:
+
+```text
+obtcmainnet72h=1
+obtcmainnet72hreusemainnetdb=1
+```
+
+The explicit reuse flag keeps ffldb storage framing compatible with the
+existing Bitcoin mainnet files while P2P, RPC, addresses, and consensus use the
+isolated `obtcmainnet72h` network. Startup fails unless height `956542` matches
+the configured fork hash. After H+1 exists, startup also requires its bits to
+match the OBTC fork-reset difficulty.
+
+Never use the reuse flag with official `obtcmainnet` or any public node. The
+private rehearsal CPU miner is allowed to run without peers and from the old
+fork timestamp so `setgenerate true <workers>` can advance the isolated chain.
+
 ## Rehearsal Parameters
 
 | Field | Value |
