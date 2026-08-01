@@ -8,6 +8,7 @@ DEFAULT_BTCCTL="${REPO_ROOT}/cmd/btcctl/btcctl"
 
 NETWORK="${NETWORK:-obtcmainnet72h}"
 BTCCTL_BIN="${BTCCTL_BIN:-${DEFAULT_BTCCTL}}"
+BTCCTL_CONFIG="${BTCCTL_CONFIG:-}"
 RPC_USER="${RPC_USER:-}"
 RPC_PASS="${RPC_PASS:-}"
 SOURCE_RPC="${SOURCE_RPC:-}"
@@ -46,6 +47,8 @@ Options:
   --rpcpass=<pass>
   --btcctl <path>              btcctl binary path
   --btcctl=<path>
+  --btcctl-config <path>       btcctl config containing RPC credentials
+  --btcctl-config=<path>
   --outdir <dir>               local evidence directory
   --outdir=<dir>
   --run-id <id>                rehearsal run ID
@@ -132,6 +135,14 @@ while [[ $# -gt 0 ]]; do
             BTCCTL_BIN="${1#*=}"
             shift
             ;;
+        --btcctl-config)
+            BTCCTL_CONFIG="$2"
+            shift 2
+            ;;
+        --btcctl-config=*)
+            BTCCTL_CONFIG="${1#*=}"
+            shift
+            ;;
         --outdir)
             OUT_DIR="$2"
             shift 2
@@ -192,8 +203,18 @@ positive_int() {
     [[ "$1" =~ ^[0-9]+$ ]]
 }
 
-if [[ -z "${SOURCE_RPC}" || -z "${RPC_USER}" || -z "${RPC_PASS}" ]]; then
-    echo "[ERROR] --source-rpc, --rpcuser, and --rpcpass are required" >&2
+if [[ -z "${SOURCE_RPC}" ]]; then
+    echo "[ERROR] --source-rpc is required" >&2
+    exit 1
+fi
+
+if [[ -z "${BTCCTL_CONFIG}" && ( -z "${RPC_USER}" || -z "${RPC_PASS}" ) ]]; then
+    echo "[ERROR] --btcctl-config or both --rpcuser and --rpcpass are required" >&2
+    exit 1
+fi
+
+if [[ -n "${BTCCTL_CONFIG}" && ! -r "${BTCCTL_CONFIG}" ]]; then
+    echo "[ERROR] btcctl config is not readable: ${BTCCTL_CONFIG}" >&2
     exit 1
 fi
 
@@ -235,12 +256,12 @@ mkdir -p "${BLOCK_DIR}"
 
 btcctl_base_args() {
     local rpcserver="$1"
-    local args=(
-        "--${NETWORK}"
-        "--rpcuser=${RPC_USER}"
-        "--rpcpass=${RPC_PASS}"
-        "--rpcserver=${rpcserver}"
-    )
+    local args=("--${NETWORK}" "--rpcserver=${rpcserver}")
+    if [[ -n "${BTCCTL_CONFIG}" ]]; then
+        args=("--configfile=${BTCCTL_CONFIG}" "${args[@]}")
+    else
+        args+=("--rpcuser=${RPC_USER}" "--rpcpass=${RPC_PASS}")
+    fi
     if [[ ${NOTLS} -eq 1 ]]; then
         args+=(--notls)
     fi
