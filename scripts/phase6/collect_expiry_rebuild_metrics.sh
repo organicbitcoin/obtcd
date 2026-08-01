@@ -4,6 +4,7 @@ set -euo pipefail
 
 SERVICE="${SERVICE:-obtc-mainnet72h.service}"
 DATA_MOUNT="${DATA_MOUNT:-/mnt/obtc-data}"
+INDEX_MOUNT="${INDEX_MOUNT:-/mnt/obtc-expiry-temp}"
 DB_DIR="${DB_DIR:-${DATA_MOUNT}/btc-mainnet/mainnet/blocks_ffldb}"
 OUT_FILE="${OUT_FILE:-${DATA_MOUNT}/artifacts/expiry-rebuild-monitor.jsonl}"
 
@@ -28,6 +29,14 @@ fi
 read -r disk_total_bytes disk_used_bytes disk_available_bytes < <(
     df -B1 --output=size,used,avail "${DATA_MOUNT}" | tail -1 | xargs
 )
+index_disk_total_bytes=null
+index_disk_used_bytes=null
+index_disk_available_bytes=null
+if mountpoint -q "${INDEX_MOUNT}"; then
+    read -r index_disk_total_bytes index_disk_used_bytes index_disk_available_bytes < <(
+        df -B1 --output=size,used,avail "${INDEX_MOUNT}" | tail -1 | xargs
+    )
+fi
 # LevelDB compaction can remove files while du is walking the directory.  Keep
 # the sample and mark the size unavailable instead of failing the collector.
 db_bytes="$(du -sb "${DB_DIR}" 2>/dev/null | awk '{print $1}' || true)"
@@ -36,11 +45,13 @@ db_bytes="${db_bytes:-null}"
 metadata_bytes="${metadata_bytes:-null}"
 progress_line="$(journalctl -u "${SERVICE}" --since '10 minutes ago' --no-pager \
     | grep 'ExpiryIndex: Processed\|Fast rebuild completed' | tail -1 || true)"
+metadata_copy_state="$(systemctl is-active obtc-expiry-metadata-copy.service 2>/dev/null || true)"
 
 jq -cn \
     --arg captured_at "${captured_at}" \
     --arg service "${SERVICE}" \
     --arg service_state "${service_state}" \
+    --arg metadata_copy_state "${metadata_copy_state}" \
     --arg progress_line "${progress_line}" \
     --argjson pid "${pid}" \
     --argjson cpu_percent "${cpu_percent}" \
@@ -50,12 +61,16 @@ jq -cn \
     --argjson disk_total_bytes "${disk_total_bytes}" \
     --argjson disk_used_bytes "${disk_used_bytes}" \
     --argjson disk_available_bytes "${disk_available_bytes}" \
+    --argjson index_disk_total_bytes "${index_disk_total_bytes}" \
+    --argjson index_disk_used_bytes "${index_disk_used_bytes}" \
+    --argjson index_disk_available_bytes "${index_disk_available_bytes}" \
     --argjson db_bytes "${db_bytes}" \
     --argjson metadata_bytes "${metadata_bytes}" \
     '{
       captured_at:$captured_at,
       service:$service,
       service_state:$service_state,
+      metadata_copy_state:$metadata_copy_state,
       pid:$pid,
       cpu_percent:$cpu_percent,
       memory_percent:$memory_percent,
@@ -64,6 +79,9 @@ jq -cn \
       disk_total_bytes:$disk_total_bytes,
       disk_used_bytes:$disk_used_bytes,
       disk_available_bytes:$disk_available_bytes,
+      index_disk_total_bytes:$index_disk_total_bytes,
+      index_disk_used_bytes:$index_disk_used_bytes,
+      index_disk_available_bytes:$index_disk_available_bytes,
       db_bytes:$db_bytes,
       metadata_bytes:$metadata_bytes,
       progress_line:$progress_line
