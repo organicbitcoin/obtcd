@@ -44,8 +44,12 @@ metadata_bytes="$(du -sb "${DB_DIR}/metadata" 2>/dev/null | awk '{print $1}' || 
 db_bytes="${db_bytes:-null}"
 metadata_bytes="${metadata_bytes:-null}"
 progress_line="$(journalctl -u "${SERVICE}" --since '10 minutes ago' --no-pager \
-    | grep 'ExpiryIndex: Processed\|Fast rebuild completed' | tail -1 || true)"
-metadata_copy_state="$(systemctl is-active obtc-expiry-metadata-copy.service 2>/dev/null || true)"
+    | grep 'ExpiryIndex: Cleared\|ExpiryIndex: Processed\|Fast rebuild completed' | tail -1 || true)"
+if mountpoint -q "${DB_DIR}/metadata"; then
+    metadata_copy_state="cutover_complete"
+else
+    metadata_copy_state="$(systemctl is-active obtc-expiry-metadata-copy.service 2>/dev/null || true)"
+fi
 
 jq -cn \
     --arg captured_at "${captured_at}" \
