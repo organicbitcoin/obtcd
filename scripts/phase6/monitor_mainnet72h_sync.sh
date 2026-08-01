@@ -345,10 +345,10 @@ for node in "${NODES[@]}"; do
           peer_count:(if ($peers[0]|type)=="array" then ($peers[0]|length) else null end),
           expiry_tip_height:($expiry[0].tip_height // null),
           expiry_total_utxos:($expiry[0].total_utxos // null),
-          expiry_disabled:($expiry[0].disabled // null),
+          expiry_disabled:(if ($expiry[0] | has("disabled")) then $expiry[0].disabled else null end),
           expiry_lag:(if ($chain[0].blocks? != null and $expiry[0].tip_height? != null) then (($chain[0].blocks|tonumber) - ($expiry[0].tip_height|tonumber)) else null end),
-          reap_enabled:($reap[0].enabled // null),
-          reap_active:($reap[0].active // null),
+          reap_enabled:(if ($reap[0] | has("enabled")) then $reap[0].enabled else null end),
+          reap_active:(if ($reap[0] | has("active")) then $reap[0].active else null end),
           reap_height:($reap[0].height // null),
           reap_picked:($reap[0].picked // null),
           reap_tax_total:($reap[0].tax_total // null),
@@ -387,6 +387,8 @@ jq -n \
       ];
     def expiry_lagging:
       [$nodes[0][] | select(.expiry_lag != null and .expiry_lag > $max_lag_blocks) | .name];
+    def expiry_disabled:
+      [$nodes[0][] | select(.expiry_disabled == true) | .name];
     def inactive_after_activation:
       [$nodes[0][] | select(.height != null and .height >= $activation_height and .reap_active != true) | .name];
     def rpc_failed:
@@ -403,9 +405,10 @@ jq -n \
       lagging_nodes:lagging_nodes,
       same_height_mismatches:same_height_mismatches,
       expiry_lagging_nodes:expiry_lagging,
+      expiry_disabled_nodes:expiry_disabled,
       inactive_after_activation_nodes:inactive_after_activation,
       rpc_failed_nodes:rpc_failed,
-      no_go:((lagging_nodes|length) > 0 or (same_height_mismatches|length) > 0 or (expiry_lagging|length) > 0 or (inactive_after_activation|length) > 0 or (rpc_failed|length) > 0),
+      no_go:((lagging_nodes|length) > 0 or (same_height_mismatches|length) > 0 or (expiry_lagging|length) > 0 or (expiry_disabled|length) > 0 or (inactive_after_activation|length) > 0 or (rpc_failed|length) > 0),
       nodes:$nodes[0]
     }' >"${summary_json}"
 
@@ -422,12 +425,13 @@ jq -r '
   "- No-go: \(.no_go)",
   "",
   "## 节点状态",
-  (.nodes[] | "- \(.name) [\(.role)] height=\(.height // "unknown") peers=\(.peer_count // "unknown") expiry_lag=\(.expiry_lag // "unknown") reap_active=\(.reap_active // "unknown") picked=\(.reap_picked // "unknown") tax=\(.reap_tax_total // "unknown")"),
+  (.nodes[] | "- \(.name) [\(.role)] height=\(.height // "unknown") peers=\(.peer_count // "unknown") expiry_lag=\(.expiry_lag // "unknown") reap_active=\(if .reap_active == null then "unknown" else (.reap_active|tostring) end) picked=\(.reap_picked // "unknown") tax=\(.reap_tax_total // "unknown")"),
   "",
   "## 告警",
   (if (.rpc_failed_nodes|length) > 0 then "- RPC 失败节点: \(.rpc_failed_nodes|join(", "))" else "- RPC 失败节点: none" end),
   (if (.lagging_nodes|length) > 0 then "- 高度落后节点: \(.lagging_nodes|join(", "))" else "- 高度落后节点: none" end),
   (if (.expiry_lagging_nodes|length) > 0 then "- ExpiryIndex 落后节点: \(.expiry_lagging_nodes|join(", "))" else "- ExpiryIndex 落后节点: none" end),
+  (if (.expiry_disabled_nodes|length) > 0 then "- ExpiryIndex disabled 节点: \(.expiry_disabled_nodes|join(", "))" else "- ExpiryIndex disabled 节点: none" end),
   (if (.inactive_after_activation_nodes|length) > 0 then "- Activation 后 REAP inactive 节点: \(.inactive_after_activation_nodes|join(", "))" else "- Activation 后 REAP inactive 节点: none" end),
   (if (.same_height_mismatches|length) > 0 then "- 同高度 hash 分歧: \(.same_height_mismatches|tojson)" else "- 同高度 hash 分歧: none" end)
 ' "${summary_json}" >"${report_md}"

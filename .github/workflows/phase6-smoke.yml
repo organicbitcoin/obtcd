@@ -43,6 +43,7 @@ jobs:
           bash -n scripts/phase6/monitor_mainnet72h_sync.sh
           bash -n scripts/phase6/export_reap_block_evidence.sh
           bash -n scripts/phase6/run_mainnet72h_observation.sh
+          bash -n scripts/phase6/test_monitor_mainnet72h_sync.sh
 
       - name: Mainnet-candidate helper smoke
         run: |
@@ -68,3 +69,4 @@ jobs:
           jq -e \
             '.height == 956542 and .label == "fork-anchor" and .node_served_block == true' \
             /tmp/boundary-receipt.json
+          scripts/phase6/test_monitor_mainnet72h_sync.sh
