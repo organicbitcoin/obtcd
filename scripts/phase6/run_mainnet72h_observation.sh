@@ -163,10 +163,10 @@ capture_boundary() {
     rpc getblock "${hash}" 2 >"${prefix}.verbose.json"
     jq -n \
         --argjson height "${height}" \
-        --arg label "${label}" \
+        --arg boundary_label "${label}" \
         --arg hash "${hash}" \
         --arg captured_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-        '{height:$height,label:$label,hash:$hash,captured_at:$captured_at,node_served_block:true}' \
+        '{height:$height,label:$boundary_label,hash:$hash,captured_at:$captured_at,node_served_block:true}' \
         >"${receipt}"
     event "boundary_captured" "${height}:${label}:${hash}"
 }
