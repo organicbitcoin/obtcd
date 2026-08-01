@@ -161,11 +161,24 @@ func TestFastRebuildInterruptResetsPartialIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get reset index stats: %v", err)
 	}
-	if stats.TipHeight != -1 || stats.TotalUTXOs != 0 {
-		t.Fatalf("partial rebuild was not reset: %+v", stats)
+	if stats.TipHeight != -1 {
+		t.Fatalf("interrupted rebuild tip was not invalidated: %+v", stats)
+	}
+	if stats.TotalUTXOs == 0 {
+		t.Fatal("test did not persist a partial batch before interruption")
 	}
 	if len(mock.blockRequests) != 0 {
 		t.Fatalf("interrupted fast rebuild fell back to blocks: %v", mock.blockRequests)
+	}
+	if err := clearExpiryIndexBucketsBatchedWithSize(db, nil, 10); err != nil {
+		t.Fatalf("clear interrupted rebuild in batches: %v", err)
+	}
+	stats, err = idx.GetStats()
+	if err != nil {
+		t.Fatalf("get cleared index stats: %v", err)
+	}
+	if stats.TipHeight != -1 || stats.TotalUTXOs != 0 {
+		t.Fatalf("batched cleanup did not clear partial rebuild: %+v", stats)
 	}
 }
 

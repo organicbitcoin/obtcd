@@ -240,17 +240,15 @@ func (idx *ExpiryIndex) Init() error {
 	if storedVersion != 0 && storedVersion != CurrentIndexVersion {
 		log.Infof("ExpiryIndex: resetting index for version upgrade %d -> %d",
 			storedVersion, CurrentIndexVersion)
+		err = clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
+		if err != nil {
+			return fmt.Errorf("failed to reset index for version upgrade: %v", err)
+		}
 		err = idx.db.Update(func(dbTx database.Tx) error {
-			if err := idx.clearIndexBuckets(dbTx); err != nil {
-				return err
-			}
-			if err := dbPutTipHeightIndexed(dbTx, -1); err != nil {
-				return err
-			}
 			return dbPutIndexVersion(dbTx, CurrentIndexVersion)
 		})
 		if err != nil {
-			return fmt.Errorf("failed to reset index for version upgrade: %v", err)
+			return fmt.Errorf("failed to store upgraded index version: %v", err)
 		}
 		indexTipHeight = -1
 	}
@@ -1078,9 +1076,13 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 	resetToEmpty := func(logPrefix string, cause error) {
 		log.Warnf("%s: %v", logPrefix, cause)
-		if clearErr := idx.db.Update(func(dbTx database.Tx) error {
-			return idx.clearIndexBuckets(dbTx)
-		}); clearErr != nil {
+		var clearErr error
+		if errors.Is(cause, errRebuildInterrupted) {
+			clearErr = idx.db.Update(resetExpiryIndexMetadata)
+		} else {
+			clearErr = clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
+		}
+		if clearErr != nil {
 			log.Errorf("ExpiryIndex: failed to reset index after fast rebuild failure: %v", clearErr)
 		}
 		idx.curTipHeight = -1
@@ -1090,9 +1092,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	// If repopulation fails partway through, we re-clear the index so that
 	// the next startup triggers a clean full rebuild rather than leaving a
 	// partially-populated index that looks valid.
-	err := idx.db.Update(func(dbTx database.Tx) error {
-		return idx.clearIndexBuckets(dbTx)
-	})
+	err := clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
 	if err != nil {
 		return fmt.Errorf("failed to clear index buckets: %v", err)
 	}
