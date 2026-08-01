@@ -1094,7 +1094,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	// partially-populated index that looks valid.
 	err := clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
 	if err != nil {
-		return fmt.Errorf("failed to clear index buckets: %v", err)
+		return fmt.Errorf("failed to clear index buckets: %w", err)
 	}
 	idx.curTipHeight = -1
 

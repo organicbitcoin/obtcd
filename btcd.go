@@ -284,6 +284,12 @@ func btcdMain(serverChan chan<- *server) error {
 	server, err := newServer(cfg.Listeners, cfg.AgentBlacklist,
 		cfg.AgentWhitelist, db, activeNetParams.Params, interrupt)
 	if err != nil {
+		// A long-running index initialization can return its interrupt error
+		// after the operator has requested shutdown.  Treat that as a clean
+		// stop instead of a failed node startup.
+		if interruptRequested(interrupt) {
+			return nil
+		}
 		// TODO: this logging could do with some beautifying.
 		btcdLog.Errorf("Unable to start server on %v: %v",
 			cfg.Listeners, err)
