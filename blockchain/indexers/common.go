@@ -13,6 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/database"
 )
 
@@ -30,6 +31,13 @@ var (
 // requires the ability to look up inputs for a transaction.
 type NeedsInputser interface {
 	NeedsInputs() bool
+}
+
+// TipSource provides the authoritative tip maintained by an indexer that can
+// rebuild itself independently of the manager's block-by-block catch-up path.
+// The manager synchronizes its bookkeeping to this tip after Init returns.
+type TipSource interface {
+	IndexTip() (*chainhash.Hash, int32, error)
 }
 
 // Indexer provides a generic interface for an indexer that is managed by an

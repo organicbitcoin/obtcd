@@ -53,6 +53,7 @@ type amountAwareChainAccessor interface {
 
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
+var _ indexers.TipSource = (*ExpiryIndex)(nil)
 
 // ExpiryIndex tracks UTXOs by expiry height.
 type ExpiryIndex struct {
@@ -74,18 +75,22 @@ type ExpiryIndex struct {
 	// chain provides access to blockchain state for rebuild operations.
 	// May be nil until SetChainAccessor is called.
 	chain ChainAccessor
+
+	// initialized prevents an accessor injected during blockchain startup
+	// from rebuilding before Init has loaded the persisted index state.
+	initialized bool
 }
 
-// SetChainAccessor injects the blockchain accessor after both the index and
-// the blockchain have been constructed. Because indexers are created before
-// the blockchain in btcd's initialization sequence, Init() runs with
-// chain == nil and defers any rebuild/catch-up work. This method picks up
-// that deferred work by running smartRebuild once the chain is available.
+// SetChainAccessor injects the blockchain accessor. When called before Init,
+// Init performs the rebuild and propagates failures through node startup. When
+// called after Init, this method picks up the deferred rebuild and logs errors
+// for compatibility with callers that inject the accessor later.
 func (idx *ExpiryIndex) SetChainAccessor(chain ChainAccessor) {
 	idx.chain = chain
 
-	// Run deferred rebuild now that chain state is accessible.
-	if idx.disabled {
+	// When injected before Init, Init itself performs the rebuild and returns
+	// any error through the normal blockchain startup path.
+	if idx.disabled || !idx.initialized {
 		return
 	}
 	if err := idx.smartRebuild(idx.curTipHeight); err != nil {
@@ -126,6 +131,27 @@ func (idx *ExpiryIndex) Key() []byte {
 // Name returns the human-readable name of the index.
 func (idx *ExpiryIndex) Name() string {
 	return indexName
+}
+
+// IndexTip returns the authoritative tip represented by the expiry index.
+// It allows the generic index manager to synchronize its own tip after a fast
+// UTXO-set rebuild.
+func (idx *ExpiryIndex) IndexTip() (*chainhash.Hash, int32, error) {
+	var tipHash chainhash.Hash
+	var tipHeight int32
+	err := idx.db.View(func(dbTx database.Tx) error {
+		var err error
+		tipHeight, err = dbGetTipHeightIndexed(dbTx)
+		if err != nil {
+			return err
+		}
+		tipHash, err = dbGetAccumulatorTipHash(dbTx)
+		return err
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return &tipHash, tipHeight, nil
 }
 
 // Create is invoked when the indexer manager determines the index needs
@@ -206,6 +232,7 @@ func (idx *ExpiryIndex) Init() error {
 
 	// Set the current tip height
 	idx.curTipHeight = indexTipHeight
+	idx.initialized = true
 
 	// If the chain accessor is available, run smart rebuild now.
 	// Otherwise defer it to SetChainAccessor (the normal startup path,
