@@ -44,6 +44,8 @@ jobs:
           bash -n scripts/phase6/export_reap_block_evidence.sh
           bash -n scripts/phase6/run_mainnet72h_observation.sh
           bash -n scripts/phase6/test_monitor_mainnet72h_sync.sh
+          grep -q 'now + EVIDENCE_UPLOAD_INTERVAL_SECONDS' \
+            scripts/phase6/run_mainnet72h_observation.sh
 
       - name: Mainnet-candidate helper smoke
         run: |

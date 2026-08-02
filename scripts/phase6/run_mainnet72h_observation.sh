@@ -17,6 +17,7 @@ FIRST_HEIGHT="${FIRST_HEIGHT:-956543}"
 ACTIVATION_HEIGHT="${ACTIVATION_HEIGHT:-956566}"
 OBSERVATION_SECONDS="${OBSERVATION_SECONDS:-259200}"
 SNAPSHOT_INTERVAL_SECONDS="${SNAPSHOT_INTERVAL_SECONDS:-7200}"
+EVIDENCE_UPLOAD_INTERVAL_SECONDS="${EVIDENCE_UPLOAD_INTERVAL_SECONDS:-7200}"
 REAP_SCAN_INTERVAL_SECONDS="${REAP_SCAN_INTERVAL_SECONDS:-600}"
 PRESIGNED_UPLOADS_FILE="${PRESIGNED_UPLOADS_FILE:-}"
 
@@ -38,6 +39,7 @@ if [[ ! -r "${BTCCTL_CONFIG}" ]]; then
 fi
 if ! [[ "${OBSERVATION_SECONDS}" =~ ^[1-9][0-9]*$ &&
     "${SNAPSHOT_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ &&
+    "${EVIDENCE_UPLOAD_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ &&
     "${REAP_SCAN_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
     echo "[ERROR] observation intervals must be positive integers" >&2
     exit 1
@@ -324,7 +326,7 @@ while (( $(date -u +%s) < $(jq -r '.deadline_epoch' "${STATE_FILE}") )); do
         if (( now >= next_upload )); then
             if upload_evidence_slot; then
                 tmp="$(mktemp)"
-                jq --argjson next "$((now + SNAPSHOT_INTERVAL_SECONDS))" \
+                jq --argjson next "$((now + EVIDENCE_UPLOAD_INTERVAL_SECONDS))" \
                     '.next_upload_epoch=$next' "${STATE_FILE}" >"${tmp}"
                 mv "${tmp}" "${STATE_FILE}"
             fi
