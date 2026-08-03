@@ -4,73 +4,92 @@
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
 
-OBTC is a Bitcoin-derived lifecycle-money experiment. It asks whether a
-Bitcoin-like UTXO system can make long dormancy explicit through expiry,
-renewal, and a rule-bound reclaim path instead of treating every old output as
-operationally active forever.
+**OBTC is a separate Bitcoin-derived experiment in which UTXOs have an
+explicit lifecycle.** It keeps Bitcoin's UTXO model but adds a new rule: very
+old outputs must be spent or renewed. It does not change Bitcoin.
 
-`obtcd` is the OBTC node implementation. It is derived from
-[btcsuite/btcd](https://github.com/btcsuite/btcd) and adds OBTC network
-parameters, expiry-aware indexing, replay protection, expiry commitment support,
-REAP validation paths, and operator tooling for testnet and mainnet-candidate
-review.
+[Understand OBTC in one page](https://organicbitcoin.org/overview.html) ·
+[Website](https://organicbitcoin.org) ·
+[Whitepaper](https://organicbitcoin.org/whitepaper.html) ·
+[Run it locally](#run-it-locally) ·
+[Review the design](EXTERNAL_REVIEW_PACKET.md)
 
-## Read this first
+## OBTC in one minute
 
-If you are new to OBTC, start here:
+Bitcoin represents wallet value as unspent transaction outputs (UTXOs):
+individual pieces of value that remain spendable until used. OBTC tests a
+deliberately controversial alternative—giving each output a long lifecycle.
+An output's age only measures when it was created onchain; it does **not** show
+that its keys are lost or that its value has been abandoned.
 
-- **What it is:** a separate Bitcoin-derived proof-of-work chain experiment
-  around UTXO lifecycle rules.
-- **Core mechanisms:** expiry, active renewal, REAP, refund/security-budget
-  accounting, expiry commitments, and replay protection.
-- **Why it exists:** to test whether dormant UTXO state, state maintenance, and
-  long-term security-budget pressure can be handled by explicit lifecycle rules
-  in a separate experiment.
-- **Current status:** mainnet-candidate and public testnet review. The code and
-  docs are open for technical review, but this is not final release material or
-  mature financial infrastructure.
-- **Non-goals:** this is not a Bitcoin consensus proposal, not an endorsement
-  request, not an investment project, not a promise of miner income, and not a
-  request that any pool, firmware project, or protocol project adopt OBTC.
-- **What review is useful:** protocol assumptions, replay/activation boundaries,
-  wallet renewal behavior, mining-template and coinbase accounting, Stratum
-  documentation assumptions, reproducibility of testnet instructions, and
-  wording that could overstate readiness.
+Under the current candidate design:
 
-Reviewer entry points:
+1. A UTXO has a lifecycle window of `362,880` blocks, approximately 6.9 years
+   at ten minutes per block.
+2. Before expiry, its holder can spend it normally or renew it into a fresh
+   output.
+3. After expiry, ordinary spending is rejected. The output becomes eligible
+   for deterministic processing called **REAP** (Reclaim Expired Assets
+   Protocol).
+4. For an output of at least 720 satoshis, REAP sends 70% back to its original
+   locking script and 30% to the proof-of-work security budget. Smaller outputs
+   go entirely to that budget.
 
-- [Mainnet Candidate External Review Packet](EXTERNAL_REVIEW_PACKET.md)
-- [OBTC Reviewer Primer](OBTC_REVIEWER_PRIMER.md)
-- [Review Test Vectors](REVIEW_TEST_VECTORS.md)
-- [Concrete Review Fixture Vectors](REVIEW_FIXTURE_VECTORS.md)
-- [Mainnet Candidate Release Notes](MAINNET_CANDIDATE_RELEASE_NOTES.md)
-- [Mainnet Candidate Test Report](MAINNET_CANDIDATE_TEST_REPORT.md)
-- [Known Limitations](KNOWN_LIMITATIONS.md)
-- [Security Review Checklist](SECURITY_REVIEW_CHECKLIST.md)
-- [Node Operator Runbook](NODE_OPERATOR_RUNBOOK.md)
-- [Wallet Operator Runbook](WALLET_OPERATOR_RUNBOOK.md)
-- [Reviewer Quick Start](docs/reviewer-quickstart.md)
-- [Mining Review Checklist](docs/mining-review-checklist.md)
-- [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md)
-- [Testnet Join Guide](docs/testnet-join.md)
-- [Mainnet Join Runbook](docs/mainnet-join.md)
-- [Network Parameters](docs/network-parameters.md)
+REAP ordering and limits are consensus rules verified by full nodes; miners do
+not choose arbitrary expired outputs. The experiment tests whether this makes
+long-lived UTXO state and security funding easier to reason about. Its cost is
+equally explicit: holders inherit a maintenance obligation and an expiry risk.
+That tradeoff is the question OBTC exists to test, not a settled claim.
 
-## Status
+## Run it locally
 
-The current public target is `mainnet-candidate-2026-07`.
+The fastest path is the repository's isolated two-node devnet. It does not use
+valuable funds or require access to Bitcoin wallet keys.
 
-Current milestone:
+```bash
+git clone https://github.com/organicbitcoin/obtcd.git
+cd obtcd
+go test ./...
 
-- [mainnet-candidate-2026-07](https://github.com/organicbitcoin/obtcd/milestone/1)
+./scripts/devnet-up.sh start
+./scripts/devnet-up.sh demo
+./scripts/devnet-up.sh status
+./scripts/devnet-up.sh stop
+```
 
-Current companion wallet repository:
+For external network testing, follow the
+[Public Testnet Self-Test](docs/limited-public-testnet-user-test.md). Public
+testnet coins have no real-world value.
 
-- [obtcwallet](https://github.com/organicbitcoin/obtcwallet)
+## Current status and boundaries
 
-Website:
+`obtcd` is the OBTC node implementation, derived from
+[btcsuite/btcd](https://github.com/btcsuite/btcd). The current public target is
+[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1),
+and the code and public testnet are open for technical review.
 
-- <https://organicbitcoin.org>
+- This is mainnet-candidate software, not a production financial system.
+- The fork height, activation height, and other candidate parameters remain
+  provisional until final release artifacts are published.
+- OBTC is not an investment project, an adoption request, or a promise of
+  miner income.
+- Do not import Bitcoin private keys, seed phrases, or wallet files into review
+  software.
+- The companion wallet implementation is
+  [organicbitcoin/obtcwallet](https://github.com/organicbitcoin/obtcwallet).
+
+Useful places to continue:
+
+- **New to the idea:** [plain-language overview](https://organicbitcoin.org/overview.html)
+- **Technical reviewer:** [external review packet](EXTERNAL_REVIEW_PACKET.md)
+  and [reviewer primer](OBTC_REVIEWER_PRIMER.md)
+- **Protocol tests:** [review test vectors](REVIEW_TEST_VECTORS.md) and
+  [fixture vectors](REVIEW_FIXTURE_VECTORS.md)
+- **Known risks:** [known limitations](KNOWN_LIMITATIONS.md) and
+  [security review checklist](SECURITY_REVIEW_CHECKLIST.md)
+- **Node or wallet operator:** [node runbook](NODE_OPERATOR_RUNBOOK.md) and
+  [wallet runbook](WALLET_OPERATOR_RUNBOOK.md)
+- **Mining reviewer:** [mining review checklist](docs/mining-review-checklist.md)
 
 ## What is implemented
 
@@ -84,16 +103,6 @@ Website:
 - `--reindex-expiry` for rebuilding persisted ExpiryIndex state.
 - `obtc-status`, a read-only node status page for operators.
 - Devnet traffic simulation and validation scripts.
-
-## Important limits
-
-- This is a mainnet-candidate codebase, not a production financial system.
-- Seed replacement, public observation, and release hardening are still active
-  launch work.
-- Miner-facing material must not be read as an income projection. REAP-related
-  miner accounting depends on activation state, candidate availability, and
-  block template validation.
-- The Go module path still inherits upstream `github.com/btcsuite/btcd`.
 
 ## Network parameters
 
@@ -227,21 +236,6 @@ Start the read-only status page against the same node:
   --notls
 ```
 
-## Local devnet
-
-The repository includes a two-node simnet/devnet helper for repeatable local
-traffic and restart testing:
-
-```bash
-./scripts/devnet-up.sh start
-./scripts/devnet-up.sh demo
-./scripts/devnet-up.sh scenario feemarket
-./scripts/devnet-up.sh scenario conflict
-./scripts/devnet-up.sh scenario multisource
-./scripts/devnet-up.sh status
-./scripts/devnet-up.sh stop
-```
-
 ## Documentation
 
 - [Mainnet Candidate External Review Packet](EXTERNAL_REVIEW_PACKET.md)
@@ -254,6 +248,14 @@ traffic and restart testing:
 - [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md)
 - [OBTC Testnet Join Guide](docs/testnet-join.md)
 - [Network Parameters](docs/network-parameters.md)
+
+Additional devnet scenarios are available after starting the local devnet:
+
+```bash
+./scripts/devnet-up.sh scenario feemarket
+./scripts/devnet-up.sh scenario conflict
+./scripts/devnet-up.sh scenario multisource
+```
 
 Public testnet coins have no real-world value. There is no public faucet at
 this stage; test coins are sent manually for node, wallet, expiry, and renewal
