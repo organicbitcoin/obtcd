@@ -44,6 +44,7 @@ jobs:
           bash -n scripts/phase6/export_reap_block_evidence.sh
           bash -n scripts/phase6/run_mainnet72h_observation.sh
           bash -n scripts/phase6/test_monitor_mainnet72h_sync.sh
+          bash -n scripts/phase6/test_run_mainnet72h_observation.sh
           grep -q 'now + EVIDENCE_UPLOAD_INTERVAL_SECONDS' \
             scripts/phase6/run_mainnet72h_observation.sh
 
@@ -72,3 +73,4 @@ jobs:
             '.height == 956542 and .label == "fork-anchor" and .node_served_block == true' \
             /tmp/boundary-receipt.json
           scripts/phase6/test_monitor_mainnet72h_sync.sh
+          scripts/phase6/test_run_mainnet72h_observation.sh
