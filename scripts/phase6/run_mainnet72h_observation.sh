@@ -19,6 +19,9 @@ OBSERVATION_SECONDS="${OBSERVATION_SECONDS:-259200}"
 SNAPSHOT_INTERVAL_SECONDS="${SNAPSHOT_INTERVAL_SECONDS:-7200}"
 EVIDENCE_UPLOAD_INTERVAL_SECONDS="${EVIDENCE_UPLOAD_INTERVAL_SECONDS:-7200}"
 REAP_SCAN_INTERVAL_SECONDS="${REAP_SCAN_INTERVAL_SECONDS:-600}"
+CONTINUE_UNTIL_REAP="${CONTINUE_UNTIL_REAP:-true}"
+POST_ACTIVATION_CONFIRMATIONS="${POST_ACTIVATION_CONFIRMATIONS:-1}"
+REQUIRED_REAP_BLOCKS="${REQUIRED_REAP_BLOCKS:-1}"
 PRESIGNED_UPLOADS_FILE="${PRESIGNED_UPLOADS_FILE:-}"
 
 STATE_FILE="${RUN_DIR}/controller-state.json"
@@ -42,6 +45,15 @@ if ! [[ "${OBSERVATION_SECONDS}" =~ ^[1-9][0-9]*$ &&
     "${EVIDENCE_UPLOAD_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ &&
     "${REAP_SCAN_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
     echo "[ERROR] observation intervals must be positive integers" >&2
+    exit 1
+fi
+if [[ "${CONTINUE_UNTIL_REAP}" != "true" && "${CONTINUE_UNTIL_REAP}" != "false" ]]; then
+    echo "[ERROR] CONTINUE_UNTIL_REAP must be true or false" >&2
+    exit 1
+fi
+if ! [[ "${POST_ACTIVATION_CONFIRMATIONS}" =~ ^[0-9]+$ &&
+    "${REQUIRED_REAP_BLOCKS}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[ERROR] REAP completion thresholds are invalid" >&2
     exit 1
 fi
 
@@ -173,6 +185,58 @@ capture_boundary() {
     event "boundary_captured" "${height}:${label}:${hash}"
 }
 
+capture_activation_candidate() {
+    local receipt="${BOUNDARY_DIR}/${ACTIVATION_HEIGHT}-candidate.receipt.json"
+    [[ -f "${receipt}" ]] && return 0
+
+    local plan height active picked
+    plan="$(rpc getreapplan)"
+    height="$(jq -r '.height // -1' <<<"${plan}")"
+    active="$(jq -r '.active // false' <<<"${plan}")"
+    picked="$(jq -r '.picked // 0' <<<"${plan}")"
+    if (( height != ACTIVATION_HEIGHT )) || [[ "${active}" != "true" ]] || (( picked < 1 )); then
+        return 0
+    fi
+
+    printf '%s\n' "${plan}" >"${BOUNDARY_DIR}/${ACTIVATION_HEIGHT}-candidate.getreapplan.json"
+    jq -n \
+        --arg captured_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+        --argjson height "${height}" \
+        --argjson picked "${picked}" \
+        '{captured_at:$captured_at,height:$height,active:true,picked:$picked,selection_observed:true}' \
+        >"${receipt}"
+    event "activation_candidate_captured" "height=${height} picked=${picked}"
+}
+
+reap_blocks_seen() {
+    local total=0 summary count
+    while IFS= read -r -d '' summary; do
+        count="$(jq -r '.reap_blocks_seen // 0' "${summary}")"
+        total=$((total + count))
+    done < <(find "${RUN_DIR}/reap-block-validation" \
+        -name reap-block-validation-summary.json -type f -print0 2>/dev/null)
+    printf '%s\n' "${total}"
+}
+
+completion_gate_met() {
+    local now tip confirmation_height seen
+    now="$(date -u +%s)"
+    (( now >= $(jq -r '.deadline_epoch' "${STATE_FILE}") )) || return 1
+    if [[ "${CONTINUE_UNTIL_REAP}" == "false" ]]; then
+        return 0
+    fi
+
+    tip="$(rpc getblockcount 2>/dev/null)" || return 1
+    confirmation_height=$((ACTIVATION_HEIGHT + POST_ACTIVATION_CONFIRMATIONS))
+    (( tip >= confirmation_height )) || return 1
+    [[ -f "${BOUNDARY_DIR}/${ACTIVATION_HEIGHT}-activation.receipt.json" ]] || return 1
+    if (( POST_ACTIVATION_CONFIRMATIONS > 0 )); then
+        [[ -f "${BOUNDARY_DIR}/$((ACTIVATION_HEIGHT + 1))-activation-plus-one.receipt.json" ]] || return 1
+    fi
+    seen="$(reap_blocks_seen)"
+    (( seen >= REQUIRED_REAP_BLOCKS ))
+}
+
 archive_new_reap_blocks() {
     local tip last_height from_height
     tip="$(rpc getblockcount)"
@@ -252,12 +316,13 @@ initialize_observation() {
         }' >"${tmp}"
     mv "${tmp}" "${STATE_FILE}"
 
-    rpc setgenerate true 1
-    event "mining_started" "one CPU worker"
+    rpc setgenerate true 2
+    event "mining_started" "two CPU workers"
 }
 
 finalize_observation() {
-    local before_height before_hash after_height after_hash tmp
+    local before_height before_hash after_height after_hash activation_hash_after
+    local candidate_captured reap_seen restart_consistent passed tmp
     rpc setgenerate false 0 || true
     archive_new_reap_blocks || true
     capture_monitor || true
@@ -281,15 +346,59 @@ finalize_observation() {
           consistent:($before_height==$after_height and $before_hash==$after_hash)
         }' >"${SYSTEM_DIR}/restart-validation.json"
 
+    restart_consistent=false
+    if [[ "${before_height}" == "${after_height}" && "${before_hash}" == "${after_hash}" ]]; then
+        restart_consistent=true
+    fi
+    activation_hash_after="$(rpc getblockhash "${ACTIVATION_HEIGHT}")"
+    candidate_captured=false
+    [[ -f "${BOUNDARY_DIR}/${ACTIVATION_HEIGHT}-candidate.receipt.json" ]] && candidate_captured=true
+    reap_seen="$(reap_blocks_seen)"
+    passed=false
+    if [[ "${restart_consistent}" == "true" && -n "${activation_hash_after}" &&
+        "${reap_seen}" -ge "${REQUIRED_REAP_BLOCKS}" &&
+        "${after_height}" -ge "$((ACTIVATION_HEIGHT + POST_ACTIVATION_CONFIRMATIONS))" ]]; then
+        passed=true
+    fi
+    jq -n \
+        --arg captured_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+        --argjson tip_height "${after_height}" \
+        --argjson activation_height "${ACTIVATION_HEIGHT}" \
+        --arg activation_hash "${activation_hash_after}" \
+        --argjson post_activation_confirmations "${POST_ACTIVATION_CONFIRMATIONS}" \
+        --argjson reap_blocks_seen "${reap_seen}" \
+        --argjson required_reap_blocks "${REQUIRED_REAP_BLOCKS}" \
+        --argjson candidate_captured "${candidate_captured}" \
+        --argjson restart_consistent "${restart_consistent}" \
+        --argjson passed "${passed}" \
+        '{
+          captured_at:$captured_at,
+          tip_height:$tip_height,
+          activation_height:$activation_height,
+          activation_hash:$activation_hash,
+          post_activation_confirmations:$post_activation_confirmations,
+          reap_blocks_seen:$reap_blocks_seen,
+          required_reap_blocks:$required_reap_blocks,
+          candidate_captured:$candidate_captured,
+          restart_consistent:$restart_consistent,
+          passed:$passed
+        }' >"${SYSTEM_DIR}/completion-verdict.json"
+
+    if [[ "${passed}" != "true" ]]; then
+        event "completion_gate_failed" "tip=${after_height} reap_blocks_seen=${reap_seen}"
+        rpc setgenerate true 2 || true
+        return 1
+    fi
+
     tmp="$(mktemp)"
     jq --arg finished_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
         '.status="complete" | .finished_at=$finished_at' "${STATE_FILE}" >"${tmp}"
     mv "${tmp}" "${STATE_FILE}"
+    event "observation_complete" "tip=${after_height}:${after_hash} reap_blocks_seen=${reap_seen}"
     (
         cd "${RUN_DIR}"
         find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum
     ) >"${RUN_DIR}/SHA256SUMS"
-    event "observation_complete" "tip=${after_height}:${after_hash}"
     upload_evidence_slot || true
 }
 
@@ -299,17 +408,26 @@ if [[ ! -f "${STATE_FILE}" ]]; then
 else
     event "controller_resumed" "existing state"
     if [[ "$(jq -r '.status' "${STATE_FILE}")" == "complete" ]]; then
-        exit 0
+        if completion_gate_met; then
+            exit 0
+        fi
+        tmp="$(mktemp)"
+        jq --arg continued_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '.status="running" | .continued_until_reap=true | .continued_at=$continued_at | del(.finished_at)' \
+            "${STATE_FILE}" >"${tmp}"
+        mv "${tmp}" "${STATE_FILE}"
+        event "observation_extended" "72h minimum elapsed; continuing until REAP completion gate"
     fi
-    rpc setgenerate true 1
+    rpc setgenerate true 2
 fi
 
-while (( $(date -u +%s) < $(jq -r '.deadline_epoch' "${STATE_FILE}") )); do
+while ! completion_gate_met; do
     if rpc getblockcount >/dev/null 2>&1; then
         capture_boundary "${FIRST_HEIGHT}" "first-obtc"
         capture_boundary "$((ACTIVATION_HEIGHT - 1))" "activation-minus-one"
         capture_boundary "${ACTIVATION_HEIGHT}" "activation"
         capture_boundary "$((ACTIVATION_HEIGHT + 1))" "activation-plus-one"
+        capture_activation_candidate
 
         now="$(date -u +%s)"
         next_snapshot="$(jq -r '.next_snapshot_epoch' "${STATE_FILE}")"
