@@ -246,8 +246,11 @@ func TestGetStatsRejectsCorruptCompositeKey(t *testing.T) {
 		t.Fatalf("seed corrupt composite key: %v", err)
 	}
 
-	if _, err := idx.GetStats(); err == nil {
-		t.Fatal("expected corrupt composite key stats read to fail")
+	if _, err := idx.GetStats(); err != nil {
+		t.Fatalf("constant-time stats read should not scan index contents: %v", err)
+	}
+	if _, err := idx.AuditStats(); err == nil {
+		t.Fatal("expected corrupt composite key audit to fail")
 	}
 }
 
