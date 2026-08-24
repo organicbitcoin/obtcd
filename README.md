@@ -275,6 +275,8 @@ For launch-tracking work, prefer the
 milestone and the labels `mainnet-blocker`, `evidence`, `comms`, and
 `post-launch`.
 
+Maintained by [Pengyu Zhao](https://github.com/zpengyu).
+
 ## Upstream attribution
 
 `obtcd` is derived from [btcsuite/btcd](https://github.com/btcsuite/btcd). The
