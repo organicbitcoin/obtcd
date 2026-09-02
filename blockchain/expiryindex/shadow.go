@@ -96,12 +96,12 @@ func BuildShadowIndexFromUTXO(db database.DB, params *chaincfg.Params,
 		if err := createExpiryIndexBuckets(dbTx); err != nil {
 			return err
 		}
-		if err := clearExpiryIndexBuckets(dbTx); err != nil {
-			return err
-		}
 		return dbPutIndexVersion(dbTx, CurrentIndexVersion)
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := clearExpiryIndexBucketsBatched(db, nil); err != nil {
 		return nil, err
 	}
 
@@ -217,10 +217,13 @@ func BuildShadowIndexFromUTXO(db database.DB, params *chaincfg.Params,
 }
 
 func resetShadowIndex(db database.DB) error {
-	return db.Update(func(dbTx database.Tx) error {
+	if err := db.Update(func(dbTx database.Tx) error {
 		if err := createExpiryIndexBuckets(dbTx); err != nil {
 			return err
 		}
-		return clearExpiryIndexBuckets(dbTx)
-	})
+		return nil
+	}); err != nil {
+		return err
+	}
+	return clearExpiryIndexBucketsBatched(db, nil)
 }

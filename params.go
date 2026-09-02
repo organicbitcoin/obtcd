@@ -77,6 +77,13 @@ var obtcMainNetParams = params{
 	rpcPort: "9528",
 }
 
+// obtcMainNet72hParams contains parameters specific to the private OBTC
+// mainnet 72h rehearsal network.
+var obtcMainNet72hParams = params{
+	Params:  &chaincfg.ObtcMainNet72hParams,
+	rpcPort: "39528",
+}
+
 // obtcTestNetParams contains parameters specific to the OBTC test network.
 var obtcTestNetParams = params{
 	Params:  &chaincfg.ObtcTestNetParams,

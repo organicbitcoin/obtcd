@@ -54,6 +54,7 @@ NETWORKS:
     obtcregtest  - OBTC regression test network (default)
     obtctestnet  - OBTC testnet
     obtcmainnet  - OBTC mainnet (read-only validation)
+    obtcmainnet72h - OBTC private 72h REAP-active rehearsal network
     regtest      - Legacy alias accepted by the validator
     testnet      - Legacy alias accepted by the validator
     mainnet      - Legacy alias accepted by the validator
@@ -80,6 +81,9 @@ EXAMPLES:
 
     # Comprehensive OBTC mainnet validation
     $0 obtcmainnet --rpcuser=user --rpcpass=pass --stress --bench --verbose
+
+    # Private 72h REAP-active rehearsal validation
+    $0 obtcmainnet72h --rpcuser=user --rpcpass=pass --stress --bench --verbose
 
     # Save results to file
     $0 obtcregtest --rpcuser=test --rpcpass=test -o validation_results.json
@@ -176,7 +180,7 @@ while [[ $# -gt 0 ]]; do
             MAX_RESULTS="${1#*=}"
             shift
             ;;
-        obtcregtest|obtctestnet|obtcmainnet|regtest|testnet|mainnet)
+        obtcregtest|obtctestnet|obtcmainnet|obtcmainnet72h|regtest|testnet|mainnet)
             NETWORK="$1"
             shift
             ;;
@@ -211,6 +215,9 @@ if [[ -z "$RPC_HOST" ]]; then
             ;;
         obtcmainnet)
             RPC_HOST="localhost:9528"
+            ;;
+        obtcmainnet72h)
+            RPC_HOST="localhost:39528"
             ;;
         regtest)
             RPC_HOST="localhost:18334"

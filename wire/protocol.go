@@ -199,6 +199,10 @@ const (
 	// ObtcMainNet represents the OBTC main network.
 	ObtcMainNet BitcoinNet = 0x4F425443
 
+	// ObtcMainNet72h represents the private OBTC mainnet 72h rehearsal
+	// network.
+	ObtcMainNet72h BitcoinNet = 0x4F483732
+
 	// ObtcTestNet represents the OBTC test network.
 	ObtcTestNet BitcoinNet = 0x4F544553
 
@@ -209,15 +213,16 @@ const (
 // bnStrings is a map of bitcoin networks back to their constant names for
 // pretty printing.
 var bnStrings = map[BitcoinNet]string{
-	MainNet:     "MainNet",
-	TestNet:     "TestNet",
-	TestNet3:    "TestNet3",
-	TestNet4:    "TestNet4",
-	SigNet:      "SigNet",
-	SimNet:      "SimNet",
-	ObtcMainNet: "ObtcMainNet",
-	ObtcTestNet: "ObtcTestNet",
-	ObtcRegNet:  "ObtcRegNet",
+	MainNet:        "MainNet",
+	TestNet:        "TestNet",
+	TestNet3:       "TestNet3",
+	TestNet4:       "TestNet4",
+	SigNet:         "SigNet",
+	SimNet:         "SimNet",
+	ObtcMainNet:    "ObtcMainNet",
+	ObtcMainNet72h: "ObtcMainNet72h",
+	ObtcTestNet:    "ObtcTestNet",
+	ObtcRegNet:     "ObtcRegNet",
 }
 
 // String returns the BitcoinNet in human-readable form.

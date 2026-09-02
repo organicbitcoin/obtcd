@@ -14,7 +14,10 @@ func TestParseConfigRequiresAnchor(t *testing.T) {
 }
 
 func TestRehearsalParamsOverrideForkDAA(t *testing.T) {
-	params := rehearsalParams(953600)
+	params, err := rehearsalParams("obtcmainnet", 953600)
+	if err != nil {
+		t.Fatalf("rehearsal params: %v", err)
+	}
 	if params.ForkDAAStartHeight != 953601 {
 		t.Fatalf("start height got %d", params.ForkDAAStartHeight)
 	}
@@ -23,6 +26,22 @@ func TestRehearsalParamsOverrideForkDAA(t *testing.T) {
 	}
 	if params.ForkDAAForkResetBits != 0x1d00ffff {
 		t.Fatalf("reset bits got %08x", params.ForkDAAForkResetBits)
+	}
+}
+
+func TestRehearsalParamsUseMainNet72hActivation(t *testing.T) {
+	params, err := rehearsalParams("obtcmainnet72h", 956542)
+	if err != nil {
+		t.Fatalf("rehearsal params: %v", err)
+	}
+	if params.ForkDAAStartHeight != 956543 {
+		t.Fatalf("start height got %d", params.ForkDAAStartHeight)
+	}
+	if params.ForkDAABootstrapEndHeight != 956566 {
+		t.Fatalf("bootstrap end got %d", params.ForkDAABootstrapEndHeight)
+	}
+	if _, err := rehearsalParams("obtcmainnet72h", 956541); err == nil {
+		t.Fatal("expected fixed anchor mismatch error")
 	}
 }
 

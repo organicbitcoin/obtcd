@@ -24,6 +24,7 @@ import (
 )
 
 type config struct {
+	Network     string
 	DBType      string
 	DBPath      string
 	DBNet       string
@@ -148,12 +149,14 @@ func main() {
 
 func parseConfig(args []string) (*config, error) {
 	cfg := &config{
+		Network:    "obtcmainnet72h",
 		DBType:     "ffldb",
 		DBNet:      "mainnet",
 		ForkHeight: -1,
 		Blocks:     32,
 	}
 	fs := flag.NewFlagSet("obtc-fork-rehearsal", flag.ContinueOnError)
+	fs.StringVar(&cfg.Network, "network", cfg.Network, "consensus network: obtcmainnet72h|obtcmainnet")
 	fs.StringVar(&cfg.DBType, "dbtype", cfg.DBType, "database backend")
 	fs.StringVar(&cfg.DBPath, "dbpath", "", "path to blocks database directory")
 	fs.StringVar(&cfg.DBNet, "dbnet", cfg.DBNet, "database network: mainnet|testnet3|testnet4|regtest|simnet")
@@ -211,7 +214,10 @@ func run(cfg *config) (*result, error) {
 		return nil, fmt.Errorf("read fork anchor header: %w", err)
 	}
 
-	params := rehearsalParams(int32(cfg.ForkHeight))
+	params, err := rehearsalParams(cfg.Network, int32(cfg.ForkHeight))
+	if err != nil {
+		return nil, err
+	}
 	chain := rehearsalChain{params: params}
 	anchorNode := &rehearsalNode{
 		height:    int32(cfg.ForkHeight),
@@ -276,7 +282,20 @@ func run(cfg *config) (*result, error) {
 	}, nil
 }
 
-func rehearsalParams(forkHeight int32) *chaincfg.Params {
+func rehearsalParams(network string, forkHeight int32) (*chaincfg.Params, error) {
+	if strings.EqualFold(strings.TrimSpace(network), "obtcmainnet72h") {
+		if forkHeight != chaincfg.ObtcMainNet72hForkHeight {
+			return nil, fmt.Errorf("obtcmainnet72h fork height got %d want %d",
+				forkHeight, chaincfg.ObtcMainNet72hForkHeight)
+		}
+		params := chaincfg.ObtcMainNet72hParams
+		params.PowLimit = new(big.Int).Set(chaincfg.ObtcMainNet72hParams.PowLimit)
+		return &params, nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(network), "obtcmainnet") {
+		return nil, fmt.Errorf("unsupported consensus network %q", network)
+	}
+
 	params := chaincfg.ObtcMainNetParams
 	params.PowLimit = new(big.Int).Set(chaincfg.ObtcMainNetParams.PowLimit)
 	params.ForkDAAStartHeight = forkHeight + 1
@@ -284,7 +303,7 @@ func rehearsalParams(forkHeight int32) *chaincfg.Params {
 	params.ForkDAAForkResetBits = params.PowLimitBits
 	params.ForkDAABootstrapHalfLife = time.Hour
 	params.ForkDAANormalHalfLife = 48 * time.Hour
-	return &params
+	return &params, nil
 }
 
 func resolveDBNet(network string) (wire.BitcoinNet, error) {

@@ -6,6 +6,7 @@ package expiryindex
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,6 +24,8 @@ const (
 	// indexName is the human-readable name for the index.
 	indexName = "expiry index"
 )
+
+var errRebuildInterrupted = errors.New("expiry index rebuild interrupted")
 
 // ChainAccessor provides read-only access to blockchain state needed by the
 // expiry index for rebuild and catch-up operations. This interface decouples
@@ -53,6 +56,8 @@ type amountAwareChainAccessor interface {
 
 // Ensure the ExpiryIndex type implements the indexers.Indexer interface.
 var _ indexers.Indexer = (*ExpiryIndex)(nil)
+var _ indexers.TipSource = (*ExpiryIndex)(nil)
+var _ indexers.InterruptibleIndexer = (*ExpiryIndex)(nil)
 
 // ExpiryIndex tracks UTXOs by expiry height.
 type ExpiryIndex struct {
@@ -74,18 +79,43 @@ type ExpiryIndex struct {
 	// chain provides access to blockchain state for rebuild operations.
 	// May be nil until SetChainAccessor is called.
 	chain ChainAccessor
+
+	// initialized prevents an accessor injected during blockchain startup
+	// from rebuilding before Init has loaded the persisted index state.
+	initialized bool
+
+	// interrupt is closed when node shutdown is requested.
+	interrupt <-chan struct{}
 }
 
-// SetChainAccessor injects the blockchain accessor after both the index and
-// the blockchain have been constructed. Because indexers are created before
-// the blockchain in btcd's initialization sequence, Init() runs with
-// chain == nil and defers any rebuild/catch-up work. This method picks up
-// that deferred work by running smartRebuild once the chain is available.
+// SetInterrupt provides the node shutdown signal used by long-running rebuild
+// and catch-up operations.
+func (idx *ExpiryIndex) SetInterrupt(interrupt <-chan struct{}) {
+	idx.interrupt = interrupt
+}
+
+func (idx *ExpiryIndex) interruptRequested() bool {
+	if idx.interrupt == nil {
+		return false
+	}
+	select {
+	case <-idx.interrupt:
+		return true
+	default:
+		return false
+	}
+}
+
+// SetChainAccessor injects the blockchain accessor. When called before Init,
+// Init performs the rebuild and propagates failures through node startup. When
+// called after Init, this method picks up the deferred rebuild and logs errors
+// for compatibility with callers that inject the accessor later.
 func (idx *ExpiryIndex) SetChainAccessor(chain ChainAccessor) {
 	idx.chain = chain
 
-	// Run deferred rebuild now that chain state is accessible.
-	if idx.disabled {
+	// When injected before Init, Init itself performs the rebuild and returns
+	// any error through the normal blockchain startup path.
+	if idx.disabled || !idx.initialized {
 		return
 	}
 	if err := idx.smartRebuild(idx.curTipHeight); err != nil {
@@ -126,6 +156,27 @@ func (idx *ExpiryIndex) Key() []byte {
 // Name returns the human-readable name of the index.
 func (idx *ExpiryIndex) Name() string {
 	return indexName
+}
+
+// IndexTip returns the authoritative tip represented by the expiry index.
+// It allows the generic index manager to synchronize its own tip after a fast
+// UTXO-set rebuild.
+func (idx *ExpiryIndex) IndexTip() (*chainhash.Hash, int32, error) {
+	var tipHash chainhash.Hash
+	var tipHeight int32
+	err := idx.db.View(func(dbTx database.Tx) error {
+		var err error
+		tipHeight, err = dbGetTipHeightIndexed(dbTx)
+		if err != nil {
+			return err
+		}
+		tipHash, err = dbGetAccumulatorTipHash(dbTx)
+		return err
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return &tipHash, tipHeight, nil
 }
 
 // Create is invoked when the indexer manager determines the index needs
@@ -189,23 +240,22 @@ func (idx *ExpiryIndex) Init() error {
 	if storedVersion != 0 && storedVersion != CurrentIndexVersion {
 		log.Infof("ExpiryIndex: resetting index for version upgrade %d -> %d",
 			storedVersion, CurrentIndexVersion)
+		err = clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
+		if err != nil {
+			return fmt.Errorf("failed to reset index for version upgrade: %v", err)
+		}
 		err = idx.db.Update(func(dbTx database.Tx) error {
-			if err := idx.clearIndexBuckets(dbTx); err != nil {
-				return err
-			}
-			if err := dbPutTipHeightIndexed(dbTx, -1); err != nil {
-				return err
-			}
 			return dbPutIndexVersion(dbTx, CurrentIndexVersion)
 		})
 		if err != nil {
-			return fmt.Errorf("failed to reset index for version upgrade: %v", err)
+			return fmt.Errorf("failed to store upgraded index version: %v", err)
 		}
 		indexTipHeight = -1
 	}
 
 	// Set the current tip height
 	idx.curTipHeight = indexTipHeight
+	idx.initialized = true
 
 	// If the chain accessor is available, run smart rebuild now.
 	// Otherwise defer it to SetChainAccessor (the normal startup path,
@@ -1000,6 +1050,9 @@ func (idx *ExpiryIndex) tryFastRebuildOrFallback(chainTipHeight int32) error {
 		log.Infof("ExpiryIndex: Fast rebuild completed successfully")
 		return nil
 	}
+	if errors.Is(err, errRebuildInterrupted) {
+		return err
+	}
 
 	// Log the fast rebuild failure and fall back
 	log.Warnf("ExpiryIndex: Fast rebuild failed (%v), falling back to incremental", err)
@@ -1012,6 +1065,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	if err := idx.requireChain(); err != nil {
 		return err
 	}
+	if idx.interruptRequested() {
+		return errRebuildInterrupted
+	}
 
 	startTime := time.Now()
 	processed := 0
@@ -1020,9 +1076,13 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 	resetToEmpty := func(logPrefix string, cause error) {
 		log.Warnf("%s: %v", logPrefix, cause)
-		if clearErr := idx.db.Update(func(dbTx database.Tx) error {
-			return idx.clearIndexBuckets(dbTx)
-		}); clearErr != nil {
+		var clearErr error
+		if errors.Is(cause, errRebuildInterrupted) {
+			clearErr = idx.db.Update(resetExpiryIndexMetadata)
+		} else {
+			clearErr = clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
+		}
+		if clearErr != nil {
 			log.Errorf("ExpiryIndex: failed to reset index after fast rebuild failure: %v", clearErr)
 		}
 		idx.curTipHeight = -1
@@ -1032,11 +1092,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	// If repopulation fails partway through, we re-clear the index so that
 	// the next startup triggers a clean full rebuild rather than leaving a
 	// partially-populated index that looks valid.
-	err := idx.db.Update(func(dbTx database.Tx) error {
-		return idx.clearIndexBuckets(dbTx)
-	})
+	err := clearExpiryIndexBucketsBatched(idx.db, idx.interrupt)
 	if err != nil {
-		return fmt.Errorf("failed to clear index buckets: %v", err)
+		return fmt.Errorf("failed to clear index buckets: %w", err)
 	}
 	idx.curTipHeight = -1
 
@@ -1052,6 +1110,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	flushBatch := func() error {
 		if len(batch) == 0 {
 			return nil
+		}
+		if idx.interruptRequested() {
+			return errRebuildInterrupted
 		}
 
 		if err := idx.db.Update(func(dbTx database.Tx) error {
@@ -1072,6 +1133,9 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 	}
 
 	processUTXO := func(outpoint wire.OutPoint, createHeight int32, amount int64) error {
+		if idx.interruptRequested() {
+			return errRebuildInterrupted
+		}
 		// Only index UTXOs represented by validation's spendable UTXO set.
 		if !idx.shouldIndexCreateHeight(createHeight) {
 			return nil
@@ -1165,11 +1229,17 @@ func (idx *ExpiryIndex) incrementalCatchUp(fromHeight, toHeight int32) error {
 	if fromHeight >= toHeight {
 		return nil
 	}
+	if idx.interruptRequested() {
+		return errRebuildInterrupted
+	}
 
 	log.Infof("ExpiryIndex: Incremental catch-up from %d to %d", fromHeight, toHeight)
 	startTime := time.Now()
 
 	for height := fromHeight + 1; height <= toHeight; height++ {
+		if idx.interruptRequested() {
+			return errRebuildInterrupted
+		}
 		// Get block at height
 		block, err := idx.getBlockByHeight(height)
 		if err != nil {

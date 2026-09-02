@@ -71,7 +71,7 @@ func parseConfig(args []string) (*config, error) {
 		StartHeight: 0,
 	}
 	fs := flag.NewFlagSet("obtc-utxo-export", flag.ContinueOnError)
-	fs.StringVar(&cfg.Network, "network", cfg.Network, "network: obtcmainnet|obtctestnet|obtcregtest")
+	fs.StringVar(&cfg.Network, "network", cfg.Network, "network: obtcmainnet|obtcmainnet72h|obtctestnet|obtcregtest")
 	fs.StringVar(&cfg.Source, "source", cfg.Source, "export source: rpc|btcd-db")
 	fs.StringVar(&cfg.RPCServer, "rpcserver", "", "RPC server host:port")
 	fs.StringVar(&cfg.RPCUser, "rpcuser", "", "RPC username")
@@ -520,6 +520,8 @@ func defaultRPCServer(network string) string {
 	switch strings.ToLower(network) {
 	case "obtcmainnet", "obtc-mainnet":
 		return "127.0.0.1:9528"
+	case "obtcmainnet72h", "obtc-mainnet-72h":
+		return "127.0.0.1:39528"
 	case "obtctestnet", "obtc-testnet":
 		return "127.0.0.1:19528"
 	case "obtcregtest", "obtc-regtest":
@@ -533,6 +535,8 @@ func resolveParams(network string) (*chaincfg.Params, error) {
 	switch strings.ToLower(strings.TrimSpace(network)) {
 	case "obtcmainnet", "obtc-mainnet":
 		return &chaincfg.ObtcMainNetParams, nil
+	case "obtcmainnet72h", "obtc-mainnet-72h":
+		return &chaincfg.ObtcMainNet72hParams, nil
 	case "obtctestnet", "obtc-testnet":
 		return &chaincfg.ObtcTestNetParams, nil
 	case "obtcregtest", "obtc-regtest":

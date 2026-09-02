@@ -2942,13 +2942,20 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	}
 	var err error
 	s.chain, err = blockchain.New(&blockchain.Config{
-		DB:               s.db,
-		Interrupt:        interrupt,
-		ChainParams:      s.chainParams,
-		Checkpoints:      checkpoints,
-		TimeSource:       s.timeSource,
-		SigCache:         s.sigCache,
-		IndexManager:     indexManager,
+		DB:           s.db,
+		Interrupt:    interrupt,
+		ChainParams:  s.chainParams,
+		Checkpoints:  checkpoints,
+		TimeSource:   s.timeSource,
+		SigCache:     s.sigCache,
+		IndexManager: indexManager,
+		IndexManagerSetup: func(chain *blockchain.BlockChain) error {
+			if s.expiryIndex != nil {
+				accessor := blockchain.NewExpiryChainAccessor(chain)
+				s.expiryIndex.SetChainAccessor(accessor)
+			}
+			return nil
+		},
 		ReapPrefixSource: reapPrefixSource,
 		HashCache:        s.hashCache,
 		Prune:            cfg.Prune * 1024 * 1024,
@@ -2956,13 +2963,6 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	// Now that the blockchain is ready, inject it into the expiry index so
-	// that rebuild and catch-up operations can access chain state.
-	if s.expiryIndex != nil {
-		accessor := blockchain.NewExpiryChainAccessor(s.chain)
-		s.expiryIndex.SetChainAccessor(accessor)
 	}
 
 	// Search for a FeeEstimator state in the database. If none can be found
