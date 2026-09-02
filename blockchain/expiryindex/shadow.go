@@ -106,6 +106,7 @@ func BuildShadowIndexFromUTXO(db database.DB, params *chaincfg.Params,
 	}
 
 	mh := NewMuHash()
+	expiryKeys := make(map[uint64]struct{})
 	type batchEntry struct {
 		outpoint  wire.OutPoint
 		expiryKey uint64
@@ -119,7 +120,7 @@ func BuildShadowIndexFromUTXO(db database.DB, params *chaincfg.Params,
 		err := db.Update(func(dbTx database.Tx) error {
 			for i := range batch {
 				entry := batch[i]
-				if err := putTxOutMapping(dbTx, &entry.outpoint, entry.expiryKey,
+				if err := putTxOutMappingWithoutStats(dbTx, &entry.outpoint, entry.expiryKey,
 					entry.amount); err != nil {
 					return err
 				}
@@ -151,6 +152,7 @@ func BuildShadowIndexFromUTXO(db database.DB, params *chaincfg.Params,
 		}
 
 		expiryKey := expiryParams.CalculateExpiryKey(utxo.CreateHeight)
+		expiryKeys[expiryKey] = struct{}{}
 		mh.Add(computeEntryData(&utxo.OutPoint, expiryKey))
 		batch = append(batch, batchEntry{
 			outpoint:  utxo.OutPoint,
@@ -187,6 +189,12 @@ func BuildShadowIndexFromUTXO(db database.DB, params *chaincfg.Params,
 	}
 
 	err = db.Update(func(dbTx database.Tx) error {
+		if err := dbPutIndexStats(dbTx, persistedIndexStats{
+			totalUTXOs:      uint64(stats.IndexedUTXOs),
+			totalExpiryKeys: uint64(len(expiryKeys)),
+		}); err != nil {
+			return err
+		}
 		if err := dbPutAccumulatorState(dbTx, mh); err != nil {
 			return err
 		}
