@@ -8,11 +8,14 @@
 explicit lifecycle.** It keeps Bitcoin's UTXO model but adds a new rule: very
 old outputs must be spent or renewed. It does not change Bitcoin.
 
-[Understand OBTC in one page](https://organicbitcoin.org/overview.html) ·
+[Read the overview](https://organicbitcoin.org/overview.html) ·
+[Build locally](#build) ·
+[Test](#test) ·
+[Report an issue](https://github.com/organicbitcoin/obtcd/issues/new/choose) ·
+[Contribute](CONTRIBUTING.md) ·
+[Review the design](EXTERNAL_REVIEW_PACKET.md) ·
 [Website](https://organicbitcoin.org) ·
-[Whitepaper](https://organicbitcoin.org/whitepaper.html) ·
-[Run it locally](#run-it-locally) ·
-[Review the design](EXTERNAL_REVIEW_PACKET.md)
+[Whitepaper](https://organicbitcoin.org/whitepaper.html)
 
 ## OBTC in one minute
 
