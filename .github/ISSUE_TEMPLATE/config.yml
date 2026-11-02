@@ -7,5 +7,5 @@ contact_links:
     url: https://github.com/organicbitcoin/obtcwallet/issues/new/choose
     about: Use this for confirmed wallet-only issues after trying the testnet guide.
   - name: Security-sensitive issue
-    url: https://github.com/organicbitcoin/obtcd/issues/new?template=bug_report.md
-    about: Do not post secrets publicly. Open a minimal bug first and avoid seed phrases, private keys, passphrases, RPC passwords, or sensitive logs.
+    url: https://github.com/organicbitcoin/obtcd/security/advisories/new
+    about: Report vulnerabilities privately. Never post exploit details, seed phrases, private keys, passphrases, RPC passwords, or sensitive logs in a public issue.
