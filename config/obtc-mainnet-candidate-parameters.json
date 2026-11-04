@@ -1770,5 +1770,90 @@
         }
       ]
     }
-  ]
+  ],
+  "doc_drift": {
+    "notes": [
+      "These checks record the public-doc state as observed on the date recorded here; they do not decide which side is right.",
+      "Hosts and milestones are committed observations, so the checker runs offline and stays deterministic."
+    ],
+    "active_guidance": {
+      "paths": [
+        "README.md",
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "docs/heritage/**"
+      ]
+    },
+    "historical_guidance": [
+      "BASELINE_AUDIT.md",
+      "CHANGELOG.md",
+      "DOCUMENTATION_RISKS.md",
+      "FINAL_ISSUE_GATE_REVIEW.md",
+      "MAINNET_CANDIDATE_*.md",
+      "OBTC_PARAMETER_CONSISTENCY_REPORT.md",
+      "PARAMETER_CONSISTENCY.md",
+      "PARAMETER_REFERENCES.md",
+      "REORG_REBUILD_TEST_REPORT.md",
+      "TEST_COVERAGE_GAPS.md",
+      "docs/heritage/**",
+      "docs/OBTC_PARAMETER_CONSISTENCY_REPORT.md"
+    ],
+    "closed_milestones": [
+      {
+        "number": 1,
+        "title": "mainnet-candidate-2026-07",
+        "state": "closed",
+        "closed_at": "2026-11-02T10:37:24Z"
+      }
+    ],
+    "peer_guidance_markers": [
+      "--addpeer=",
+      "fallback seed node",
+      "explicit fallback"
+    ],
+    "hosts": [
+      {
+        "host": "seed.mainnet.organicbitcoin.org",
+        "role": "aggregate DNS seed used by obtcd",
+        "resolves": false,
+        "observed_at": "2026-11-04"
+      },
+      {
+        "host": "seed1.mainnet.organicbitcoin.org",
+        "role": "individual fallback seed node",
+        "resolves": false,
+        "observed_at": "2026-11-04"
+      },
+      {
+        "host": "seed2.mainnet.organicbitcoin.org",
+        "role": "individual fallback seed node",
+        "resolves": false,
+        "observed_at": "2026-11-04"
+      },
+      {
+        "host": "seed3.mainnet.organicbitcoin.org",
+        "role": "individual fallback seed node",
+        "resolves": false,
+        "observed_at": "2026-11-04"
+      }
+    ],
+    "contributor_surfaces": {
+      "paths": [
+        "README.md",
+        "SECURITY.md",
+        "docs/reviewer-quickstart.md",
+        "docs/development/**/*.md"
+      ],
+      "exclude": [],
+      "allowed_owners": [
+        "organicbitcoin"
+      ],
+      "allowed_links": [
+        "https://github.com/btcsuite/btcd",
+        "https://github.com/bitcoin/bips",
+        "https://github.com/stratum-mining/sv2-spec"
+      ]
+    }
+  }
 }
