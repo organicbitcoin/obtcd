@@ -97,6 +97,11 @@ check-obtc-parameters:
 	@$(call print, "Checking OBTC parameter consistency.")
 	python3 scripts/check_obtc_parameters.py
 
+#? check-obtc-parameters-tests: Run the parameter and public-doc drift checker tests
+check-obtc-parameters-tests:
+	@$(call print, "Running OBTC parameter checker tests.")
+	python3 -m unittest discover -s scripts -p '*parameter*test*.py'
+
 #? unit: Run unit tests
 unit:
 	@$(call print, "Running unit tests.")
@@ -155,6 +160,7 @@ tidy-module:
 	build \
 	check \
 	check-obtc-parameters \
+	check-obtc-parameters-tests \
 	unit \
 	unit-cover \
 	unit-race \
