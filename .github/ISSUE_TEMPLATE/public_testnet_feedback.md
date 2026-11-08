@@ -2,9 +2,13 @@
 name: Public testnet feedback
 about: Send a short note after trying the OBTC public testnet.
 title: "[public-testnet feedback]: "
-labels: ["public-testnet", "feedback"]
+labels: ["question"]
 assignees: ""
 ---
+
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
 
 ## Short Feedback
 

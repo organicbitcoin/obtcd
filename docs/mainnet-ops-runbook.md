@@ -1,6 +1,6 @@
 # OBTC Mainnet Operations Runbook
 
-> Status: draft for `mainnet-candidate-2026-07`
+> Status: technical-review draft; no public mainnet launch date is announced
 
 This runbook covers the operator setup for OBTC mainnet-candidate seed and
 observer nodes. It complements [OBTC Mainnet Join Runbook](mainnet-join.md) and
@@ -54,7 +54,7 @@ Or build a candidate artifact set with checksums and a manifest:
 
 ```bash
 scripts/phase6/build_release_artifacts.sh \
-  --version mainnet-candidate-2026-07 \
+  --version technical-review-dev \
   --goos linux \
   --goarch amd64
 ```

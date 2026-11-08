@@ -2,9 +2,13 @@
 name: REAP issue
 about: Report a reproducible issue with REAP validity, marker, ordering, caps, tax, refund, or mempool isolation.
 title: "[reap]: "
-labels: ["bug", "REAP", "needs triage"]
+labels: ["bug", "consensus"]
 assignees: ""
 ---
+
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
 
 ## Summary
 

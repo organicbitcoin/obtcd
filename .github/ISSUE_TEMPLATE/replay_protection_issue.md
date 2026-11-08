@@ -2,9 +2,13 @@
 name: Replay protection issue
 about: Report OBTC replay-protection activation, sighash, script, or mempool behavior.
 title: "[replay-protection]: "
-labels: ["bug", "replay protection", "needs triage"]
+labels: ["bug", "consensus"]
 assignees: ""
 ---
+
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
 
 ## Summary
 
