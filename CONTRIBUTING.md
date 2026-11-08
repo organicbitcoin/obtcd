@@ -1,90 +1,83 @@
 # Contributing to OBTC
 
-OBTC welcomes focused contributions to documentation, tests, reproducibility,
-operator experience, and implementation code. A useful first contribution does
-not require understanding the entire protocol.
+OBTC is an independent Bitcoin-derived UTXO lifecycle and proof-of-work
+experiment. It is not a Bitcoin consensus change proposal or production
+financial infrastructure. Documentation, tests, reproducible bug reports,
+tooling, and wallet UX contributions are welcome.
 
-## Read
+## Build and test
 
-Start with the [README](README.md), then choose the shortest relevant guide:
-
-- [Reviewer Quick Start](docs/reviewer-quickstart.md) for protocol review;
-- [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md) for node
-  and wallet testing;
-- [Mining Review Checklist](docs/mining-review-checklist.md) for REAP and block
-  template work.
-
-Use Go 1.24.6 or newer. The node currently requires Go 1.24.0, while the
-companion wallet requires Go 1.24.6. Git is also required.
-
-## Build
+Install Git and Go **1.24.0 or newer** for this node repository. Existing CI
+tests Go 1.24.0; the [verification record](docs/contributor-readiness-verification.md)
+identifies the exact environments actually tested. The Go module path remains
+`github.com/btcsuite/btcd` for upstream compatibility; do not rename it. The
+node and RPC client binaries are still named `btcd` and `btcctl`.
 
 ```bash
 git clone https://github.com/organicbitcoin/obtcd.git
-git clone https://github.com/organicbitcoin/obtcwallet.git
-
-(cd obtcd && go build -o ./btcd . && go build -o ./btcctl ./cmd/btcctl)
-(cd obtcwallet && go build -o ./btcwallet . && \
-  go build -o ./renewall ./cmd/renewall)
-```
-
-Do not import Bitcoin seeds, private keys, or wallet files into OBTC software.
-Public testnet coins have no real-world value. Keep RPC listeners on
-`127.0.0.1`, and never include credentials or unredacted private logs in an
-issue, pull request, or AI conversation.
-
-## Test
-
-Run the tests relevant to your change. For a general node change, start with:
-
-```bash
 cd obtcd
-go test ./...
+go build -o ./btcd .
+go build -o ./btcctl ./cmd/btcctl
 go test ./chaincfg ./wire -run OBTC -count=1
-go test ./mempool -run 'REAP|RejectREAPSystemTxFromMempool' -count=1
-go test ./mining -run 'REAP|Accounting|Witness' -count=1
-```
-
-For wallet changes:
-
-```bash
-cd obtcwallet
 go test ./...
 ```
 
-Record the operating system, `go version`, commit hash, exact commands, and
-results. If a command fails, report the failure accurately instead of claiming
-the path is verified. See the latest
-[clean-clone verification record](docs/contributor-readiness-verification.md)
-for an example.
+The [one-page quickstart](docs/contributing/QUICKSTART.md) adds an isolated
+state test and explains expected results. No wallet, test coins, public peers,
+or RPC service are needed for this path. Dependency downloads need internet
+access. Make and Python 3 are needed for `make check-obtc-parameters`.
 
-## Report
+Choose an existing guide for deeper work:
 
-Search [existing issues](https://github.com/organicbitcoin/obtcd/issues) before
-opening a report. Include the commit hash, network, reproduction steps,
-expected result, actual result, and redacted logs. Wallet-only reports belong in
-the [wallet issue tracker](https://github.com/organicbitcoin/obtcwallet/issues).
+- [Reviewer Quick Start](docs/reviewer-quickstart.md): protocol review and focused tests.
+- [Public Testnet Self-Test](docs/limited-public-testnet-user-test.md): optional
+  node/wallet integration, requiring Go 1.24.6 or newer and manually issued test coins.
+- [Mining Review Checklist](docs/mining-review-checklist.md): REAP and templates.
+- [Wallet repository](https://github.com/organicbitcoin/obtcwallet): wallet-only
+  changes and its own setup, tests, and contribution rules.
 
-Do not publish exploit details or secrets. Use
-[private vulnerability reporting](https://github.com/organicbitcoin/obtcd/security/advisories/new)
-for sensitive security reports.
+## Your first contribution
 
-## Contribute
+1. Search [existing issues](https://github.com/organicbitcoin/obtcd/issues),
+   especially [good first issue](https://github.com/organicbitcoin/obtcd/labels/good%20first%20issue)
+   and [help wanted](https://github.com/organicbitcoin/obtcd/labels/help%20wanted).
+   Discuss the task's scope on the issue before starting substantial work.
+2. Fork the repository, clone your fork, and create a branch such as
+   `git switch -c docs/clarify-build`. Keep the change focused.
+3. Run relevant checks. Record the commit, OS, `go version`, exact commands,
+   and results, including failures or tests you did not run. Format Go with `gofmt`.
+4. Push to your fork and [open a pull request against `master`](https://github.com/organicbitcoin/obtcd/compare).
+   Fill in the [PR template](.github/pull_request_template.md) and link the issue.
+   Small, useful documentation and test fixes are welcome.
 
-Open a small pull request with a clear purpose and reproducible test evidence.
-Documentation fixes, test additions, and well-scoped reproduction reports are
-welcome when they materially improve accuracy or usability.
-
-Consensus, signature, REAP, Replay Protection, expiry, reorganization, mining,
-and wallet key-management changes receive stricter review. Those pull requests
-must include positive, negative, and boundary tests, describe activation-height
-effects, and explain any compatibility or fund-safety implications. Do not
-change consensus parameters as part of unrelated contributor-experience work.
-
-Format Go code with `gofmt`. Keep logs structured and free of secrets. Write
-commit subjects in the imperative mood, prefix them with the affected package
-when useful, and keep each commit reviewable. The detailed upstream-derived
+Consensus, cryptography, serialization, REAP, expiry, reorganizations, mining,
+and key-management paths require stricter review, positive/negative/boundary
+tests, and an explanation of compatibility and activation effects. Do not mix
+parameter changes into unrelated work. The upstream-derived
 [development guidelines](docs/development/code-contribution-guidelines.md)
-remain applicable to substantial code changes.
+provide further code-review conventions; upstream attribution and the
+[ISC License](LICENSE) remain in place.
 
-By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+## AI-assisted contributions
+
+Codex, Claude Code, Copilot, and similar tools are allowed. You remain
+responsible for correctness: understand and explain the change, inspect every
+generated edit, and report only tests you actually ran. Mention material AI
+assistance in the PR. Never send private keys, seeds, passwords, production
+logs, or other private data to an AI conversation or attach them to a report.
+
+## Safety and review
+
+Use regtest or testnet assets only. Never import a real Bitcoin seed, private
+key, or wallet into experimental OBTC software. RPC defaults to loopback;
+keep examples and local testing explicitly bound to `127.0.0.1`. Do not expose
+unencrypted RPC publicly.
+
+Use [SECURITY.md](SECURITY.md) for sensitive findings, rather than publishing
+exploit details. Non-sensitive bug reports should include the commit, network,
+OS/Go version, reproduction, expected/actual results, and redacted logs. Remove
+private endpoints, usernames, and personal filesystem paths as well as secrets.
+
+Maintainers work on this project in their spare time and cannot guarantee
+response times or round-the-clock support. Review may request a narrower scope
+or decline a proposal. Follow the [Code of Conduct](CODE_OF_CONDUCT.md).

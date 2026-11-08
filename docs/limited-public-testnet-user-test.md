@@ -399,14 +399,15 @@ curl --user wallet:walletpass \
 ## Optional: Dry-Run Renewall
 
 If you want to test the batch renewal selector without signing or broadcasting
-transactions:
+transactions, keep the wallet's loopback agent gRPC service on `19556` running
+and synced. This is a different endpoint from legacy JSON-RPC on `19554`.
+The current `--dry-run` path does not need `--walletpass` or an unlock:
 
 ```bash
 cd ~/obtc-testnet
 
 ./obtcwallet/renewall \
   --connect=127.0.0.1:19556 \
-  --walletpass='<your-wallet-private-passphrase>' \
   --amount=0.1 \
   --notls \
   --dry-run

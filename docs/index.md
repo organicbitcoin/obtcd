@@ -11,6 +11,8 @@ mining, or development practices that are still shared with btcd.
 
 ## Start Here
 
+* [Contributor Quickstart](contributing/QUICKSTART.md)
+* [Contribution Guidelines](../CONTRIBUTING.md)
 * [Mainnet Candidate External Review Packet](../EXTERNAL_REVIEW_PACKET.md)
 * [Mainnet Candidate Release Notes](../MAINNET_CANDIDATE_RELEASE_NOTES.md)
 * [Mainnet Candidate Test Report](../MAINNET_CANDIDATE_TEST_REPORT.md)

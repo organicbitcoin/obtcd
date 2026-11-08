@@ -2,9 +2,13 @@
 name: Reproducibility failure
 about: Report a failed build, test, demo, release artifact, checksum, or documented command.
 title: "[reproducibility]: "
-labels: ["bug", "reproducibility", "needs triage"]
+labels: ["bug", "reproducibility"]
 assignees: ""
 ---
+
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
 
 ## Summary
 

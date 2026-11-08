@@ -27,11 +27,11 @@ Source files:
 | Segwit Bech32 HRP | `obtc` |
 | DNS seed | `seed.mainnet.organicbitcoin.org` |
 
-The seed record is intended to be backed by Route 53 A/AAAA records for public
-P2P seed nodes. See [OBTC Mainnet DNS Seed Design](mainnet-dns-seed.md). The
-record is not required for the source-only MC1 external technical review
-release, but it must resolve to live TCP `9527` nodes before any seed-backed
-public operating network or production launch claim.
+The seed name is reserved in code; its presence is not evidence of a live
+bootstrap service. See [OBTC Mainnet DNS Seed Design](mainnet-dns-seed.md) and
+the [open provisioning task](https://github.com/organicbitcoin/obtcd/issues/2).
+It must resolve to reviewed, live TCP `9527` nodes before any seed-backed public
+operating network or production launch claim.
 
 ## Address And Key Namespaces
 
@@ -99,6 +99,13 @@ Version-bits deployments:
 | REAP max weight (`ReapMaxWeight`) | `400,000` |
 | REAP tax | `30 / 100` |
 | REAP dust threshold | `720` satoshis |
+
+`400,000 WU` is the current candidate consensus ceiling in
+`chaincfg/params_obtc.go`. `mining/reap/params.go` derives the planner budget
+from that value; there is no separate `200,000 WU` soft mainnet default in this
+revision. Some historical experiments also use `400,000 WU`. That numerical
+overlap does not turn historical benchmark results into evidence about the
+current network or release readiness.
 
 The OBTC mainnet fork height is a provisional mainnet-candidate planning value.
 It may change before final release artifacts are cut.

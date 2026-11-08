@@ -20,7 +20,7 @@ Describe the problem and its impact.
 ## Environment
 
 - `obtcd` commit hash:
-- network (`obtcmainnet`, `obtctestnet`, `obtcregtest`, or isolated devnet):
+- network (`obtcmainnet` mainnet-candidate, `obtctestnet`, `obtcregtest`, isolated devnet, or none for local tests):
 - operating system and architecture:
 - `go version`:
 - enabled indexes and relevant flags, with credentials removed:

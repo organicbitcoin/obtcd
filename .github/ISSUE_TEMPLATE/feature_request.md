@@ -10,6 +10,10 @@ assignees: ''
 
 What concrete problem would this solve, and for whom?
 
+Keep the request small and specific. Proposals need review and may be declined;
+opening a request does not commit maintainers to implementing it. Report
+sensitive findings through SECURITY.md, without public exploit details or secrets.
+
 ## Proposed outcome
 
 Describe the observable result rather than prescribing an implementation when

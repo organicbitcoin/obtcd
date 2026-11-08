@@ -2,17 +2,17 @@
 
 [![Build Status](https://github.com/organicbitcoin/obtcd/workflows/Build%20and%20Test/badge.svg)](https://github.com/organicbitcoin/obtcd/actions)
 [![ISC License](https://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/organicbitcoin/obtcd)
+[![Documentation](https://img.shields.io/badge/docs-reference-blue.svg)](docs/index.md)
 
 **OBTC is a separate Bitcoin-derived experiment in which UTXOs have an
 explicit lifecycle.** It keeps Bitcoin's UTXO model but adds a new rule: very
 old outputs must be spent or renewed. It does not change Bitcoin.
 
-[Read the overview](https://organicbitcoin.org/overview.html) ·
-[Build locally](#build) ·
+[Learn](docs/reviewer-quickstart.md) ·
+[Build](docs/contributing/QUICKSTART.md) ·
 [Test](#test) ·
-[Report an issue](https://github.com/organicbitcoin/obtcd/issues/new/choose) ·
 [Contribute](CONTRIBUTING.md) ·
+[Report an issue](https://github.com/organicbitcoin/obtcd/issues/new/choose) ·
 [Review the design](EXTERNAL_REVIEW_PACKET.md) ·
 [Website](https://organicbitcoin.org) ·
 [Whitepaper](https://organicbitcoin.org/whitepaper.html)
@@ -46,18 +46,16 @@ That tradeoff is the question OBTC exists to test, not a settled claim.
 
 ## Run it locally
 
-The fastest path is the repository's isolated two-node devnet. It does not use
-valuable funds or require access to Bitcoin wallet keys.
+Start with the [one-page contributor quickstart](docs/contributing/QUICKSTART.md).
+These local checks need Go 1.24.0 or newer and Git, but no wallet, coins,
+public peers, or RPC server:
 
 ```bash
 git clone https://github.com/organicbitcoin/obtcd.git
 cd obtcd
-go test ./...
-
-./scripts/devnet-up.sh start
-./scripts/devnet-up.sh demo
-./scripts/devnet-up.sh status
-./scripts/devnet-up.sh stop
+go build -o ./btcd .
+go test ./chaincfg ./wire -run OBTC -count=1
+go test ./blockchain/expiryindex -run '^TestConnectDisconnectTxOutRoundTrip$' -count=1
 ```
 
 For external network testing, follow the
@@ -67,11 +65,14 @@ testnet coins have no real-world value.
 ## Current status and boundaries
 
 `obtcd` is the OBTC node implementation, derived from
-[btcsuite/btcd](https://github.com/btcsuite/btcd). The current public target is
-[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1),
-and the code and public testnet are open for technical review.
+[btcsuite/btcd](https://github.com/btcsuite/btcd). The code and public testnet
+are open for technical review. The closed
+[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1)
+milestone and published prereleases are historical review artifacts, not a
+current launch schedule. No public mainnet launch date is announced here.
 
-- This is mainnet-candidate software, not a production financial system.
+- This is experimental testnet / mainnet-candidate review software, not a
+  production financial system or a Bitcoin consensus change proposal.
 - The fork height, activation height, and other candidate parameters remain
   provisional until final release artifacts are published.
 - OBTC is not an investment project, an adoption request, or a promise of
@@ -139,6 +140,11 @@ The mainnet-candidate join draft is maintained in
 
 - Go 1.24.0 or newer
 - Git
+
+The Go module path remains `github.com/btcsuite/btcd`; binary names retain
+`btcd` and `btcctl`. The optional wallet has its own Go requirement. See the
+[verification record](docs/contributor-readiness-verification.md) for tested
+versions, commands, and limitations.
 
 ## Build
 
@@ -252,12 +258,15 @@ Start the read-only status page against the same node:
 - [OBTC Testnet Join Guide](docs/testnet-join.md)
 - [Network Parameters](docs/network-parameters.md)
 
-Additional devnet scenarios are available after starting the local devnet:
+For an optional isolated two-node devnet demo and additional scenarios:
 
 ```bash
+./scripts/devnet-up.sh start
+./scripts/devnet-up.sh demo
 ./scripts/devnet-up.sh scenario feemarket
 ./scripts/devnet-up.sh scenario conflict
 ./scripts/devnet-up.sh scenario multisource
+./scripts/devnet-up.sh stop
 ```
 
 Public testnet coins have no real-world value. There is no public faucet at
@@ -266,19 +275,17 @@ testing.
 
 ## Issues
 
-Use this repository's issue tracker for invited-reviewer test feedback, manual
+Use this repository's issue tracker for contributor reports, invited-reviewer test feedback, manual
 test coin issuance coordination, node bugs, release evidence,
 mainnet-candidate blockers, mining-template review, and operator feedback.
 There is no public faucet or open public test coin request queue:
 
 <https://github.com/organicbitcoin/obtcd/issues>
 
-For launch-tracking work, prefer the
-[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1)
-milestone and the labels `mainnet-blocker`, `evidence`, `comms`, and
-`post-launch`.
-
-Maintained by [Pengyu Zhao](https://github.com/zpengyu).
+For first contributions, browse `good first issue` and `help wanted` and follow
+[CONTRIBUTING.md](CONTRIBUTING.md). The dated `mainnet-candidate-2026-07`
+milestone is closed; current work is tracked in the issue list. Sensitive
+findings belong in the private channel described in [SECURITY.md](SECURITY.md).
 
 ## Upstream attribution
 

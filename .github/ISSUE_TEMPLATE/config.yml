@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: OBTC public testnet guide
-    url: https://github.com/organicbitcoin/obtcd/blob/master/docs/public-testnet-user-test.md
-    about: Start here to build a node, create a wallet, request testnet coins, and try expiry renewal.
+    url: https://github.com/organicbitcoin/obtcd/blob/master/docs/limited-public-testnet-user-test.md
+    about: Optional node and wallet self-test. Coins require an existing invitation; there is no public faucet or open request queue.
   - name: OBTC wallet repository
     url: https://github.com/organicbitcoin/obtcwallet/issues/new/choose
     about: Use this for confirmed wallet-only issues after trying the testnet guide.

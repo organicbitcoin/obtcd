@@ -1,24 +1,38 @@
-## Purpose
+## Summary
 
 Describe the problem, the change, and the linked issue.
 
+Related issue: <!-- Link an existing issue, or explain why none is needed. -->
+
 ## Scope and risk
 
+- Risk classification: `docs/tests/tooling` / `RPC-wallet` / `consensus-mining-security`
+  (test-only changes in consensus-sensitive paths still need expert review)
 - Network: `none` / `obtcmainnet` / `obtctestnet` / `obtcregtest` / devnet
 - [ ] Consensus or activation heights
+- [ ] Serialization or network compatibility
 - [ ] REAP or expiry
 - [ ] Replay Protection or signatures
 - [ ] Mining or coinbase commitments
+- [ ] Miner rewards or economic parameters
 - [ ] Wallet key management or funds
 - [ ] No item above is affected
 
 For every checked risk area, explain the positive, negative, and boundary cases
 and any activation-height or compatibility effect.
 
-## Verification
+## How to test
 
-List the exact commands and results reviewers can reproduce. Include the OS,
-Go version, and commit when the result depends on the environment.
+List the exact commands you actually ran and their results. Separate proposed
+checks from completed checks and explain failures or omissions. Include the OS,
+Go version, and commit. Describe positive, negative, and boundary coverage, or
+explain why it is not applicable for a documentation-only change.
+
+## AI assistance
+
+State whether and how AI tools helped. Authors are responsible for reviewing
+generated changes, explaining them, and verifying correctness; never include
+private keys, passwords, or production logs in AI conversations or PR evidence.
 
 ## Checklist
 
