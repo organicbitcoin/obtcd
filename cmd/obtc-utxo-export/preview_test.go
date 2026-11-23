@@ -188,7 +188,11 @@ func TestSelectPreviewInputsAppliesDustTaxAndCaps(t *testing.T) {
 		{TxID: "02", Vout: 0, AmountSat: 2000, ExpiryHeight: 10},
 	}
 
-	detail, picked := selectPreviewInputs(10, backlog, p)
+	candidates, err := orderedPreviewCandidates(backlog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, picked := selectPreviewInputs(10, candidates, p)
 	if picked != 2 || detail.SelectedInputCount != 2 {
 		t.Fatalf("picked got %d detail=%d", picked, detail.SelectedInputCount)
 	}
@@ -349,4 +353,49 @@ func loadAggregateBlocks(t *testing.T, path string) []reapAggregateBlock {
 		blocks = append(blocks, block)
 	}
 	return blocks
+}
+
+func TestCanonicalPreviewOrderVector(t *testing.T) {
+	data, err := os.ReadFile("testdata/reap-order.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Rows   []utxoRow
+		Order  []int `json:"expected_indices"`
+		Tax    int64 `json:"tax_total_sat"`
+		Refund int64 `json:"refund_total_sat"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		t.Fatal(err)
+	}
+	var got []reapPreviewInput
+	summary, err := buildPreview(v.Rows, "obtcmainnet", &chaincfg.ObtcMainNetParams, 8, "", func(detail reapPreviewDetail) error {
+		got = append(got, detail.SelectedInputs...)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(v.Order) || summary.TaxTotalSat != v.Tax || summary.RefundTotalSat != v.Refund {
+		t.Fatalf("unexpected totals: %+v", summary)
+	}
+	for i, idx := range v.Order {
+		want := v.Rows[idx]
+		if got[i].TxID != want.TxID || got[i].Vout != want.Vout {
+			t.Fatalf("position %d: got %s:%d, want %s:%d", i, got[i].TxID, got[i].Vout, want.TxID, want.Vout)
+		}
+	}
+}
+
+func TestPreviewRejectsInvalidTxID(t *testing.T) {
+	for _, txid := range []string{"", "invalid-hex"} {
+		_, err := buildPreview([]utxoRow{{TxID: txid}}, "obtcmainnet", nil, 0, "", func(reapPreviewDetail) error {
+			t.Fatal("emitted invalid row")
+			return nil
+		})
+		if err == nil {
+			t.Fatalf("expected invalid txid %q to fail", txid)
+		}
+	}
 }

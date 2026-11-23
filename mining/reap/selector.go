@@ -5,7 +5,6 @@
 package reap
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -14,12 +13,6 @@ import (
 	"github.com/btcsuite/btcd/blockchain/expiryindex"
 	"github.com/btcsuite/btcd/wire"
 )
-
-type candidate struct {
-	op     wire.OutPoint
-	expiry uint64
-	amount int64
-}
 
 type expiringScanner interface {
 	ScanExpiringUTXOs(fromKey, toKey uint64, maxResults int, startAfter *wire.OutPoint) ([]*expiryindex.ExpiringUTXO, bool, error)
@@ -115,7 +108,7 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 	p.debugLogf("REAP select start tip=%d maxInputs=%d weightBudget=%d scanBatch=%d sort=%d",
 		tip, p.MaxInputs, p.WeightBudget, p.ScanBatch, p.Sort)
 
-	var all []candidate
+	var all []blockchain.ReapPrefixCandidate
 	var fromKey uint64
 	if tip >= 0 {
 		fromKey = 0
@@ -137,7 +130,11 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 			if entry == nil || entry.IsSpent() {
 				continue
 			}
-			all = append(all, candidate{op: row.OutPoint, expiry: row.ExpiryKey, amount: entry.Amount()})
+			all = append(all, blockchain.ReapPrefixCandidate{
+				OutPoint:  row.OutPoint,
+				ExpiryKey: row.ExpiryKey,
+				Amount:    entry.Amount(),
+			})
 			liveRows++
 		}
 		p.debugLogf("REAP select scan page from=%d to=%d rows=%d liveRows=%d accumulated=%d hasMore=%t",
@@ -162,7 +159,7 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 		if err := ctx.Err(); err != nil {
 			return REAPPlan{}, err
 		}
-		dustTier := isDustTierAmount(c.amount, p.DustThresholdSat)
+		dustTier := isDustTierAmount(c.Amount, p.DustThresholdSat)
 		if !canSelectTierCandidate(dustTier, dustCount, normalCount, p) {
 			plan.Stats.Skipped += len(all) - i
 			p.debugLogf("REAP select stop reason=max-inputs picked=%d skipped=%d",
@@ -177,15 +174,15 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 				len(plan.Inputs), nextWeight, p.WeightBudget, plan.Stats.Skipped)
 			break
 		}
-		plan.Inputs = append(plan.Inputs, c.op)
+		plan.Inputs = append(plan.Inputs, c.OutPoint)
 		if dustTier {
 			dustCount++
 		} else {
 			normalCount++
 		}
-		tax := taxForValue(c.amount, p)
-		refund := c.amount - tax
-		refund, tax = applyDustRule(c.amount, refund, tax, p.DustThresholdSat)
+		tax := taxForValue(c.Amount, p)
+		refund := c.Amount - tax
+		refund, tax = applyDustRule(c.Amount, refund, tax, p.DustThresholdSat)
 		plan.TaxTotal += tax
 		plan.RefundTotal += refund
 		if tierLimitReached(dustCount, normalCount, p) {
@@ -204,32 +201,15 @@ func selectCandidatesWithScanner(ctx context.Context, tip int32, scanner expirin
 	return plan, nil
 }
 
-func sortCandidates(cs []candidate, mode SortMode) {
-	slices.SortFunc(cs, func(a, b candidate) int {
-		if a.expiry != b.expiry {
-			if a.expiry < b.expiry {
-				return -1
-			}
-			return 1
-		}
-		if mode == SortModeStrict && a.amount != b.amount {
-			if a.amount < b.amount {
-				return -1
-			}
-			return 1
-		}
-		hcmp := bytes.Compare(a.op.Hash[:], b.op.Hash[:])
-		if hcmp != 0 {
-			return hcmp
-		}
-		switch {
-		case a.op.Index < b.op.Index:
-			return -1
-		case a.op.Index > b.op.Index:
-			return 1
-		default:
-			return 0
-		}
+func sortCandidates(cs []blockchain.ReapPrefixCandidate, mode SortMode) {
+	if mode == SortModeStrict {
+		slices.SortFunc(cs, blockchain.CompareReapCandidates)
+		return
+	}
+	slices.SortFunc(cs, func(a, b blockchain.ReapPrefixCandidate) int {
+		// Simple mode omits the amount tie-breaker.
+		a.Amount, b.Amount = 0, 0
+		return blockchain.CompareReapCandidates(a, b)
 	})
 }
 

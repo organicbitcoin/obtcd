@@ -109,6 +109,8 @@ Canonical REAP order is expiry key, then amount, then OutPoint. The global
 prefix rule means a block may include a short prefix, but may not skip an
 earlier candidate.
 
+The [machine-readable ordering vector](cmd/obtc-utxo-export/testdata/reap-order.json) gives input rows and zero-based indices in expected selection order. Compare expiry height, amount in satoshis, the decoded transaction hash in wire byte order, and numeric output index, all ascending. To obtain wire bytes from a 64-character display txid, hex-decode it and reverse the 32 bytes. The vector includes a hash pair whose display ordering is reversed and two indices of the same transaction.
+
 | Fixture | Exact Input | Expected Result | Executable Reference |
 |---|---|---|---|
 | Global prefix exact | source candidates `opA(amount=1000)`, `opB(amount=2000)`, `opC(amount=3000)` at the same expiry key; REAP inputs `opA, opB` | accepted | `blockchain/validation_reap_test.go:TestCheckReapGlobalPrefix` |

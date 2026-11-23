@@ -12,10 +12,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"time"
 
+	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/mining/reap"
 )
 
@@ -108,10 +110,10 @@ func buildPreview(rows []utxoRow, network string, params *chaincfg.Params,
 		return nil, fmt.Errorf("invalid REAP tax denominator: %d", p.TaxDen)
 	}
 
-	rows = append([]utxoRow(nil), rows...)
-	sort.Slice(rows, func(i, j int) bool {
-		return compareUTXORowsStrict(rows[i], rows[j]) < 0
-	})
+	candidates, err := orderedPreviewCandidates(rows)
+	if err != nil {
+		return nil, err
+	}
 
 	summary := &reapPreviewSummary{
 		Network:        network,
@@ -133,27 +135,20 @@ func buildPreview(rows []utxoRow, network string, params *chaincfg.Params,
 		return summary, nil
 	}
 
-	var backlog []utxoRow
 	next := 0
-	height := rows[0].ExpiryHeight
-	for next < len(rows) || len(backlog) > 0 {
-		if len(backlog) == 0 && next < len(rows) && rows[next].ExpiryHeight > height {
-			height = rows[next].ExpiryHeight
-		}
-		for next < len(rows) && rows[next].ExpiryHeight <= height {
-			backlog = append(backlog, rows[next])
+	height := candidates[0].ExpiryKey
+	for first := 0; first < len(candidates); {
+		height = max(height, candidates[first].ExpiryKey)
+		for next < len(candidates) && candidates[next].ExpiryKey <= height {
 			next++
 		}
-		if len(backlog) == 0 {
-			continue
-		}
-
+		backlog := candidates[first:next]
 		detail, picked := selectPreviewInputs(height, backlog, p)
 		if picked == 0 {
 			return nil, fmt.Errorf("unable to select REAP inputs at height %d with backlog=%d", height, len(backlog))
 		}
-		backlog = backlog[picked:]
-		detail.RemainingBacklog = len(backlog)
+		first += picked
+		detail.RemainingBacklog = next - first
 
 		if err := emit(detail); err != nil {
 			return nil, err
@@ -166,13 +161,13 @@ func buildPreview(rows []utxoRow, network string, params *chaincfg.Params,
 	return summary, nil
 }
 
-func selectPreviewInputs(height uint64, backlog []utxoRow, p reap.REAPParams) (reapPreviewDetail, int) {
+func selectPreviewInputs(height uint64, backlog []previewCandidate, p reap.REAPParams) (reapPreviewDetail, int) {
 	detail := reapPreviewDetail{ReapHeight: height}
 	dustCount := 0
 	normalCount := 0
 
 	for i, row := range backlog {
-		dust := isDust(row.AmountSat, p.DustThresholdSat)
+		dust := isDust(row.Amount, p.DustThresholdSat)
 		if !canSelectPreviewCandidate(dust, dustCount, normalCount, p) {
 			return detail, i
 		}
@@ -181,10 +176,10 @@ func selectPreviewInputs(height uint64, backlog []utxoRow, p reap.REAPParams) (r
 			return detail, i
 		}
 
-		tax := taxForAmount(row.AmountSat, p)
-		refund := row.AmountSat - tax
+		tax := taxForAmount(row.Amount, p)
+		refund := row.Amount - tax
 		if dust {
-			tax = row.AmountSat
+			tax = row.Amount
 			refund = 0
 			dustCount++
 			detail.DustTaxSat += tax
@@ -197,10 +192,10 @@ func selectPreviewInputs(height uint64, backlog []utxoRow, p reap.REAPParams) (r
 		detail.TaxTotalSat += tax
 		detail.RefundTotalSat += refund
 		detail.SelectedInputs = append(detail.SelectedInputs, reapPreviewInput{
-			TxID:         row.TxID,
-			Vout:         row.Vout,
-			AmountSat:    row.AmountSat,
-			ExpiryHeight: row.ExpiryHeight,
+			TxID:         row.txID,
+			Vout:         row.OutPoint.Index,
+			AmountSat:    row.Amount,
+			ExpiryHeight: row.ExpiryKey,
 			TaxSat:       tax,
 			RefundSat:    refund,
 			Dust:         dust,
@@ -264,33 +259,28 @@ func buildBucket(heights []reapHeightSummary, width uint64) []reapBucketSummary 
 	return buckets
 }
 
-func compareUTXORowsStrict(a, b utxoRow) int {
-	if a.ExpiryHeight != b.ExpiryHeight {
-		if a.ExpiryHeight < b.ExpiryHeight {
-			return -1
+type previewCandidate struct {
+	blockchain.ReapPrefixCandidate
+	txID string
+}
+
+func orderedPreviewCandidates(rows []utxoRow) ([]previewCandidate, error) {
+	candidates := make([]previewCandidate, len(rows))
+	for i, row := range rows {
+		c := &candidates[i]
+		if row.TxID == "" {
+			return nil, fmt.Errorf("missing txid in UTXO row %d", i+1)
 		}
-		return 1
-	}
-	if a.AmountSat != b.AmountSat {
-		if a.AmountSat < b.AmountSat {
-			return -1
+		if err := chainhash.Decode(&c.OutPoint.Hash, row.TxID); err != nil {
+			return nil, fmt.Errorf("invalid txid in UTXO row %d: %w", i+1, err)
 		}
-		return 1
+		c.txID, c.OutPoint.Index = row.TxID, row.Vout
+		c.ExpiryKey, c.Amount = row.ExpiryHeight, row.AmountSat
 	}
-	if a.TxID != b.TxID {
-		if a.TxID < b.TxID {
-			return -1
-		}
-		return 1
-	}
-	switch {
-	case a.Vout < b.Vout:
-		return -1
-	case a.Vout > b.Vout:
-		return 1
-	default:
-		return 0
-	}
+	slices.SortFunc(candidates, func(a, b previewCandidate) int {
+		return blockchain.CompareReapCandidates(a.ReapPrefixCandidate, b.ReapPrefixCandidate)
+	})
+	return candidates, nil
 }
 
 func compareUTXORowsExportOrder(a, b utxoRow) int {
