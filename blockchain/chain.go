@@ -179,6 +179,11 @@ type BlockChain struct {
 	warningCaches    []thresholdStateCache
 	deploymentCaches []thresholdStateCache
 
+	// Bitcoin and OBTC deployment windows have separate caches so a reorg
+	// across the fork can query either rule set in any order.
+	bitcoinDeployments      *[chaincfg.DefinedDeployments]chaincfg.ConsensusDeployment
+	bitcoinDeploymentCaches []thresholdStateCache
+
 	// The following fields are used to determine if certain warnings have
 	// already been shown.
 	//
@@ -2233,6 +2238,8 @@ func New(config *Config) (*BlockChain, error) {
 			clockEnder.SynchronizeClock(&b)
 		}
 	}
+
+	b.initSharedHistoryDeployments()
 
 	// Initialize the chain state from the passed database.  When the db
 	// does not yet contain any chain state, both it and the chain state

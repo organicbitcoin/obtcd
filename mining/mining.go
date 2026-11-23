@@ -793,9 +793,9 @@ mempoolLoop:
 		scriptFlags := blockchain.ApplyOBTCReplayProtectionScriptFlag(
 			txscript.StandardVerifyFlags, g.chainParams, nextBlockHeight,
 		)
-		err = blockchain.ValidateTransactionScripts(tx, blockUtxos,
+		err = blockchain.ValidateTransactionScriptsAtHeight(tx, blockUtxos,
 			scriptFlags, g.sigCache,
-			g.hashCache)
+			g.hashCache, g.chainParams, nextBlockHeight)
 		if err != nil {
 			log.Tracef("Skipping tx %s due to error in "+
 				"ValidateTransactionScripts: %v", tx.Hash(), err)

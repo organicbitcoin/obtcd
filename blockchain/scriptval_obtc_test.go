@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -30,7 +31,7 @@ func TestValidateTransactionScriptsSkipsREAPTx(t *testing.T) {
 	view := NewUtxoViewpoint()
 
 	flags := txscript.ScriptBip16 | txscript.ScriptVerifyWitness
-	err := ValidateTransactionScripts(btx, view, flags, nil, nil)
+	err := ValidateTransactionScriptsAtHeight(btx, view, flags, nil, nil, &chaincfg.ObtcRegTestParams, 500)
 	if err != nil {
 		t.Fatalf("expected REAP tx to skip script validation, got: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestCheckBlockScriptsSkipsREAPTx(t *testing.T) {
 	view := NewUtxoViewpoint()
 	flags := txscript.ScriptBip16
 
-	err := checkBlockScripts(block, view, flags, nil, nil)
+	err := checkBlockScripts(block, view, flags, nil, nil, true)
 	if err != nil {
 		t.Fatalf("expected block with only coinbase+REAP to pass script validation, got: %v", err)
 	}

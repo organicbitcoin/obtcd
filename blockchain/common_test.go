@@ -382,6 +382,7 @@ func newFakeChain(params *chaincfg.Params) *BlockChain {
 		}
 	}
 
+	b.initSharedHistoryDeployments()
 	return b
 }
 

@@ -1545,9 +1545,9 @@ func (mp *TxPool) checkMempoolAcceptance(tx *btcutil.Tx,
 	scriptFlags := blockchain.ApplyOBTCReplayProtectionScriptFlag(
 		txscript.StandardVerifyFlags, mp.cfg.ChainParams, nextBlockHeight,
 	)
-	err = blockchain.ValidateTransactionScripts(tx, utxoView,
+	err = blockchain.ValidateTransactionScriptsAtHeight(tx, utxoView,
 		scriptFlags, mp.cfg.SigCache,
-		mp.cfg.HashCache)
+		mp.cfg.HashCache, mp.cfg.ChainParams, nextBlockHeight)
 	if err != nil {
 		if cerr, ok := err.(blockchain.RuleError); ok {
 			return nil, chainRuleError(cerr)

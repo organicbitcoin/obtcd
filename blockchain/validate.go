@@ -694,7 +694,7 @@ func CheckBlockHeaderContext(header *wire.BlockHeader, prevNode HeaderCtx,
 	// block.
 	blockHeight := prevNode.Height() + 1
 
-	params := c.ChainParams()
+	params := chaincfg.ConsensusParamsAtHeight(c.ChainParams(), blockHeight)
 
 	fastAdd := flags&BFFastAdd == BFFastAdd
 	if !fastAdd {
@@ -862,7 +862,7 @@ func (b *BlockChain) checkBlockContext(block *btcutil.Block, prevNode *blockNode
 		// once a majority of the network has upgraded.  This is part of
 		// BIP0034.
 		if ShouldHaveSerializedBlockHeight(header) &&
-			blockHeight >= b.chainParams.BIP0034Height {
+			blockHeight >= chaincfg.ConsensusParamsAtHeight(b.chainParams, blockHeight).BIP0034Height {
 
 			coinbaseTx := block.Transactions()[0]
 			err := CheckSerializedHeight(coinbaseTx, blockHeight)
@@ -970,8 +970,10 @@ func CheckTransactionInputs(tx *btcutil.Tx, txHeight int32, utxoView *UtxoViewpo
 		return 0, nil
 	}
 
-	if err := checkReapMarker(tx.MsgTx(), txHeight, chainParams); err != nil {
-		return 0, err
+	if reapRulesActive(chainParams, txHeight) {
+		if err := checkReapMarker(tx.MsgTx(), txHeight, chainParams); err != nil {
+			return 0, err
+		}
 	}
 	if err := checkExpirySpendRules(tx.MsgTx(), txHeight, utxoView, chainParams); err != nil {
 		return 0, err
@@ -1129,7 +1131,8 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	// BIP0034 is not yet active.  This is a useful optimization because the
 	// BIP0030 check is expensive since it involves a ton of cache misses in
 	// the utxoset.
-	if !isBIP0030Node(node) && (node.height < b.chainParams.BIP0034Height) {
+	rules := chaincfg.ConsensusParamsAtHeight(b.chainParams, node.height)
+	if !isBIP0030Node(node) && node.height < rules.BIP0034Height {
 		err := b.checkBIP0030(node, block, view)
 		if err != nil {
 			return err
@@ -1284,13 +1287,13 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	// Enforce DER signatures for block versions 3+ once the historical
 	// activation threshold has been reached.  This is part of BIP0066.
 	blockHeader := &block.MsgBlock().Header
-	if blockHeader.Version >= 3 && node.height >= b.chainParams.BIP0066Height {
+	if blockHeader.Version >= 3 && node.height >= rules.BIP0066Height {
 		scriptFlags |= txscript.ScriptVerifyDERSignatures
 	}
 
 	// Enforce CHECKLOCKTIMEVERIFY for block versions 4+ once the historical
 	// activation threshold has been reached.  This is part of BIP0065.
-	if blockHeader.Version >= 4 && node.height >= b.chainParams.BIP0065Height {
+	if blockHeader.Version >= 4 && node.height >= rules.BIP0065Height {
 		scriptFlags |= txscript.ScriptVerifyCheckLockTimeVerify
 	}
 
@@ -1362,7 +1365,7 @@ func (b *BlockChain) checkConnectBlock(node *blockNode, block *btcutil.Block, vi
 	// prevent CPU exhaustion attacks.
 	if runScripts {
 		err := checkBlockScripts(block, view, scriptFlags, b.sigCache,
-			b.hashCache)
+			b.hashCache, reapRulesActive(b.chainParams, node.height))
 		if err != nil {
 			return err
 		}

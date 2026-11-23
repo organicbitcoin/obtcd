@@ -68,6 +68,23 @@ index state.
 Use `--connect=<peer:9527>` instead of `--addpeer=<peer:9527>` only when the
 node must connect exclusively to the listed peers.
 
+### Verifying the shared Bitcoin history
+
+An empty `--obtcmainnet` data directory starts at Bitcoin genesis. An OBTC
+archival peer must serve the historical blocks using the OBTC network magic.
+The node checks Bitcoin mainnet difficulty, block versions and soft-fork votes
+through height 1,000,000 inclusive. It uses OBTC difficulty and replay
+protection from 1,000,001. The expiry index tracks inherited outputs during
+sync, and expiry enforcement starts at 1,002,016.
+
+The following regression replays the first 14,131 historical blocks from
+genesis with proof-of-work and script checks enabled. It uses the fixture
+shipped in this repository.
+
+```bash
+go test ./blockchain -run '^TestOBTCSharedHistory' -count=1
+```
+
 ## Validate Node Health
 
 Check RPC connectivity:

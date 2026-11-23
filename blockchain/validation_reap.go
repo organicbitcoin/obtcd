@@ -110,6 +110,16 @@ func reapInputDigest(tx *wire.MsgTx) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// reapRulesActive reports whether the candidate block recognizes REAP
+// transactions. Before expiry activation, every spend uses ordinary scripts.
+func reapRulesActive(params *chaincfg.Params, height int32) bool {
+	if params == nil {
+		return false
+	}
+	expiry := chaincfg.GetExpiryParams(params)
+	return expiry != nil && height >= expiry.EnableAtHeight
+}
+
 func checkReapMarker(tx *wire.MsgTx, txHeight int32,
 	chainParams *chaincfg.Params) error {
 

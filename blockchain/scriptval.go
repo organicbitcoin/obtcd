@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -189,15 +190,24 @@ func newTxValidator(utxoView *UtxoViewpoint, flags txscript.ScriptFlags,
 	}
 }
 
+// ValidateTransactionScriptsAtHeight validates ordinary input scripts using
+// the candidate block's rules. Active REAP transactions have already had their
+// inputs checked by CheckTransactionInputs.
+func ValidateTransactionScriptsAtHeight(tx *btcutil.Tx, utxoView *UtxoViewpoint,
+	flags txscript.ScriptFlags, sigCache *txscript.SigCache, hashCache *txscript.HashCache,
+	params *chaincfg.Params, height int32) error {
+
+	if isLikelyReapTx(tx.MsgTx()) && reapRulesActive(params, height) {
+		return nil
+	}
+	return ValidateTransactionScripts(tx, utxoView, flags, sigCache, hashCache)
+}
+
 // ValidateTransactionScripts validates the scripts for the passed transaction
 // using multiple goroutines.
 func ValidateTransactionScripts(tx *btcutil.Tx, utxoView *UtxoViewpoint,
 	flags txscript.ScriptFlags, sigCache *txscript.SigCache,
 	hashCache *txscript.HashCache) error {
-
-	if isLikelyReapTx(tx.MsgTx()) {
-		return nil
-	}
 
 	// First determine if segwit is active according to the scriptFlags. If
 	// it isn't then we don't need to interact with the HashCache.
@@ -249,7 +259,7 @@ func ValidateTransactionScripts(tx *btcutil.Tx, utxoView *UtxoViewpoint,
 // the passed block using multiple goroutines.
 func checkBlockScripts(block *btcutil.Block, utxoView *UtxoViewpoint,
 	scriptFlags txscript.ScriptFlags, sigCache *txscript.SigCache,
-	hashCache *txscript.HashCache) error {
+	hashCache *txscript.HashCache, allowReap bool) error {
 
 	// First determine if segwit is active according to the scriptFlags. If
 	// it isn't then we don't need to interact with the HashCache.
@@ -263,7 +273,7 @@ func checkBlockScripts(block *btcutil.Block, utxoView *UtxoViewpoint,
 	}
 	txValItems := make([]*txValidateItem, 0, numInputs)
 	for _, tx := range block.Transactions() {
-		if isLikelyReapTx(tx.MsgTx()) {
+		if allowReap && isLikelyReapTx(tx.MsgTx()) {
 			// REAP system transactions use dedicated validation rules and do
 			// not require standard input script execution.
 			continue

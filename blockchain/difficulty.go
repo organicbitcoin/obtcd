@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/blockchain/internal/workmath"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
@@ -284,7 +285,7 @@ func calcNextRequiredDifficulty(lastNode HeaderCtx, newBlockTime time.Time,
 
 	// Special difficulty rule for Testnet4
 	oldTarget := CompactToBig(lastNode.Bits())
-	if c.ChainParams().EnforceBIP94 {
+	if chaincfg.ConsensusParamsAtHeight(c.ChainParams(), lastNode.Height()+1).EnforceBIP94 {
 		// Here we use the first block of the difficulty period. This way
 		// the real difficulty is always preserved in the first block as
 		// it is not allowed to use the min-difficulty exception.

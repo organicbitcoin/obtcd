@@ -326,6 +326,16 @@ func IsOBTC(params *Params) bool {
 		params.Net == wire.ObtcRegNet
 }
 
+// ConsensusParamsAtHeight selects the block validation rules for a candidate
+// height. Network identity, storage, peer discovery and the expiry index always
+// use the configured network, including while replaying the shared history.
+func ConsensusParamsAtHeight(params *Params, height int32) *Params {
+	if params.Net == wire.ObtcMainNet && height <= ObtcMainNetForkHeight {
+		return &MainNetParams
+	}
+	return params
+}
+
 // GetOBTCForkHeight returns the fork height for an OBTC network, or -1.
 func GetOBTCForkHeight(params *Params) int32 {
 	switch params.Net {
