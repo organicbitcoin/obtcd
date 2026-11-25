@@ -398,11 +398,11 @@ func TestSelectCandidatesWithScannerNilScanner(t *testing.T) {
 
 func TestSortCandidatesByExpiryThenOutpoint(t *testing.T) {
 	h := func(b byte) chainhash.Hash { return chainhash.Hash{b} }
-	cs := []candidate{
-		{op: wire.OutPoint{Hash: h(0x02), Index: 3}, expiry: 2, amount: 100},
-		{op: wire.OutPoint{Hash: h(0x01), Index: 9}, expiry: 1, amount: 999},
-		{op: wire.OutPoint{Hash: h(0x01), Index: 1}, expiry: 1, amount: 111},
-		{op: wire.OutPoint{Hash: h(0x01), Index: 0}, expiry: 1, amount: 111},
+	cs := []blockchain.ReapPrefixCandidate{
+		{OutPoint: wire.OutPoint{Hash: h(0x02), Index: 3}, ExpiryKey: 2, Amount: 100},
+		{OutPoint: wire.OutPoint{Hash: h(0x01), Index: 9}, ExpiryKey: 1, Amount: 999},
+		{OutPoint: wire.OutPoint{Hash: h(0x01), Index: 1}, ExpiryKey: 1, Amount: 111},
+		{OutPoint: wire.OutPoint{Hash: h(0x01), Index: 0}, ExpiryKey: 1, Amount: 111},
 	}
 
 	sortCandidates(cs, SortModeSimple)
@@ -414,29 +414,29 @@ func TestSortCandidatesByExpiryThenOutpoint(t *testing.T) {
 		{Hash: h(0x02), Index: 3},
 	}
 	for i := range want {
-		if cs[i].op != want[i] {
-			t.Fatalf("order mismatch at %d: got %v want %v", i, cs[i].op, want[i])
+		if cs[i].OutPoint != want[i] {
+			t.Fatalf("order mismatch at %d: got %v want %v", i, cs[i].OutPoint, want[i])
 		}
 	}
 }
 
 func TestSortCandidatesStrictUsesAmountTieBreaker(t *testing.T) {
 	h := func(b byte) chainhash.Hash { return chainhash.Hash{b} }
-	base := []candidate{
-		{op: wire.OutPoint{Hash: h(0x01), Index: 0}, expiry: 7, amount: 200},
-		{op: wire.OutPoint{Hash: h(0x02), Index: 0}, expiry: 7, amount: 100},
+	base := []blockchain.ReapPrefixCandidate{
+		{OutPoint: wire.OutPoint{Hash: h(0x01), Index: 0}, ExpiryKey: 7, Amount: 200},
+		{OutPoint: wire.OutPoint{Hash: h(0x02), Index: 0}, ExpiryKey: 7, Amount: 100},
 	}
 
-	det := append([]candidate(nil), base...)
-	strict := append([]candidate(nil), base...)
+	det := append([]blockchain.ReapPrefixCandidate(nil), base...)
+	strict := append([]blockchain.ReapPrefixCandidate(nil), base...)
 	sortCandidates(det, SortModeSimple)
 	sortCandidates(strict, SortModeStrict)
 
-	if det[0].amount != 200 {
-		t.Fatalf("deterministic mode should not prioritize amount; got first amount %d", det[0].amount)
+	if det[0].Amount != 200 {
+		t.Fatalf("deterministic mode should not prioritize amount; got first amount %d", det[0].Amount)
 	}
-	if strict[0].amount != 100 {
-		t.Fatalf("strict mode should prioritize smaller amount; got first amount %d", strict[0].amount)
+	if strict[0].Amount != 100 {
+		t.Fatalf("strict mode should prioritize smaller amount; got first amount %d", strict[0].Amount)
 	}
 }
 

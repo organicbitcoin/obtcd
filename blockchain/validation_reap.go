@@ -6,6 +6,7 @@ package blockchain
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -279,54 +280,33 @@ func checkReapGlobalPrefix(block *btcutil.Block, blockHeight int32,
 	return nil
 }
 
-type reapInputOrderKey struct {
-	expiry uint64
-	amount int64
-	op     wire.OutPoint
+// CompareReapCandidates compares canonical REAP inputs by expiry height,
+// amount, the 32 hash bytes in wire order, then numeric output index.
+func CompareReapCandidates(a, b ReapPrefixCandidate) int {
+	if order := cmp.Compare(a.ExpiryKey, b.ExpiryKey); order != 0 {
+		return order
+	}
+	if order := cmp.Compare(a.Amount, b.Amount); order != 0 {
+		return order
+	}
+	if order := bytes.Compare(a.OutPoint.Hash[:], b.OutPoint.Hash[:]); order != 0 {
+		return order
+	}
+	return cmp.Compare(a.OutPoint.Index, b.OutPoint.Index)
 }
 
-func compareReapInputOrderKey(a, b reapInputOrderKey) int {
-	if a.expiry != b.expiry {
-		if a.expiry < b.expiry {
-			return -1
-		}
-		return 1
-	}
-
-	if a.amount != b.amount {
-		if a.amount < b.amount {
-			return -1
-		}
-		return 1
-	}
-
-	hcmp := bytes.Compare(a.op.Hash[:], b.op.Hash[:])
-	if hcmp != 0 {
-		return hcmp
-	}
-
-	switch {
-	case a.op.Index < b.op.Index:
-		return -1
-	case a.op.Index > b.op.Index:
-		return 1
-	default:
-		return 0
-	}
-}
-
-func makeReapInputOrderKey(outpoint wire.OutPoint, utxoView *UtxoViewpoint,
-	expiryParams *chaincfg.ExpiryParams) (reapInputOrderKey, error) {
+func reapCandidateFromView(outpoint wire.OutPoint, utxoView *UtxoViewpoint,
+	expiryParams *chaincfg.ExpiryParams) (ReapPrefixCandidate, error) {
 
 	utxo := utxoView.LookupEntry(outpoint)
 	if utxo == nil || utxo.IsSpent() {
-		return reapInputOrderKey{}, fmt.Errorf("missing utxo for reap input %s", outpoint.String())
+		return ReapPrefixCandidate{}, fmt.Errorf("missing utxo for reap input %s", outpoint.String())
 	}
 
-	return reapInputOrderKey{
-		expiry: expiryParams.CalculateExpiryKey(utxo.BlockHeight()),
-		amount: utxo.Amount(),
-		op:     outpoint,
+	return ReapPrefixCandidate{
+		ExpiryKey: expiryParams.CalculateExpiryKey(utxo.BlockHeight()),
+		Amount:    utxo.Amount(),
+		OutPoint:  outpoint,
 	}, nil
 }
 
@@ -373,16 +353,16 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 		))
 	}
 
-	var prevKey reapInputOrderKey
+	var prevKey ReapPrefixCandidate
 	dustCount := 0
 	normalCount := 0
 
 	for i, txIn := range tx.TxIn {
-		curKey, err := makeReapInputOrderKey(txIn.PreviousOutPoint, utxoView, expiryParams)
+		curKey, err := reapCandidateFromView(txIn.PreviousOutPoint, utxoView, expiryParams)
 		if err != nil {
 			return ruleError(ErrMissingTxOut, err.Error())
 		}
-		if i > 0 && compareReapInputOrderKey(prevKey, curKey) > 0 {
+		if i > 0 && CompareReapCandidates(prevKey, curKey) > 0 {
 			logOBTCDevf(chainParams,
 				"REAP consensus hardening failed tx=%s reason=canonical-order prev=%s cur=%s",
 				txHash, tx.TxIn[i-1].PreviousOutPoint, tx.TxIn[i].PreviousOutPoint)
@@ -390,7 +370,7 @@ func checkReapConsensusHardening(tx *wire.MsgTx, txHeight int32,
 		}
 
 		if twoTierLimits {
-			dustTier := isReapDustTierAmount(curKey.amount, expiryParams)
+			dustTier := isReapDustTierAmount(curKey.Amount, expiryParams)
 			if dustTier {
 				if dustCount >= expiryParams.ReapDustMaxInputs {
 					logOBTCDevf(chainParams,

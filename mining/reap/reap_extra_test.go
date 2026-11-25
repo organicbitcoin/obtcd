@@ -93,14 +93,14 @@ func TestTaxForValueEdgeCases(t *testing.T) {
 
 func TestSortCandidatesSimpleModeIgnoresAmount(t *testing.T) {
 	op := wire.OutPoint{Index: 0}
-	cs := []candidate{
-		{op: op, expiry: 100, amount: 999},
-		{op: op, expiry: 100, amount: 1},
+	cs := []blockchain.ReapPrefixCandidate{
+		{OutPoint: op, ExpiryKey: 100, Amount: 999},
+		{OutPoint: op, ExpiryKey: 100, Amount: 1},
 	}
 
 	sortCandidates(cs, SortModeSimple)
 	// same outpoint+expiry, so order remains stable and no panic; branch coverage target.
-	if cs[0].expiry != 100 || cs[1].expiry != 100 {
+	if cs[0].ExpiryKey != 100 || cs[1].ExpiryKey != 100 {
 		t.Fatalf("unexpected ordering")
 	}
 }

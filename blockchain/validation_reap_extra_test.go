@@ -149,18 +149,18 @@ func TestApplyReapDustRuleDisabledThreshold(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// compareReapInputOrderKey
+// CompareReapCandidates
 // ---------------------------------------------------------------------------
 
-func TestCompareReapInputOrderKey(t *testing.T) {
-	a := reapInputOrderKey{expiry: 100, amount: 500, op: wire.OutPoint{Index: 0}}
-	b := reapInputOrderKey{expiry: 200, amount: 500, op: wire.OutPoint{Index: 0}}
-	c := reapInputOrderKey{expiry: 100, amount: 600, op: wire.OutPoint{Index: 0}}
-	d := reapInputOrderKey{expiry: 100, amount: 500, op: wire.OutPoint{Index: 1}}
+func TestCompareReapCandidates(t *testing.T) {
+	a := ReapPrefixCandidate{ExpiryKey: 100, Amount: 500, OutPoint: wire.OutPoint{Index: 0}}
+	b := ReapPrefixCandidate{ExpiryKey: 200, Amount: 500, OutPoint: wire.OutPoint{Index: 0}}
+	c := ReapPrefixCandidate{ExpiryKey: 100, Amount: 600, OutPoint: wire.OutPoint{Index: 0}}
+	d := ReapPrefixCandidate{ExpiryKey: 100, Amount: 500, OutPoint: wire.OutPoint{Index: 1}}
 
 	tests := []struct {
 		name string
-		a, b reapInputOrderKey
+		a, b ReapPrefixCandidate
 		want int
 	}{
 		{"lower expiry first", a, b, -1},
@@ -174,9 +174,9 @@ func TestCompareReapInputOrderKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := compareReapInputOrderKey(tc.a, tc.b)
+			got := CompareReapCandidates(tc.a, tc.b)
 			if got != tc.want {
-				t.Fatalf("compareReapInputOrderKey = %d, want %d", got, tc.want)
+				t.Fatalf("CompareReapCandidates = %d, want %d", got, tc.want)
 			}
 		})
 	}
