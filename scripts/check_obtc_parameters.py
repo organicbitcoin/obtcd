@@ -77,6 +77,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Return non-zero when optional cross-repo references mismatch or are missing.",
     )
+    parser.add_argument(
+        "--fail-on-drift",
+        action="store_true",
+        help=(
+            "Return non-zero on public-doc drift (closed-milestone links, unresolved "
+            "hosts offered as peers, links leaving OBTC). Reported by default, gated "
+            "only with this flag so existing runs keep their exit contract."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -524,6 +533,267 @@ def run_checks(
     return results
 
 
+# --------------------------------------------------------------------------
+# Public-doc drift checks (#34)
+#
+# The manifest's ``doc_drift`` block records what the public documentation says
+# about the outside world: which milestones are closed, which seed hosts do not
+# resolve, and which links may leave the OBTC repositories. Those observations
+# are committed with the date they were taken, so the checks are deterministic
+# and run on a checkout that contains only ``obtcd``.
+# --------------------------------------------------------------------------
+
+GUIDANCE_ROLE = "guidance"
+LINK_ROLE = "link"
+
+GITHUB_URL = re.compile(
+    r"https?://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+)"
+)
+MILESTONE_URL = re.compile(
+    r"https?://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+)"
+    r"/milestone/(?P<number>[0-9]+)"
+)
+
+
+def drift_policy(manifest: dict[str, Any]) -> dict[str, Any]:
+    """The manifest's ``doc_drift`` block, or an empty one when it is absent."""
+    policy = manifest.get("doc_drift")
+    return policy if isinstance(policy, dict) else {}
+
+
+def glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """A repo-relative glob as a regex: ``**/`` spans folders, ``*`` stays in one."""
+    out = ["^"]
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if pattern.startswith("**/", index):
+            out.append("(?:.*/)?")
+            index += 3
+        elif char == "*":
+            out.append("[^/]*")
+            index += 1
+        elif char == "?":
+            out.append("[^/]")
+            index += 1
+        else:
+            out.append(re.escape(char))
+            index += 1
+    out.append("$")
+    return re.compile("".join(out))
+
+
+def matching_paths(
+    extractor: Extractor, roots: Iterable[str], excludes: Iterable[str] = ()
+) -> list[str]:
+    """Every tracked text file under ``obtcd`` matching one of ``roots``."""
+    base = extractor.repo_path("obtcd")
+    if not base.is_dir():
+        return []
+    includes = [glob_to_regex(pattern) for pattern in roots]
+    blocked = [glob_to_regex(pattern) for pattern in excludes]
+    found: list[str] = []
+    for path in sorted(base.rglob("*")):
+        if not path.is_file() or path.suffix not in {".md", ".txt", ".html"}:
+            continue
+        rel = path.relative_to(base).as_posix()
+        if any(rx.match(rel) for rx in includes) and not any(rx.match(rel) for rx in blocked):
+            found.append(rel)
+    return found
+
+
+def guidance_paths(extractor: Extractor, policy: dict[str, Any]) -> list[str]:
+    """Active guidance files: the include globs minus every historical record."""
+    active = policy.get("active_guidance") or {}
+    excludes = list(active.get("exclude", [])) + list(policy.get("historical_guidance", []))
+    return matching_paths(extractor, active.get("paths", []), excludes)
+
+
+def drift_result(
+    check_id: str,
+    description: str,
+    expected: str,
+    role: str,
+    path: str,
+    status: str,
+    observed: str,
+    detail: str,
+) -> CheckResult:
+    return CheckResult(
+        check_id,
+        description,
+        expected,
+        "public-doc-drift",
+        role,
+        "obtcd",
+        path,
+        True,
+        status,
+        observed,
+        detail,
+    )
+
+
+def check_closed_milestone_guidance(
+    extractor: Extractor, policy: dict[str, Any]
+) -> list[CheckResult]:
+    """Active guidance must not send readers to a milestone that is already closed."""
+    closed = {
+        int(entry["number"]): entry for entry in policy.get("closed_milestones", [])
+    }
+    if not closed:
+        return []
+    results: list[CheckResult] = []
+    for rel in guidance_paths(extractor, policy):
+        text = extractor.read_text("obtcd", rel)
+        hits = [
+            match
+            for match in MILESTONE_URL.finditer(text)
+            if match.group("owner").lower() in {"organicbitcoin", "obtc"}
+            and int(match.group("number")) in closed
+        ]
+        if hits:
+            observed = ", ".join(
+                sorted(
+                    {
+                        f"milestone/{match.group('number')} "
+                        f"({closed[int(match.group('number'))]['title']})"
+                        for match in hits
+                    }
+                )
+            )
+            results.append(
+                drift_result(
+                    "closed_milestone_in_active_guidance",
+                    "Active guidance points at a closed milestone",
+                    "no link to a closed milestone",
+                    GUIDANCE_ROLE,
+                    rel,
+                    STATUS_MISMATCH,
+                    observed,
+                    "Historical reports may keep the link; active guidance must not.",
+                )
+            )
+        else:
+            results.append(
+                drift_result(
+                    "closed_milestone_in_active_guidance",
+                    "Active guidance points at a closed milestone",
+                    "no link to a closed milestone",
+                    GUIDANCE_ROLE,
+                    rel,
+                    STATUS_OK,
+                    "",
+                    "no closed-milestone link",
+                )
+            )
+    return results
+
+
+def check_unresolved_host_guidance(
+    extractor: Extractor, policy: dict[str, Any]
+) -> list[CheckResult]:
+    """A host that does not resolve must not be shown as a usable peer."""
+    hosts = [entry for entry in policy.get("hosts", []) if not entry.get("resolves", True)]
+    markers = [marker.lower() for marker in policy.get("peer_guidance_markers", [])]
+    if not hosts or not markers:
+        return []
+    results: list[CheckResult] = []
+    for rel in guidance_paths(extractor, policy):
+        text = extractor.read_text("obtcd", rel)
+        lines = text.splitlines()
+        for entry in hosts:
+            name = entry["host"]
+            if name not in text:
+                continue
+            claimed = [
+                line.strip()
+                for line in lines
+                if name in line and any(marker in line.lower() for marker in markers)
+            ]
+            if claimed:
+                results.append(
+                    drift_result(
+                        "unresolved_host_shown_as_peer",
+                        "An unresolved host is shown as a usable peer",
+                        f"{name} not offered as a peer",
+                        GUIDANCE_ROLE,
+                        rel,
+                        STATUS_MISMATCH,
+                        claimed[0][:120],
+                        f"observed {entry.get('observed_at', 'unknown')}: no A/AAAA record",
+                    )
+                )
+    return results
+
+
+def check_contributor_links(
+    extractor: Extractor, policy: dict[str, Any]
+) -> list[CheckResult]:
+    """Contributor and security surfaces must not silently link outside OBTC."""
+    config = policy.get("contributor_surfaces") or {}
+    allowed_owners = {owner.lower() for owner in config.get("allowed_owners", [])}
+    allowed_links = [link.rstrip("/") for link in config.get("allowed_links", [])]
+    if not allowed_owners:
+        return []
+    results: list[CheckResult] = []
+    for rel in matching_paths(
+        extractor, config.get("paths", []), config.get("exclude", [])
+    ):
+        text = extractor.read_text("obtcd", rel)
+        outside: set[str] = set()
+        attributed: set[str] = set()
+        for match in GITHUB_URL.finditer(text):
+            url = match.group(0).rstrip("/")
+            if match.group("owner").lower() in allowed_owners:
+                continue
+            if any(url == link or url.startswith(link + "/") for link in allowed_links):
+                attributed.add(url)
+                continue
+            outside.add(url)
+        if outside:
+            results.append(
+                drift_result(
+                    "contributor_link_leaves_obtc",
+                    "A contributor or security surface links outside the OBTC repositories",
+                    "links stay in the OBTC repositories",
+                    LINK_ROLE,
+                    rel,
+                    STATUS_MISMATCH,
+                    ", ".join(sorted(outside))[:200],
+                    "Add the URL to allowed_links with a reason, or point at an OBTC page.",
+                )
+            )
+        else:
+            results.append(
+                drift_result(
+                    "contributor_link_leaves_obtc",
+                    "A contributor or security surface links outside the OBTC repositories",
+                    "links stay in the OBTC repositories",
+                    LINK_ROLE,
+                    rel,
+                    STATUS_OK,
+                    ", ".join(sorted(attributed))[:200],
+                    "allowed external attribution only",
+                )
+            )
+    return results
+
+
+def run_drift_checks(
+    manifest: dict[str, Any], extractor: Extractor
+) -> list[CheckResult]:
+    """Every public-doc drift check the manifest declares, in a stable order."""
+    policy = drift_policy(manifest)
+    if not policy:
+        return []
+    return [
+        *check_closed_milestone_guidance(extractor, policy),
+        *check_unresolved_host_guidance(extractor, policy),
+        *check_contributor_links(extractor, policy),
+    ]
+
+
 def parameter_statuses(results: list[CheckResult]) -> dict[str, str]:
     statuses: dict[str, str] = {}
     by_param: dict[str, list[CheckResult]] = {}
@@ -559,7 +829,11 @@ def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(out)
 
 
-def render_markdown(manifest: dict[str, Any], results: list[CheckResult]) -> str:
+def render_markdown(
+    manifest: dict[str, Any],
+    results: list[CheckResult],
+    drift: list[CheckResult] | None = None,
+) -> str:
     statuses = parameter_statuses(results)
     by_param: dict[str, list[CheckResult]] = {}
     for result in results:
@@ -664,17 +938,58 @@ def render_markdown(manifest: dict[str, Any], results: list[CheckResult]) -> str
             reference_rows,
         )
     )
+    if drift:
+        drift_findings = [
+            row for row in drift if row.status in FAIL_STATUSES or row.status == STATUS_WARNING
+        ]
+        lines.extend(["", "## Public Doc Drift", ""])
+        if drift_findings:
+            lines.append(
+                markdown_table(
+                    ["Status", "Check", "Role", "Path", "Observed", "Detail"],
+                    [
+                        [
+                            row.status,
+                            row.parameter_id,
+                            row.role,
+                            row.path,
+                            row.observed,
+                            row.detail,
+                        ]
+                        for row in drift_findings
+                    ],
+                )
+            )
+        else:
+            lines.append(
+                "No drift found: active guidance points at no closed milestone, "
+                "an unresolved host is not offered as a peer, and contributor "
+                "and security surfaces only link to OBTC or documented attribution."
+            )
+        lines.extend(["", "### Checked Public Docs", ""])
+        lines.append(
+            markdown_table(
+                ["Check", "Path", "Status", "Detail"],
+                [[row.parameter_id, row.path, row.status, row.detail] for row in drift],
+            )
+        )
+
     lines.append("")
     return "\n".join(lines)
 
 
-def render_json(manifest: dict[str, Any], results: list[CheckResult]) -> str:
+def render_json(
+    manifest: dict[str, Any],
+    results: list[CheckResult],
+    drift: list[CheckResult] | None = None,
+) -> str:
     statuses = parameter_statuses(results)
     return json.dumps(
         {
             "manifest_id": manifest.get("manifest_id"),
             "parameter_statuses": statuses,
             "results": [row.__dict__ for row in results],
+            "doc_drift_results": [row.__dict__ for row in (drift or [])],
         },
         indent=2,
         sort_keys=True,
@@ -693,17 +1008,21 @@ def main() -> int:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     extractor = Extractor(repo_root, workspace_root)
     results = run_checks(manifest, extractor)
+    drift = run_drift_checks(manifest, extractor)
 
     if args.format == "json":
-        print(render_json(manifest, results))
+        print(render_json(manifest, results, drift))
     else:
-        print(render_markdown(manifest, results))
+        print(render_markdown(manifest, results, drift))
 
     failing = [
         row
         for row in results
         if row.status in FAIL_STATUSES and (row.required or args.strict_optional)
     ]
+    drift_failing = [row for row in drift if row.status in FAIL_STATUSES]
+    if args.fail_on_drift and drift_failing:
+        return 1
     return 1 if failing else 0
 
 
