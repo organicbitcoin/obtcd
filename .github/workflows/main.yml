@@ -162,6 +162,11 @@ jobs:
           echo "Checking OBTC parameter consistency..."
           make check-obtc-parameters
 
+      - name: Check OBTC Parameter Checker Tests
+        run: |
+          echo "Running the parameter and public-doc drift checker tests..."
+          make check-obtc-parameters-tests
+
       - name: Check DevNet and Phase6 scripts
         run: |
           echo "Validating script entrypoints..."

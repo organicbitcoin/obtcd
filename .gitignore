@@ -65,3 +65,7 @@ dist/
 
 .DS_Store
 .aider*
+
+# Python bytecode from the checker tests
+__pycache__/
+*.pyc
