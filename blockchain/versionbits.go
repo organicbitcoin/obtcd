@@ -146,7 +146,7 @@ func (c bitConditionChecker) ForceActive(node *blockNode) bool {
 // and activating consensus rule changes.
 type deploymentChecker struct {
 	deployment *chaincfg.ConsensusDeployment
-	chain      *BlockChain
+	params     *chaincfg.Params
 }
 
 // Ensure the deploymentChecker type implements the thresholdConditionChecker
@@ -199,7 +199,7 @@ func (c deploymentChecker) RuleChangeActivationThreshold() uint32 {
 		return c.deployment.CustomActivationThreshold
 	}
 
-	return c.chain.chainParams.RuleChangeActivationThreshold
+	return c.params.RuleChangeActivationThreshold
 }
 
 // MinerConfirmationWindow is the number of blocks in each threshold state
@@ -210,7 +210,7 @@ func (c deploymentChecker) RuleChangeActivationThreshold() uint32 {
 //
 // This is part of the thresholdConditionChecker interface implementation.
 func (c deploymentChecker) MinerConfirmationWindow() uint32 {
-	return c.chain.chainParams.MinerConfirmationWindow
+	return c.params.MinerConfirmationWindow
 }
 
 // EligibleToActivate returns true if a custom deployment can transition from
@@ -287,15 +287,13 @@ func (b *BlockChain) calcNextBlockVersion(prevNode *blockNode) (int32, error) {
 	// activation at the next threshold window change.
 	expectedVersion := uint32(vbTopBits)
 	for id := 0; id < len(b.chainParams.Deployments); id++ {
-		deployment := &b.chainParams.Deployments[id]
-		cache := &b.deploymentCaches[id]
-		checker := deploymentChecker{deployment: deployment, chain: b}
+		checker, cache := b.deploymentForNextBlock(prevNode, uint32(id))
 		state, err := b.thresholdState(prevNode, checker, cache)
 		if err != nil {
 			return 0, err
 		}
 		if state == ThresholdStarted || state == ThresholdLockedIn {
-			expectedVersion |= uint32(1) << deployment.BitNumber
+			expectedVersion |= uint32(1) << checker.deployment.BitNumber
 		}
 	}
 	return int32(expectedVersion), nil

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -397,6 +398,42 @@ func (b *BlockChain) IsDeploymentActive(deploymentID uint32) (bool, error) {
 	return state == ThresholdActive, nil
 }
 
+// initSharedHistoryDeployments binds the Bitcoin voting windows to this
+// chain's own median-time clock without modifying the Bitcoin network globals.
+func (b *BlockChain) initSharedHistoryDeployments() {
+	if chaincfg.ConsensusParamsAtHeight(b.chainParams, 0) == b.chainParams {
+		return
+	}
+	deployments := chaincfg.MainNetParams.Deployments
+	for i := range deployments {
+		d := &deployments[i]
+		if s, ok := d.DeploymentStarter.(*chaincfg.MedianTimeDeploymentStarter); ok {
+			local := chaincfg.NewMedianTimeDeploymentStarter(s.StartTime())
+			local.SynchronizeClock(b)
+			d.DeploymentStarter = local
+		}
+		if e, ok := d.DeploymentEnder.(*chaincfg.MedianTimeDeploymentEnder); ok {
+			local := chaincfg.NewMedianTimeDeploymentEnder(e.EndTime())
+			local.SynchronizeClock(b)
+			d.DeploymentEnder = local
+		}
+	}
+	b.bitcoinDeployments = &deployments
+	b.bitcoinDeploymentCaches = newThresholdCaches(chaincfg.DefinedDeployments)
+}
+
+func (b *BlockChain) deploymentForNextBlock(prev *blockNode, id uint32) (deploymentChecker, *thresholdStateCache) {
+	var height int32
+	if prev != nil {
+		height = prev.height + 1
+	}
+	params := chaincfg.ConsensusParamsAtHeight(b.chainParams, height)
+	if params != b.chainParams {
+		return deploymentChecker{&b.bitcoinDeployments[id], params}, &b.bitcoinDeploymentCaches[id]
+	}
+	return deploymentChecker{&params.Deployments[id], params}, &b.deploymentCaches[id]
+}
+
 // deploymentState returns the current rule change threshold for a given
 // deploymentID. The threshold is evaluated from the point of view of the block
 // node passed in as the first argument to this method.
@@ -408,13 +445,11 @@ func (b *BlockChain) IsDeploymentActive(deploymentID uint32) (bool, error) {
 //
 // This function MUST be called with the chain state lock held (for writes).
 func (b *BlockChain) deploymentState(prevNode *blockNode, deploymentID uint32) (ThresholdState, error) {
-	if deploymentID > uint32(len(b.chainParams.Deployments)) {
+	if deploymentID >= uint32(len(b.chainParams.Deployments)) {
 		return ThresholdFailed, DeploymentError(deploymentID)
 	}
 
-	deployment := &b.chainParams.Deployments[deploymentID]
-	checker := deploymentChecker{deployment: deployment, chain: b}
-	cache := &b.deploymentCaches[deploymentID]
+	checker, cache := b.deploymentForNextBlock(prevNode, deploymentID)
 
 	return b.thresholdState(prevNode, checker, cache)
 }
@@ -437,10 +472,7 @@ func (b *BlockChain) initThresholdCaches() error {
 		}
 	}
 	for id := 0; id < len(b.chainParams.Deployments); id++ {
-		deployment := &b.chainParams.Deployments[id]
-		cache := &b.deploymentCaches[id]
-		checker := deploymentChecker{deployment: deployment, chain: b}
-		_, err := b.thresholdState(prevNode, checker, cache)
+		_, err := b.deploymentState(prevNode, uint32(id))
 		if err != nil {
 			return err
 		}

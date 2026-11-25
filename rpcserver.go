@@ -1225,6 +1225,7 @@ func handleGetBlockChainInfo(s *rpcServer, cmd interface{}, closeChan <-chan str
 	// status of soft-forks deployed via the super-majority block
 	// signalling mechanism.
 	height := chainSnapshot.Height
+	rules := chaincfg.ConsensusParamsAtHeight(params, height)
 	chainInfo.SoftForks.SoftForks = []*btcjson.SoftForkDescription{
 		{
 			ID:      "bip34",
@@ -1232,7 +1233,7 @@ func handleGetBlockChainInfo(s *rpcServer, cmd interface{}, closeChan <-chan str
 			Reject: struct {
 				Status bool `json:"status"`
 			}{
-				Status: height >= params.BIP0034Height,
+				Status: height >= rules.BIP0034Height,
 			},
 		},
 		{
@@ -1241,7 +1242,7 @@ func handleGetBlockChainInfo(s *rpcServer, cmd interface{}, closeChan <-chan str
 			Reject: struct {
 				Status bool `json:"status"`
 			}{
-				Status: height >= params.BIP0066Height,
+				Status: height >= rules.BIP0066Height,
 			},
 		},
 		{
@@ -1250,14 +1251,15 @@ func handleGetBlockChainInfo(s *rpcServer, cmd interface{}, closeChan <-chan str
 			Reject: struct {
 				Status bool `json:"status"`
 			}{
-				Status: height >= params.BIP0065Height,
+				Status: height >= rules.BIP0065Height,
 			},
 		},
 	}
 
 	// Finally, query the BIP0009 version bits state for all currently
 	// defined BIP0009 soft-fork deployments.
-	for deployment, deploymentDetails := range params.Deployments {
+	nextRules := chaincfg.ConsensusParamsAtHeight(params, height+1)
+	for deployment, deploymentDetails := range nextRules.Deployments {
 		// Map the integer deployment ID into a human readable
 		// fork-name.
 		var forkName string
