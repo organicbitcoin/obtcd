@@ -46,6 +46,9 @@ go build -o obtcd .
 
 # For OBTC mainnet (read-only validation)
 ./obtcd --obtcmainnet --expiryindex --rpcuser=your_user --rpcpass=your_pass
+
+# For private 72h REAP-active rehearsal
+./obtcd --obtcmainnet72h --expiryindex --rpcuser=your_user --rpcpass=your_pass
 ```
 
 ### 2. Wait for Sync and Index Build
@@ -73,6 +76,9 @@ Use the quick validation script for easy testing:
 
 # OBTC mainnet validation with performance benchmarking
 ./scripts/validation/quick_validate.sh obtcmainnet --rpcuser=user --rpcpass=pass --bench -o mainnet_results.json
+
+# Private 72h REAP-active rehearsal validation
+./scripts/validation/quick_validate.sh obtcmainnet72h --rpcuser=user --rpcpass=pass --stress --bench -o mainnet72h_results.json
 ```
 
 ## ⚡ Testnet smoke check (Phase 6)
@@ -231,7 +237,7 @@ go run ./replay_block_audit \
 | `-rpcpass` | RPC password | *Required* |
 | `-rpchost` | RPC host:port | Auto-detected |
 | `-rpccert` | TLS certificate path | Empty (no TLS) |
-| `-network` | Network (obtcregtest/obtctestnet/obtcmainnet or regtest/testnet/mainnet) | obtcregtest |
+| `-network` | Network (obtcregtest/obtctestnet/obtcmainnet/obtcmainnet72h or regtest/testnet/mainnet) | obtcregtest |
 | `-start` | Start height | Current tip - 1000 |
 | `-end` | End height | Current tip |
 | `-max` | Max results per query | 100 |

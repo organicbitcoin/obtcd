@@ -28,17 +28,17 @@ Usage:
   $0 --rpcuser <user> --rpcpass <pass> [options]
 
 Options:
-  --network <name>          OBTC network: obtctestnet or obtcmainnet (default: obtctestnet)
+  --network <name>          OBTC network: obtctestnet, obtcmainnet, or obtcmainnet72h (default: obtctestnet)
   --network=<name>
   --rpcuser <user>           RPC username (required)
   --rpcuser=<user>
   --rpcpass <pass>           RPC password (required)
   --rpcpass=<pass>
-  --rpcserver <host:port>    RPC endpoint (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528)
+  --rpcserver <host:port>    RPC endpoint (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528, mainnet72h 127.0.0.1:39528)
   --rpcserver=<host:port>
   --btcctl <path>            btcctl binary path (default: ./cmd/btcctl/btcctl)
   --btcctl=<path>
-  --p2p-port <port>          expected local P2P listen port (default: testnet 19527, mainnet 9527)
+  --p2p-port <port>          expected local P2P listen port (default: testnet 19527, mainnet 9527, mainnet72h 39527)
   --p2p-port=<port>
   --min-peers <n>            minimum connected peers (default: 1)
   --min-peers=<n>
@@ -51,6 +51,7 @@ Examples:
   $0 --rpcuser=u --rpcpass=p --rpcserver=10.0.0.8:19528 --min-peers=2
   $0 --rpcuser=u --rpcpass=p --strict-expiryindex
   $0 --network=obtcmainnet --notls --rpcuser=u --rpcpass=p --strict-expiryindex
+  $0 --network=obtcmainnet72h --notls --rpcuser=u --rpcpass=p --strict-expiryindex
 EOF
 }
 
@@ -141,8 +142,12 @@ case "${NETWORK}" in
         RPC_SERVER="${RPC_SERVER:-127.0.0.1:9528}"
         P2P_PORT="${P2P_PORT:-9527}"
         ;;
+    obtcmainnet72h)
+        RPC_SERVER="${RPC_SERVER:-127.0.0.1:39528}"
+        P2P_PORT="${P2P_PORT:-39527}"
+        ;;
     *)
-        echo "[ERROR] --network must be obtctestnet or obtcmainnet" >&2
+        echo "[ERROR] --network must be obtctestnet, obtcmainnet, or obtcmainnet72h" >&2
         exit 1
         ;;
 esac

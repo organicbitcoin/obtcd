@@ -25,6 +25,12 @@ func TestNormalizeAddressOBTCDefaultPorts(t *testing.T) {
 			want:  "127.0.0.1:9528",
 		},
 		{
+			name:  "obtc mainnet 72h rehearsal node rpc",
+			addr:  "127.0.0.1",
+			chain: &chaincfg.ObtcMainNet72hParams,
+			want:  "127.0.0.1:39528",
+		},
+		{
 			name:  "obtc testnet node rpc",
 			addr:  "127.0.0.1",
 			chain: &chaincfg.ObtcTestNetParams,
@@ -42,6 +48,13 @@ func TestNormalizeAddressOBTCDefaultPorts(t *testing.T) {
 			chain:     &chaincfg.ObtcMainNetParams,
 			useWallet: true,
 			want:      "127.0.0.1:9554",
+		},
+		{
+			name:      "obtc mainnet 72h rehearsal wallet rpc",
+			addr:      "127.0.0.1",
+			chain:     &chaincfg.ObtcMainNet72hParams,
+			useWallet: true,
+			want:      "127.0.0.1:39554",
 		},
 		{
 			name:      "obtc testnet wallet rpc",

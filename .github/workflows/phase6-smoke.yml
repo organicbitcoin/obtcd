@@ -40,6 +40,13 @@ jobs:
           bash -n scripts/phase6/gen_testnet_conf.sh
           bash -n scripts/phase6/build_release_artifacts.sh
           bash -n scripts/phase6/firewall_preflight.sh
+          bash -n scripts/phase6/monitor_mainnet72h_sync.sh
+          bash -n scripts/phase6/export_reap_block_evidence.sh
+          bash -n scripts/phase6/run_mainnet72h_observation.sh
+          bash -n scripts/phase6/test_monitor_mainnet72h_sync.sh
+          bash -n scripts/phase6/test_run_mainnet72h_observation.sh
+          grep -q 'now + EVIDENCE_UPLOAD_INTERVAL_SECONDS' \
+            scripts/phase6/run_mainnet72h_observation.sh
 
       - name: Mainnet-candidate helper smoke
         run: |
@@ -53,3 +60,17 @@ jobs:
             --rpcpass ci \
             --addpeers seed1.example.com:9527,seed2.example.com:9527
           grep -q '^obtcmainnet=1$' /tmp/obtc-mainnet.conf
+          scripts/phase6/monitor_mainnet72h_sync.sh --help >/tmp/monitor-help.txt
+          scripts/phase6/export_reap_block_evidence.sh --help >/tmp/reap-evidence-help.txt
+          jq -n \
+            --argjson height 956542 \
+            --arg boundary_label fork-anchor \
+            --arg hash 0000000000000000000200bad2d8d62a198f06b4390e7ca9be8f15581b42102e \
+            --arg captured_at 2026-08-01T13:49:46Z \
+            '{height:$height,label:$boundary_label,hash:$hash,captured_at:$captured_at,node_served_block:true}' \
+            >/tmp/boundary-receipt.json
+          jq -e \
+            '.height == 956542 and .label == "fork-anchor" and .node_served_block == true' \
+            /tmp/boundary-receipt.json
+          scripts/phase6/test_monitor_mainnet72h_sync.sh
+          scripts/phase6/test_run_mainnet72h_observation.sh

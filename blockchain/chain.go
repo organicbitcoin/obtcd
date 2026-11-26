@@ -2138,6 +2138,11 @@ type Config struct {
 	// index manager.
 	IndexManager IndexManager
 
+	// IndexManagerSetup is called after chain state is loaded but before the
+	// index manager initializes its indexes.  It allows indexes that rebuild
+	// from current chain state to receive a chain accessor before Init.
+	IndexManagerSetup func(*BlockChain) error
+
 	// ReapPrefixSource defines the source used to validate REAP
 	// transactions against the canonical prefix of the globally expired UTXO
 	// set.
@@ -2244,6 +2249,12 @@ func New(config *Config) (*BlockChain, error) {
 	// Perform any upgrades to the various chain-specific buckets as needed.
 	if err := b.maybeUpgradeDbBuckets(config.Interrupt); err != nil {
 		return nil, err
+	}
+
+	if config.IndexManagerSetup != nil {
+		if err := config.IndexManagerSetup(&b); err != nil {
+			return nil, err
+		}
 	}
 
 	// Initialize and catch up all of the currently active optional indexes

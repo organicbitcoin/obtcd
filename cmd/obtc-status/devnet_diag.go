@@ -515,6 +515,8 @@ func diagnosticsNetworkParams(cfg *config) (*chaincfg.Params, error) {
 	}
 
 	switch cfg.NetworkName {
+	case "obtcmainnet72h":
+		return &chaincfg.ObtcMainNet72hParams, nil
 	case "obtctestnet":
 		return &chaincfg.ObtcTestNetParams, nil
 	case "obtcregtest":

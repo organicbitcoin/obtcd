@@ -438,7 +438,11 @@ func TestExpiryIndexInitWithChainAccessorRunsImmediateRebuild(t *testing.T) {
 		blocks:     make(map[int32]*btcutil.Block),
 		utxos:      make(map[wire.OutPoint]int32),
 	}
-	idx.chain = mock
+	idx.SetChainAccessor(mock)
+	if mock.forEachCalls != 0 {
+		t.Fatalf("accessor injection before Init must not rebuild, got %d calls",
+			mock.forEachCalls)
+	}
 
 	if err := idx.Init(); err != nil {
 		t.Fatalf("Init with chain accessor should rebuild immediately, got %v", err)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/database"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btclog"
 )
@@ -112,6 +113,14 @@ func TestSetChainAccessorSwallowsDeferredRebuildError(t *testing.T) {
 	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
 	if err != nil {
 		t.Fatalf("new index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.Create(dbTx)
+	}); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	if err := idx.Init(); err != nil {
+		t.Fatalf("init index: %v", err)
 	}
 
 	mock := &rebuildMockChain{

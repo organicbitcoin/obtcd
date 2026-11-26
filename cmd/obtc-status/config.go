@@ -38,6 +38,7 @@ type config struct {
 	DevnetActionTimeout time.Duration `long:"devnet-action-timeout" description:"Timeout for local Devnet control actions" default:"2m"`
 	NoTLS               bool          `long:"notls" description:"Disable TLS for upstream btcd RPC calls"`
 	ObtcMainNet         bool          `long:"obtcmainnet" description:"Connect to the OBTC main network"`
+	ObtcMainNet72h      bool          `long:"obtcmainnet72h" description:"Connect to the private OBTC mainnet 72h rehearsal network"`
 	ObtcTestNet         bool          `long:"obtctestnet" description:"Connect to the OBTC test network"`
 	ObtcRegTest         bool          `long:"obtcregtest" description:"Connect to the OBTC regression test network"`
 	RPCCert             string        `short:"c" long:"rpccert" description:"RPC server certificate chain for validation"`
@@ -80,6 +81,10 @@ func networkParams(cfg *config) (*chaincfg.Params, error) {
 		numNets++
 		network = &chaincfg.ObtcMainNetParams
 	}
+	if cfg.ObtcMainNet72h {
+		numNets++
+		network = &chaincfg.ObtcMainNet72hParams
+	}
 	if cfg.ObtcTestNet {
 		numNets++
 		network = &chaincfg.ObtcTestNetParams
@@ -99,6 +104,8 @@ func defaultRPCPort(params *chaincfg.Params) string {
 	switch params {
 	case &chaincfg.ObtcMainNetParams:
 		return "9528"
+	case &chaincfg.ObtcMainNet72hParams:
+		return "39528"
 	case &chaincfg.ObtcTestNetParams:
 		return "19528"
 	case &chaincfg.ObtcRegTestParams:
@@ -110,6 +117,8 @@ func defaultRPCPort(params *chaincfg.Params) string {
 
 func networkName(params *chaincfg.Params) string {
 	switch params {
+	case &chaincfg.ObtcMainNet72hParams:
+		return "obtcmainnet72h"
 	case &chaincfg.ObtcTestNetParams:
 		return "obtctestnet"
 	case &chaincfg.ObtcRegTestParams:
@@ -156,10 +165,14 @@ func loadConfig() (*config, error) {
 		return nil, fmt.Errorf("--devnet and --testnet-lab cannot be used together")
 	}
 
-	if cfg.Devnet && !cfg.ObtcMainNet && !cfg.ObtcTestNet && !cfg.ObtcRegTest {
+	if cfg.Devnet && !cfg.ObtcMainNet && !cfg.ObtcMainNet72h &&
+		!cfg.ObtcTestNet && !cfg.ObtcRegTest {
+
 		cfg.ObtcRegTest = true
 	}
-	if cfg.TestnetLab && !cfg.ObtcMainNet && !cfg.ObtcRegTest {
+	if cfg.TestnetLab && !cfg.ObtcMainNet && !cfg.ObtcMainNet72h &&
+		!cfg.ObtcRegTest {
+
 		cfg.ObtcTestNet = true
 	}
 	if cfg.Devnet {

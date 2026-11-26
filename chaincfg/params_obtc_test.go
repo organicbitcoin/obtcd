@@ -24,6 +24,11 @@ func TestOBTCNetworkMagic(t *testing.T) {
 			magic:  wire.ObtcMainNet,
 		},
 		{
+			name:   "OBTC MainNet 72h rehearsal",
+			params: &ObtcMainNet72hParams,
+			magic:  wire.ObtcMainNet72h,
+		},
+		{
 			name:   "OBTC TestNet",
 			params: &ObtcTestNetParams,
 			magic:  wire.ObtcTestNet,
@@ -55,6 +60,11 @@ func TestIsOBTC(t *testing.T) {
 		{
 			name:     "OBTC MainNet should be detected as OBTC",
 			params:   &ObtcMainNetParams,
+			expected: true,
+		},
+		{
+			name:     "OBTC MainNet 72h rehearsal should be detected as OBTC",
+			params:   &ObtcMainNet72hParams,
 			expected: true,
 		},
 		{
@@ -99,6 +109,7 @@ func TestIsOBTC(t *testing.T) {
 func TestOBTCNetworkUniqueness(t *testing.T) {
 	obtcNets := []wire.BitcoinNet{
 		wire.ObtcMainNet,
+		wire.ObtcMainNet72h,
 		wire.ObtcTestNet,
 		wire.ObtcRegNet,
 	}
@@ -142,6 +153,7 @@ func TestOBTCAddressParameters(t *testing.T) {
 
 	obtcNets := []namedParams{
 		{name: "obtc mainnet", params: &ObtcMainNetParams},
+		{name: "obtc mainnet 72h rehearsal", params: &ObtcMainNet72hParams},
 		{name: "obtc testnet", params: &ObtcTestNetParams},
 		{name: "obtc regtest", params: &ObtcRegTestParams},
 	}
@@ -255,6 +267,11 @@ func TestOBTCPortsUnique(t *testing.T) {
 			bitcoinParams: &MainNetParams,
 		},
 		{
+			name:          "OBTC MainNet 72h rehearsal port vs Bitcoin MainNet",
+			obtcParams:    &ObtcMainNet72hParams,
+			bitcoinParams: &MainNetParams,
+		},
+		{
 			name:          "OBTC TestNet port vs Bitcoin TestNet3",
 			obtcParams:    &ObtcTestNetParams,
 			bitcoinParams: &TestNet3Params,
@@ -330,6 +347,11 @@ func TestOBTCForkHeights(t *testing.T) {
 			expectedHeight: ObtcMainNetForkHeight,
 		},
 		{
+			name:           "OBTC MainNet 72h rehearsal fork height",
+			params:         &ObtcMainNet72hParams,
+			expectedHeight: ObtcMainNet72hForkHeight,
+		},
+		{
 			name:           "OBTC TestNet fork height",
 			params:         &ObtcTestNetParams,
 			expectedHeight: ObtcTestNetForkHeight,
@@ -381,6 +403,18 @@ func TestIsPostOBTCFork(t *testing.T) {
 			name:       "OBTC MainNet after fork",
 			params:     &ObtcMainNetParams,
 			height:     ObtcMainNetForkHeight + 1000,
+			expectPost: true,
+		},
+		{
+			name:       "OBTC MainNet 72h rehearsal before fork",
+			params:     &ObtcMainNet72hParams,
+			height:     ObtcMainNet72hForkHeight - 1,
+			expectPost: false,
+		},
+		{
+			name:       "OBTC MainNet 72h rehearsal at fork",
+			params:     &ObtcMainNet72hParams,
+			height:     ObtcMainNet72hForkHeight,
 			expectPost: true,
 		},
 		{
@@ -440,6 +474,27 @@ func TestOBTCForkHeightValues(t *testing.T) {
 		t.Errorf("MainNet ForkDAA reset bits got %08x", ObtcMainNetParams.ForkDAAForkResetBits)
 	}
 
+	if ObtcMainNet72hForkHeight != 956_542 {
+		t.Errorf("MainNet 72h rehearsal fork height got %d want %d",
+			ObtcMainNet72hForkHeight, 956_542)
+	}
+	if ObtcMainNet72hFirstBlockHeight != ObtcMainNet72hForkHeight+1 {
+		t.Errorf("MainNet 72h rehearsal first block height got %d want %d",
+			ObtcMainNet72hFirstBlockHeight, ObtcMainNet72hForkHeight+1)
+	}
+	if ObtcMainNet72hActivationHeight != ObtcMainNet72hForkHeight+24 {
+		t.Errorf("MainNet 72h rehearsal activation height got %d want %d",
+			ObtcMainNet72hActivationHeight, ObtcMainNet72hForkHeight+24)
+	}
+	if ObtcMainNet72hParams.ForkDAAStartHeight != ObtcMainNet72hFirstBlockHeight {
+		t.Errorf("MainNet 72h rehearsal ForkDAA start got %d want %d",
+			ObtcMainNet72hParams.ForkDAAStartHeight, ObtcMainNet72hFirstBlockHeight)
+	}
+	if ObtcMainNet72hParams.ForkDAABootstrapEndHeight != ObtcMainNet72hActivationHeight {
+		t.Errorf("MainNet 72h rehearsal ForkDAA bootstrap end got %d want %d",
+			ObtcMainNet72hParams.ForkDAABootstrapEndHeight, ObtcMainNet72hActivationHeight)
+	}
+
 	// TestNet is an independent chain, so its OBTC rules are active from genesis.
 	if ObtcTestNetForkHeight != 0 {
 		t.Errorf("TestNet fork height %d should be 0", ObtcTestNetForkHeight)
@@ -466,6 +521,11 @@ func TestOBTCReplayProtectionActivation(t *testing.T) {
 		{
 			name:       "obtc mainnet",
 			params:     &ObtcMainNetParams,
+			expectInit: true,
+		},
+		{
+			name:       "obtc mainnet 72h rehearsal",
+			params:     &ObtcMainNet72hParams,
 			expectInit: true,
 		},
 		{
@@ -520,6 +580,7 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 		params *Params
 	}{
 		{"obtc mainnet", &ObtcMainNetParams},
+		{"obtc mainnet 72h rehearsal", &ObtcMainNet72hParams},
 		{"obtc testnet", &ObtcTestNetParams},
 		{"obtc regtest", &ObtcRegTestParams},
 	} {
@@ -559,10 +620,34 @@ func TestGetExpiryParamsDirect(t *testing.T) {
 					t.Fatalf("unexpected mainnet REAP limits: %+v", p)
 				}
 			}
+			if tc.params.Net == ObtcMainNet72hParams.Net {
+				if p.EnableAtHeight != ObtcMainNet72hActivationHeight {
+					t.Fatalf("expected 72h EnableAtHeight %d, got %d",
+						ObtcMainNet72hActivationHeight, p.EnableAtHeight)
+				}
+				if p.ReapConsensusAtHeight != ObtcMainNet72hActivationHeight {
+					t.Fatalf("expected 72h ReapConsensusAtHeight %d, got %d",
+						ObtcMainNet72hActivationHeight, p.ReapConsensusAtHeight)
+				}
+				if p.ReplayProtectionAtHeight != ObtcMainNet72hFirstBlockHeight {
+					t.Fatalf("expected 72h ReplayProtectionAtHeight %d, got %d",
+						ObtcMainNet72hFirstBlockHeight, p.ReplayProtectionAtHeight)
+				}
+				if p.ExpiryCommitmentEnableAtHeight != ObtcMainNet72hActivationHeight {
+					t.Fatalf("expected 72h commitment activation %d, got %d",
+						ObtcMainNet72hActivationHeight, p.ExpiryCommitmentEnableAtHeight)
+				}
+				if p.WindowBlocks != 362880 || p.ReapMaxInputs != 256 ||
+					p.ReapDustMaxInputs != 1024 || p.ReapMaxWeight != 400_000 {
+
+					t.Fatalf("unexpected 72h rehearsal REAP limits: %+v", p)
+				}
+			}
 			if p.ReapConsensusAtHeight < p.EnableAtHeight {
 				t.Fatalf("expected ReapConsensusAtHeight >= EnableAtHeight: %+v", p)
 			}
 			if tc.params.Net != ObtcMainNetParams.Net &&
+				tc.params.Net != ObtcMainNet72hParams.Net &&
 				p.ReplayProtectionAtHeight < p.ReapConsensusAtHeight {
 				t.Fatalf("expected ReplayProtectionAtHeight >= ReapConsensusAtHeight: %+v", p)
 			}
@@ -598,6 +683,7 @@ func TestOBTCDeploymentsConfigured(t *testing.T) {
 		params *Params
 	}{
 		{"obtc mainnet", &ObtcMainNetParams},
+		{"obtc mainnet 72h rehearsal", &ObtcMainNet72hParams},
 		{"obtc testnet", &ObtcTestNetParams},
 		{"obtc regtest", &ObtcRegTestParams},
 	}

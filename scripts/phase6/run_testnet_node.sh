@@ -8,7 +8,37 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BTCD_BIN="${BTCD_BIN:-${REPO_ROOT}/btcd}"
 BTCCTL_BIN="${BTCCTL_BIN:-${REPO_ROOT}/cmd/btcctl/btcctl}"
 
-DATA_DIR="${DATA_DIR:-${HOME}/.obtcd-testnet}"
+NETWORK="${NETWORK:-obtctestnet}"
+
+case "${NETWORK}" in
+obtctestnet)
+    DEFAULT_DATA_DIR="${HOME}/.obtcd-testnet"
+    DEFAULT_P2P_LISTEN="0.0.0.0:19527"
+    DEFAULT_RPC_LISTEN="127.0.0.1:19528"
+    DEFAULT_RPC_SERVER="127.0.0.1:19528"
+    NETWORK_FLAG="--obtctestnet"
+    ;;
+obtcmainnet)
+    DEFAULT_DATA_DIR="${HOME}/.obtcd-mainnet"
+    DEFAULT_P2P_LISTEN="0.0.0.0:9527"
+    DEFAULT_RPC_LISTEN="127.0.0.1:9528"
+    DEFAULT_RPC_SERVER="127.0.0.1:9528"
+    NETWORK_FLAG="--obtcmainnet"
+    ;;
+obtcmainnet72h)
+    DEFAULT_DATA_DIR="${HOME}/.obtcd-mainnet72h"
+    DEFAULT_P2P_LISTEN="0.0.0.0:39527"
+    DEFAULT_RPC_LISTEN="127.0.0.1:39528"
+    DEFAULT_RPC_SERVER="127.0.0.1:39528"
+    NETWORK_FLAG="--obtcmainnet72h"
+    ;;
+*)
+    echo "[ERROR] NETWORK must be obtctestnet, obtcmainnet, or obtcmainnet72h" >&2
+    exit 1
+    ;;
+esac
+
+DATA_DIR="${DATA_DIR:-${DEFAULT_DATA_DIR}}"
 LOG_DIR="${LOG_DIR:-${DATA_DIR}/logs}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/obtcd.log}"
 PID_FILE="${PID_FILE:-${DATA_DIR}/obtcd.pid}"
@@ -16,9 +46,9 @@ PID_FILE="${PID_FILE:-${DATA_DIR}/obtcd.pid}"
 RPC_USER="${RPC_USER:-obtc}"
 RPC_PASS="${RPC_PASS:-change-me-in-env}"
 
-P2P_LISTEN="${P2P_LISTEN:-0.0.0.0:19527}"
-RPC_LISTEN="${RPC_LISTEN:-127.0.0.1:19528}"
-RPC_SERVER="${RPC_SERVER:-127.0.0.1:19528}"
+P2P_LISTEN="${P2P_LISTEN:-${DEFAULT_P2P_LISTEN}}"
+RPC_LISTEN="${RPC_LISTEN:-${DEFAULT_RPC_LISTEN}}"
+RPC_SERVER="${RPC_SERVER:-${DEFAULT_RPC_SERVER}}"
 
 ENABLE_EXPIRYINDEX="${ENABLE_EXPIRYINDEX:-1}"
 ADDPEERS="${ADDPEERS:-}" # comma-separated: host1:19527,host2:19527
@@ -26,7 +56,7 @@ EXTRA_FLAGS="${EXTRA_FLAGS:-}" # optional extra btcd flags
 
 usage() {
     cat <<EOF
-OBTC Phase6 Testnet Node Helper
+OBTC Phase6 Node Helper
 
 Usage:
   $0 start|stop|restart|status|tail
@@ -34,11 +64,12 @@ Usage:
 Environment variables:
   BTCD_BIN            btcd binary path (default: ./btcd in repo root)
   BTCCTL_BIN          btcctl binary path (default: ./cmd/btcctl/btcctl)
-  DATA_DIR            data directory (default: ~/.obtcd-testnet)
+  NETWORK             obtctestnet, obtcmainnet, or obtcmainnet72h (default: obtctestnet)
+  DATA_DIR            data directory (default depends on NETWORK)
   RPC_USER            rpc username
   RPC_PASS            rpc password
-  P2P_LISTEN          p2p listen endpoint (default: 0.0.0.0:19527)
-  RPC_LISTEN          rpc listen endpoint (default: 127.0.0.1:19528)
+  P2P_LISTEN          p2p listen endpoint (default depends on NETWORK)
+  RPC_LISTEN          rpc listen endpoint (default depends on NETWORK)
   RPC_SERVER          rpc server endpoint for status calls
   ENABLE_EXPIRYINDEX  1 to enable --expiryindex, 0 to disable (default: 1)
   ADDPEERS            comma-separated peers
@@ -47,6 +78,7 @@ Environment variables:
 Examples:
   RPC_USER=u RPC_PASS=p $0 start
   ADDPEERS=10.0.0.2:19527,10.0.0.3:19527 $0 start
+  NETWORK=obtcmainnet72h ADDPEERS=10.0.0.2:39527,10.0.0.3:39527 $0 start
   ENABLE_EXPIRYINDEX=0 $0 restart
 EOF
 }
@@ -81,7 +113,7 @@ start_node() {
 
     local -a args
     args=(
-        --obtctestnet
+        "${NETWORK_FLAG}"
         "--datadir=${DATA_DIR}"
         "--listen=${P2P_LISTEN}"
         "--rpclisten=${RPC_LISTEN}"
@@ -109,7 +141,7 @@ start_node() {
         args+=("${extra[@]}")
     fi
 
-    echo "[INFO] starting obtcd testnet node..."
+    echo "[INFO] starting obtcd ${NETWORK} node..."
     nohup "${BTCD_BIN}" "${args[@]}" >>"${LOG_FILE}" 2>&1 &
     local pid=$!
     echo "${pid}" >"${PID_FILE}"
@@ -168,7 +200,7 @@ status_node() {
         echo
         echo "[INFO] getblockchaininfo"
         if ! "${BTCCTL_BIN}" \
-            --obtctestnet \
+            "${NETWORK_FLAG}" \
             "--rpcuser=${RPC_USER}" \
             "--rpcpass=${RPC_PASS}" \
             "--rpcserver=${RPC_SERVER}" \

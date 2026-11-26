@@ -68,7 +68,7 @@ func TestValidateConfig(t *testing.T) {
 		},
 	}
 
-	validNetworks := []string{"mainnet", "testnet", "regtest", "obtcmainnet", "obtctestnet", "obtcregtest"}
+	validNetworks := []string{"mainnet", "testnet", "regtest", "obtcmainnet", "obtcmainnet72h", "obtctestnet", "obtcregtest"}
 	for _, net := range validNetworks {
 		tests = append(tests, struct {
 			name    string

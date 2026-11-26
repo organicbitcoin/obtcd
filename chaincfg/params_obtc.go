@@ -56,6 +56,23 @@ const (
 	// at ObtcMainNetFirstBlockHeight to avoid a post-fork replay window.
 	ObtcMainNetActivationHeight int32 = ObtcMainNetForkHeight + 2016
 
+	// ObtcMainNet72hForkHeight is the private 72h rehearsal fork anchor. It is
+	// intentionally not the official OBTC mainnet candidate fork height.
+	ObtcMainNet72hForkHeight int32 = 956_542
+
+	// ObtcMainNet72hForkHash records the BTC block hash observed for the
+	// rehearsal anchor. Operators must re-check it against their local BTC
+	// source before starting a rehearsal.
+	ObtcMainNet72hForkHash string = "0000000000000000000200bad2d8d62a198f06b4390e7ca9be8f15581b42102e"
+
+	// ObtcMainNet72hFirstBlockHeight is the first OBTC-independent private
+	// rehearsal block after the BTC fork anchor.
+	ObtcMainNet72hFirstBlockHeight int32 = ObtcMainNet72hForkHeight + 1
+
+	// ObtcMainNet72hActivationHeight activates expiry, REAP, and expiry
+	// commitments early enough for a 72h REAP-active rehearsal.
+	ObtcMainNet72hActivationHeight int32 = ObtcMainNet72hForkHeight + 24
+
 	// ObtcTestNetForkHeight is zero because the public OBTC testnet is an
 	// independent chain, not a fork of Bitcoin testnet3 history.
 	ObtcTestNetForkHeight int32 = 0
@@ -160,6 +177,32 @@ var ObtcMainNetParams = Params{
 	// Project-local BIP44 coin type.
 	HDCoinType: 20260,
 }
+
+// ObtcMainNet72hParams defines the private 72h mainnet rehearsal network. It
+// keeps mainnet-like economics and historical fork behavior, but uses isolated
+// network, address, and HD namespaces so rehearsal nodes cannot accidentally
+// join or look like the official OBTC mainnet.
+var ObtcMainNet72hParams = func() Params {
+	params := ObtcMainNetParams
+	params.Name = "obtcmainnet72h"
+	params.Net = wire.ObtcMainNet72h
+	params.DefaultPort = "39527"
+	params.DNSSeeds = nil
+	params.ForkDAAStartHeight = ObtcMainNet72hFirstBlockHeight
+	params.ForkDAABootstrapEndHeight = ObtcMainNet72hActivationHeight
+
+	params.Bech32HRPSegwit = "obtc72h"
+	params.PubKeyHashAddrID = 0x73
+	params.ScriptHashAddrID = 0xD3
+	params.PrivateKeyID = 0xF3
+	params.WitnessPubKeyHashAddrID = 0x30
+	params.WitnessScriptHashAddrID = 0x31
+	params.HDPrivateKeyID = [4]byte{0x0B, 0x4A, 0xB0, 0x1E}
+	params.HDPublicKeyID = [4]byte{0x0B, 0x4A, 0xB5, 0xD4}
+	params.HDCoinType = 20263
+
+	return params
+}()
 
 // ObtcTestNetParams defines the network parameters for OBTC testnet.
 var ObtcTestNetParams = Params{
@@ -322,6 +365,7 @@ var ObtcRegTestParams = Params{
 // IsOBTC reports whether params belongs to an OBTC network.
 func IsOBTC(params *Params) bool {
 	return params.Net == wire.ObtcMainNet ||
+		params.Net == wire.ObtcMainNet72h ||
 		params.Net == wire.ObtcTestNet ||
 		params.Net == wire.ObtcRegNet
 }
@@ -331,6 +375,8 @@ func GetOBTCForkHeight(params *Params) int32 {
 	switch params.Net {
 	case wire.ObtcMainNet:
 		return ObtcMainNetForkHeight
+	case wire.ObtcMainNet72h:
+		return ObtcMainNet72hForkHeight
 	case wire.ObtcTestNet:
 		return ObtcTestNetForkHeight
 	case wire.ObtcRegNet:
@@ -399,6 +445,23 @@ func GetExpiryParams(params *Params) *ExpiryParams {
 			ExpiryCommitmentEnableAtHeight: ObtcMainNetActivationHeight,
 		}
 
+	case wire.ObtcMainNet72h:
+		return &ExpiryParams{
+			WindowBlocks:                   362880,
+			ListBatchLimit:                 10000,
+			StartScanHeight:                0,
+			EnableAtHeight:                 ObtcMainNet72hActivationHeight,
+			ReapConsensusAtHeight:          ObtcMainNet72hActivationHeight,
+			ReplayProtectionAtHeight:       ObtcMainNet72hFirstBlockHeight,
+			ReapMaxInputs:                  256,
+			ReapDustMaxInputs:              1024,
+			ReapMaxWeight:                  400_000,
+			ReapTaxNumerator:               30,
+			ReapTaxDenominator:             100,
+			ReapDustThresholdSat:           720,
+			ExpiryCommitmentEnableAtHeight: ObtcMainNet72hActivationHeight,
+		}
+
 	case wire.ObtcTestNet:
 		return &ExpiryParams{
 			WindowBlocks:                   144,
@@ -451,6 +514,7 @@ func validateOBTCNamespaceIsolation() error {
 
 	obtcNets := []namedParams{
 		{name: "obtc mainnet", params: &ObtcMainNetParams},
+		{name: "obtc mainnet 72h rehearsal", params: &ObtcMainNet72hParams},
 		{name: "obtc testnet", params: &ObtcTestNetParams},
 		{name: "obtc regtest", params: &ObtcRegTestParams},
 	}
@@ -584,6 +648,11 @@ func init() {
 	err := Register(&ObtcMainNetParams)
 	if err != nil {
 		panic("failed to register OBTC mainnet parameters: " + err.Error())
+	}
+
+	err = Register(&ObtcMainNet72hParams)
+	if err != nil {
+		panic("failed to register OBTC mainnet 72h rehearsal parameters: " + err.Error())
 	}
 
 	err = Register(&ObtcTestNetParams)

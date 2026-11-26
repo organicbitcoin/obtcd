@@ -225,6 +225,32 @@ func (m *Manager) maybeCreateIndexes(dbTx database.Tx) error {
 	return nil
 }
 
+// syncIndexerTip updates the manager bookkeeping for an index that reports an
+// authoritative tip after performing its own initialization.
+func (m *Manager) syncIndexerTip(indexer Indexer) error {
+	tipSource, ok := indexer.(TipSource)
+	if !ok {
+		return nil
+	}
+
+	hash, height, err := tipSource.IndexTip()
+	if err != nil {
+		return fmt.Errorf("failed to fetch %s tip: %v", indexer.Name(), err)
+	}
+	if hash == nil {
+		return fmt.Errorf("failed to fetch %s tip: nil hash", indexer.Name())
+	}
+
+	err = m.db.Update(func(dbTx database.Tx) error {
+		return dbPutIndexerTip(dbTx, indexer.Key(), hash, height)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to synchronize %s tip: %v",
+			indexer.Name(), err)
+	}
+	return nil
+}
+
 // Init initializes the enabled indexes.  This is called during chain
 // initialization and primarily consists of catching up all indexes to the
 // current best chain tip.  This is necessary since each index can be disabled
@@ -265,7 +291,17 @@ func (m *Manager) Init(chain *blockchain.BlockChain, interrupt <-chan struct{}) 
 
 	// Initialize each of the enabled indexes.
 	for _, indexer := range m.enabledIndexes {
+		if interruptible, ok := indexer.(InterruptibleIndexer); ok {
+			interruptible.SetInterrupt(interrupt)
+		}
 		if err := indexer.Init(); err != nil {
+			return err
+		}
+
+		// Some indexes can initialize from a current-state snapshot instead
+		// of replaying every historical block.  Keep the manager's tip in
+		// sync with the authoritative tip produced by that initialization.
+		if err := m.syncIndexerTip(indexer); err != nil {
 			return err
 		}
 	}

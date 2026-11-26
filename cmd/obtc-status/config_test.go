@@ -22,6 +22,11 @@ func TestDefaultRPCPortOBTCNetworks(t *testing.T) {
 			want:   "9528",
 		},
 		{
+			name:   "obtc mainnet 72h rehearsal",
+			params: &chaincfg.ObtcMainNet72hParams,
+			want:   "39528",
+		},
+		{
 			name:   "obtc testnet",
 			params: &chaincfg.ObtcTestNetParams,
 			want:   "19528",

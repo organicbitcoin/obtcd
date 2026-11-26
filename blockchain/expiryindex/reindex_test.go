@@ -249,6 +249,68 @@ func TestReindexExpiryIndexFailsOnClosedDB(t *testing.T) {
 	}
 }
 
+func TestBatchedClearInterruptInvalidatesTipBeforeDeleting(t *testing.T) {
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("unable to create test db: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("unable to create expiry index: %v", err)
+	}
+	outpoint := wire.OutPoint{Hash: chainhash.Hash{0x72}, Index: 1}
+	if err := db.Update(func(dbTx database.Tx) error {
+		if err := idx.Create(dbTx); err != nil {
+			return err
+		}
+		if err := putTxOutMapping(dbTx, &outpoint, 100, 500); err != nil {
+			return err
+		}
+		if err := dbPutTipHeightIndexed(dbTx, 99); err != nil {
+			return err
+		}
+		tipHash := chainhash.Hash{0x99}
+		return dbPutAccumulatorTipHash(dbTx, &tipHash)
+	}); err != nil {
+		t.Fatalf("seed expiry index: %v", err)
+	}
+
+	interrupt := make(chan struct{})
+	close(interrupt)
+	err = clearExpiryIndexBucketsBatchedWithSize(db, interrupt, 1)
+	if !errors.Is(err, errRebuildInterrupted) {
+		t.Fatalf("got error %v, want rebuild interrupted", err)
+	}
+
+	stats, err := idx.GetStats()
+	if err != nil {
+		t.Fatalf("get interrupted clear stats: %v", err)
+	}
+	if stats.TipHeight != -1 {
+		t.Fatalf("tip must be invalidated before deletion, got %d", stats.TipHeight)
+	}
+	if stats.TotalUTXOs != 1 {
+		t.Fatalf("preexisting interrupt should not delete entries, got %d", stats.TotalUTXOs)
+	}
+}
+
+func TestBatchedClearRejectsInvalidBatchSize(t *testing.T) {
+	if err := clearExpiryIndexBucketsBatchedWithSize(nil, nil, 1); err == nil {
+		t.Fatal("expected nil database error")
+	}
+
+	db, teardown, err := createCoreTestDB()
+	if err != nil {
+		t.Fatalf("unable to create test db: %v", err)
+	}
+	defer teardown()
+	if err := clearExpiryIndexBucketsBatchedWithSize(db, nil, 0); err == nil {
+		t.Fatal("expected invalid batch size error")
+	}
+}
+
 func TestClearExpiryIndexBucketsPropagatesResetErrors(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -334,14 +396,11 @@ func TestReindexExpiryIndexPropagatesWrappedUpdateErrors(t *testing.T) {
 			want: "failed to clear expiry index buckets: failed to reset accumulator: forced meta put failure",
 		},
 		{
-			name: "tip height reset failure",
+			name: "indexed tip height reset failure",
 			failPut: map[string]error{
 				string(keyTipHeightIndexed): errors.New("forced meta put failure"),
 			},
-			failAt: map[string]int{
-				string(keyTipHeightIndexed): 2,
-			},
-			want: "failed to reset expiry index tip height: forced meta put failure",
+			want: "failed to clear expiry index buckets: failed to reset indexed tip height: forced meta put failure",
 		},
 		{
 			name: "version reset failure",

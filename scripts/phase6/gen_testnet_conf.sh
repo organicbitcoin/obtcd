@@ -14,19 +14,19 @@ ADDPEERS="${ADDPEERS:-}"
 
 usage() {
     cat <<EOF
-Generate a minimal btcd config for OBTC testnet or mainnet-candidate.
+Generate a minimal btcd config for OBTC testnet, mainnet-candidate, or private rehearsal nodes.
 
 Usage:
   $0 [options]
 
 Options:
-  --network <name>            OBTC network: obtctestnet or obtcmainnet (default: obtctestnet)
+  --network <name>            OBTC network: obtctestnet, obtcmainnet, or obtcmainnet72h (default: obtctestnet)
   --network=<name>
   --out <path>                output file path (default: ./phase6-<network>.conf)
   --out=<path>
-  --listen <host:port>        P2P listen address (default: testnet 0.0.0.0:19527, mainnet 0.0.0.0:9527)
+  --listen <host:port>        P2P listen address (default: testnet 0.0.0.0:19527, mainnet 0.0.0.0:9527, mainnet72h 0.0.0.0:39527)
   --listen=<host:port>
-  --rpclisten <host:port>     RPC listen address (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528)
+  --rpclisten <host:port>     RPC listen address (default: testnet 127.0.0.1:19528, mainnet 127.0.0.1:9528, mainnet72h 127.0.0.1:39528)
   --rpclisten=<host:port>
   --rpcuser <user>
   --rpcuser=<user>
@@ -42,6 +42,7 @@ Examples:
   $0 --rpcuser=u --rpcpass=p --addpeers=seed1:19527,seed2:19527
   $0 --out /etc/obtc/testnet.conf --listen=0.0.0.0:19527 --rpclisten=127.0.0.1:19528
   $0 --network=obtcmainnet --out /etc/obtc/mainnet.conf --addpeers=seed1:9527,seed2:9527
+  $0 --network=obtcmainnet72h --out /etc/obtc/mainnet72h.conf --addpeers=node1:39527,node2:39527
 EOF
 }
 
@@ -132,8 +133,12 @@ case "${NETWORK}" in
         LISTEN_ADDR="${LISTEN_ADDR:-0.0.0.0:9527}"
         RPC_LISTEN_ADDR="${RPC_LISTEN_ADDR:-127.0.0.1:9528}"
         ;;
+    obtcmainnet72h)
+        LISTEN_ADDR="${LISTEN_ADDR:-0.0.0.0:39527}"
+        RPC_LISTEN_ADDR="${RPC_LISTEN_ADDR:-127.0.0.1:39528}"
+        ;;
     *)
-        echo "[ERROR] --network must be obtctestnet or obtcmainnet" >&2
+        echo "[ERROR] --network must be obtctestnet, obtcmainnet, or obtcmainnet72h" >&2
         exit 1
         ;;
 esac

@@ -121,7 +121,7 @@ func parseFlags() *Config {
 	flag.StringVar(&config.RPCUser, "rpcuser", "", "RPC username (required)")
 	flag.StringVar(&config.RPCPass, "rpcpass", "", "RPC password (required)")
 	flag.StringVar(&config.RPCCert, "rpccert", "", "RPC TLS certificate path (optional)")
-	flag.StringVar(&config.Network, "network", "obtcregtest", "Network (obtcregtest/obtctestnet/obtcmainnet or regtest/testnet/mainnet)")
+	flag.StringVar(&config.Network, "network", "obtcregtest", "Network (obtcregtest/obtctestnet/obtcmainnet/obtcmainnet72h or regtest/testnet/mainnet)")
 	flag.BoolVar(&config.Verbose, "verbose", false, "Enable verbose output")
 	flag.IntVar(&config.MaxResults, "max", 100, "Maximum results per query")
 	flag.StringVar(&config.OutputFile, "output", "", "Write JSON report to file")
@@ -150,6 +150,8 @@ func parseFlags() *Config {
 			config.RPCHost = "localhost:19528"
 		case "obtcmainnet":
 			config.RPCHost = "localhost:9528"
+		case "obtcmainnet72h":
+			config.RPCHost = "localhost:39528"
 		case "regtest":
 			config.RPCHost = "localhost:18334"
 		case "testnet":
@@ -170,7 +172,7 @@ func validateConfig(config *Config) error {
 	}
 
 	switch config.Network {
-	case "mainnet", "testnet", "regtest", "obtcmainnet", "obtctestnet", "obtcregtest":
+	case "mainnet", "testnet", "regtest", "obtcmainnet", "obtcmainnet72h", "obtctestnet", "obtcregtest":
 		// ok
 	default:
 		return fmt.Errorf("invalid network: %s", config.Network)

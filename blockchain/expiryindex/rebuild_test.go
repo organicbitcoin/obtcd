@@ -28,6 +28,7 @@ type rebuildMockChain struct {
 	forEachCalls         int
 	forEachErr           error
 	forEachStopAfter     int
+	forEachAfter         func(int)
 	blockRequests        []int32
 	blockErrors          map[int32]error
 	spendJournalRequests []int32
@@ -70,6 +71,9 @@ func (m *rebuildMockChain) ForEachUTXO(fn func(outpoint wire.OutPoint, height in
 			return err
 		}
 		processed++
+		if m.forEachAfter != nil {
+			m.forEachAfter(processed)
+		}
 		if m.forEachErr != nil && m.forEachStopAfter > 0 && processed >= m.forEachStopAfter {
 			return m.forEachErr
 		}
@@ -78,6 +82,104 @@ func (m *rebuildMockChain) ForEachUTXO(fn func(outpoint wire.OutPoint, height in
 		return m.forEachErr
 	}
 	return nil
+}
+
+func TestFastRebuildHonorsPreexistingInterrupt(t *testing.T) {
+	db, teardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new expiry index: %v", err)
+	}
+	idx.chain = &rebuildMockChain{
+		bestHeight: 5,
+		blocks:     make(map[int32]*btcutil.Block),
+		utxos:      make(map[wire.OutPoint]int32),
+	}
+	interrupt := make(chan struct{})
+	close(interrupt)
+	idx.SetInterrupt(interrupt)
+
+	err = idx.tryFastRebuildOrFallback(5)
+	if !errors.Is(err, errRebuildInterrupted) {
+		t.Fatalf("got error %v, want rebuild interrupted", err)
+	}
+	mock := idx.chain.(*rebuildMockChain)
+	if mock.forEachCalls != 0 || len(mock.blockRequests) != 0 {
+		t.Fatalf("interrupted rebuild must not scan or fall back: foreach=%d blocks=%v",
+			mock.forEachCalls, mock.blockRequests)
+	}
+}
+
+func TestFastRebuildInterruptResetsPartialIndex(t *testing.T) {
+	db, teardown, err := createRebuildTestDB()
+	if err != nil {
+		t.Fatalf("create test database: %v", err)
+	}
+	defer teardown()
+
+	idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+	if err != nil {
+		t.Fatalf("new expiry index: %v", err)
+	}
+	if err := db.Update(func(dbTx database.Tx) error {
+		return idx.Create(dbTx)
+	}); err != nil {
+		t.Fatalf("create expiry index: %v", err)
+	}
+
+	utxos := make(map[wire.OutPoint]int32, DefaultBatchSize+2)
+	for i := 0; i < DefaultBatchSize+2; i++ {
+		var hash chainhash.Hash
+		hash[0] = byte(i)
+		hash[1] = byte(i >> 8)
+		utxos[wire.OutPoint{Hash: hash, Index: uint32(i)}] = 1
+	}
+	interrupt := make(chan struct{})
+	mock := &rebuildMockChain{
+		bestHeight: 5,
+		blocks:     make(map[int32]*btcutil.Block),
+		utxos:      utxos,
+		forEachAfter: func(processed int) {
+			if processed == DefaultBatchSize+1 {
+				close(interrupt)
+			}
+		},
+	}
+	idx.chain = mock
+	idx.SetInterrupt(interrupt)
+
+	err = idx.tryFastRebuildOrFallback(5)
+	if !errors.Is(err, errRebuildInterrupted) {
+		t.Fatalf("got error %v, want rebuild interrupted", err)
+	}
+	stats, err := idx.GetStats()
+	if err != nil {
+		t.Fatalf("get reset index stats: %v", err)
+	}
+	if stats.TipHeight != -1 {
+		t.Fatalf("interrupted rebuild tip was not invalidated: %+v", stats)
+	}
+	if stats.TotalUTXOs == 0 {
+		t.Fatal("test did not persist a partial batch before interruption")
+	}
+	if len(mock.blockRequests) != 0 {
+		t.Fatalf("interrupted fast rebuild fell back to blocks: %v", mock.blockRequests)
+	}
+	if err := clearExpiryIndexBucketsBatchedWithSize(db, nil, 10); err != nil {
+		t.Fatalf("clear interrupted rebuild in batches: %v", err)
+	}
+	stats, err = idx.GetStats()
+	if err != nil {
+		t.Fatalf("get cleared index stats: %v", err)
+	}
+	if stats.TipHeight != -1 || stats.TotalUTXOs != 0 {
+		t.Fatalf("batched cleanup did not clear partial rebuild: %+v", stats)
+	}
 }
 
 // TestSmartRebuild tests the smart rebuild decision logic
