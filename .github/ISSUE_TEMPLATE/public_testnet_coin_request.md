@@ -1,12 +1,20 @@
 ---
-name: Public testnet coin request
-about: Request a small amount of manually issued OBTC testnet coin.
+name: Invited testnet coin follow-up
+about: Coordinate an already agreed, invited testnet coin transfer.
 title: "[public-testnet coin]: "
-labels: ["public-testnet", "coin-request"]
+labels: ["question"]
 assignees: ""
 ---
 
-## Request
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
+
+## Agreed test request
+
+Use this only if a maintainer has already invited you and asked for an issue.
+There is no public faucet or open coin request queue. Local contributor tests
+need no coins; see CONTRIBUTING.md.
 
 - OBTC testnet address:
 - Requested amount:

@@ -19,19 +19,19 @@ is outlined on this page.
 We highly encourage code contributions, however it is imperative that you adhere
 to the guidelines established on this page.
 
-## Substantial contributions only
+## Valuable, focused contributions
 
-Due to the prevalence of automated analysis and pull request authoring tools
-and online competitions that incentivize creating commits in popular
-repositories, the maintainers of this project are flooded with trivial pull
-requests that only change some typos or other insubstantial content (e.g. the
-year in the license file).
-If you are an honest user that wants to contribute to this project, please
-consider that every pull request takes precious time from the maintainers to
-review and consider the impact of changes. Time that could be spent writing
-features or fixing bugs.
-If you really want to contribute, consider reviewing and testing other users'
-pull requests instead. Or add value to the project by writing unit tests.
+Focused documentation fixes, reproducible bug reports, test improvements, and
+small usability changes are welcome when they materially improve correctness
+or contributor experience. Automated typo churn, speculative rewrites, and
+changes without a clear project benefit may be closed because every pull
+request requires maintainer review.
+
+First-time contributors do not need to understand the entire protocol. Changes
+to consensus, signatures, REAP, Replay Protection, expiry, reorganizations,
+mining templates, or wallet key management do require deeper evidence and
+review. See the repository's top-level `CONTRIBUTING.md` for the current entry
+path and review expectations.
 
 ## Minimum Recommended Skillset
 

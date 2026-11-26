@@ -84,6 +84,11 @@ Documentation reviewers:
 
 ## 4. What to run
 
+For the smallest no-peer, no-wallet check, use the
+[contributor quickstart](contributing/QUICKSTART.md). The testnet startup below
+is optional and needs a verified peer; see the
+[canonical self-test guide](limited-public-testnet-user-test.md) for that path.
+
 Build from the repository root:
 
 ```bash

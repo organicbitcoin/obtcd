@@ -1,19 +1,46 @@
-## Change Description
-Description of change / link to associated issue.
+## Summary
 
-## Steps to Test
-Steps for reviewers to follow to test the change.
+Describe the problem, the change, and the linked issue.
 
-## Pull Request Checklist
-### Testing
-- [ ] Your PR passes all CI checks.
-- [ ] Tests covering the positive and negative (error paths) are included.
-- [ ] Bug fixes contain tests triggering the bug to prevent regressions.
+Related issue: <!-- Link an existing issue, or explain why none is needed. -->
 
-### Code Style and Documentation
-- [ ] The change is not [insubstantial](https://github.com/organicbitcoin/obtcd/blob/master/docs/development/code-contribution-guidelines.md#substantial-contributions-only). Typo fixes are not accepted to fight bot spam.
-- [ ] The change obeys the [Code Documentation and Commenting](https://github.com/organicbitcoin/obtcd/blob/master/docs/development/code-contribution-guidelines.md#code-documentation-and-commenting) guidelines, and lines wrap at 80.
-- [ ] Commits follow the [Ideal Git Commit Structure](https://github.com/organicbitcoin/obtcd/blob/master/docs/development/code-contribution-guidelines.md#model-git-commit-messages).
+## Scope and risk
+
+- Risk classification: `docs/tests/tooling` / `RPC-wallet` / `consensus-mining-security`
+  (test-only changes in consensus-sensitive paths still need expert review)
+- Network: `none` / `obtcmainnet` / `obtctestnet` / `obtcregtest` / devnet
+- [ ] Consensus or activation heights
+- [ ] Serialization or network compatibility
+- [ ] REAP or expiry
+- [ ] Replay Protection or signatures
+- [ ] Mining or coinbase commitments
+- [ ] Miner rewards or economic parameters
+- [ ] Wallet key management or funds
+- [ ] No item above is affected
+
+For every checked risk area, explain the positive, negative, and boundary cases
+and any activation-height or compatibility effect.
+
+## How to test
+
+List the exact commands you actually ran and their results. Separate proposed
+checks from completed checks and explain failures or omissions. Include the OS,
+Go version, and commit. Describe positive, negative, and boundary coverage, or
+explain why it is not applicable for a documentation-only change.
+
+## AI assistance
+
+State whether and how AI tools helped. Authors are responsible for reviewing
+generated changes, explaining them, and verifying correctness; never include
+private keys, passwords, or production logs in AI conversations or PR evidence.
+
+## Checklist
+
+- [ ] I followed [CONTRIBUTING.md](https://github.com/organicbitcoin/obtcd/blob/master/CONTRIBUTING.md).
+- [ ] The change is focused and contains no unrelated consensus or parameter changes.
+- [ ] Tests cover relevant success, rejection, and boundary behavior, or the PR explains why tests are not applicable.
+- [ ] A bug fix includes a regression test when practical.
+- [ ] Documentation matches the current code and does not claim unverified network or release readiness.
+- [ ] Logs, examples, screenshots, and fixtures contain no secrets or private identity data.
+- [ ] Go changes are formatted with `gofmt`, and CI passes.
 - [ ] Any new logging statements use an appropriate subsystem and logging level.
-
-📝 Please see our [Contribution Guidelines](https://github.com/organicbitcoin/obtcd/blob/master/docs/development/code-contribution-guidelines.md) for further guidance.

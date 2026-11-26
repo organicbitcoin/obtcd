@@ -27,10 +27,11 @@ Do not open a public issue with exploit details, private keys, seed phrases,
 wallet backups, real-fund claim attempts, unpublished peer addresses, private
 logs, or other sensitive material.
 
-For sensitive reports, use GitHub private vulnerability reporting for this
-repository if it is available. If private reporting is not available, open a
-minimal public issue asking for a secure reporting channel and include no exploit
-details or secrets.
+For sensitive reports, use
+[GitHub private vulnerability reporting](https://github.com/organicbitcoin/obtcd/security/advisories/new).
+It is enabled for this repository. If GitHub does not offer the private form to
+your account, open a minimal public issue asking for a secure reporting channel
+and include no exploit details or secrets.
 
 Public issues are appropriate for non-sensitive bugs, documentation gaps,
 reproducible testnet-only failures, and questions that do not reveal private

@@ -2,9 +2,13 @@
 name: Public testnet bug
 about: Report a reproducible issue while trying the OBTC public testnet.
 title: "[public-testnet bug]: "
-labels: ["public-testnet", "bug", "needs triage"]
+labels: ["bug"]
 assignees: ""
 ---
+
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
 
 ## What Happened?
 

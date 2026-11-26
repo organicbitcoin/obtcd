@@ -6,7 +6,7 @@ on:
       version:
         description: "Release name/tag used in artifact paths"
         required: true
-        default: "mainnet-candidate-2026-07"
+        default: "technical-review-dev"
       goos:
         description: "Target GOOS"
         required: true
@@ -31,7 +31,7 @@ permissions:
 
 env:
   GO_VERSION: 1.24.0
-  RELEASE_VERSION: ${{ github.event.inputs.version || 'mainnet-candidate-ci' }}
+  RELEASE_VERSION: ${{ github.event.inputs.version || 'technical-review-ci' }}
   TARGET_GOOS: ${{ github.event.inputs.goos || 'linux' }}
   TARGET_GOARCH: ${{ github.event.inputs.goarch || 'amd64' }}
 
@@ -42,6 +42,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v6

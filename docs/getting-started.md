@@ -4,6 +4,10 @@ Build `obtcd` from this repository.  The executable is still named `btcd`, but
 OBTC networks are selected explicitly with `--obtcmainnet`, `--obtctestnet`, or
 `--obtcregtest`.
 
+For a first contribution with no peers or wallet, use the
+[local contributor quickstart](contributing/QUICKSTART.md). The startup section
+below is an optional network test, not a prerequisite for building or testing.
+
 ## Requirements
 
 [Go](https://go.dev/doc/install) 1.24.0 or newer for `obtcd`, matching

@@ -1,6 +1,6 @@
 # OBTC Mainnet Join Runbook
 
-> Status: draft for `mainnet-candidate-2026-07`
+> Status: technical-review draft; no public mainnet launch date is announced
 
 This runbook describes how to start and validate an OBTC mainnet-candidate node
 with the current `obtcd` codebase. It is not a production mainnet launch
@@ -23,10 +23,11 @@ Before using this runbook, review [OBTC Mainnet Parameters](mainnet-params.md).
 | Replay-protection height | `1000001` (currently fork + 1) |
 | Expiry / REAP / commitment activation height | `1002016` (currently fork + 2016) |
 
-The code uses the aggregate DNS seed `seed.mainnet.organicbitcoin.org`.
-Mainnet-candidate bootstrap should also publish explicit fallback peers:
-`seed1.mainnet.organicbitcoin.org`, `seed2.mainnet.organicbitcoin.org`, and
-`seed3.mainnet.organicbitcoin.org`.
+The code reserves the aggregate DNS seed `seed.mainnet.organicbitcoin.org`.
+Seed names in code and historical examples are not proof of live bootstrap
+services. [Seed/fallback validation remains tracked separately](https://github.com/organicbitcoin/obtcd/issues/3).
+Use this runbook for external connectivity only with an explicitly published,
+verified peer list; the placeholders below are not usable peer addresses.
 
 ## Build
 
@@ -60,9 +61,9 @@ index state.
   --notls \
   --rpcuser=<rpc_user> \
   --rpcpass=<rpc_pass> \
-  --addpeer=seed1.mainnet.organicbitcoin.org:9527 \
-  --addpeer=seed2.mainnet.organicbitcoin.org:9527 \
-  --addpeer=seed3.mainnet.organicbitcoin.org:9527
+  --addpeer=<published-peer-1:9527> \
+  --addpeer=<published-peer-2:9527> \
+  --addpeer=<published-peer-3:9527>
 ```
 
 Use `--connect=<peer:9527>` instead of `--addpeer=<peer:9527>` only when the
@@ -141,7 +142,8 @@ criteria before it is listed in release material:
 * Confirm the node was started with `--obtcmainnet`.
 * Confirm outbound TCP access to peer port `9527`.
 * Confirm inbound TCP `9527` if this node is expected to accept peers.
-* Confirm `seed.mainnet.organicbitcoin.org` and individual fallback peers resolve.
+* Obtain a verified peer list, then confirm it resolves and reaches reviewed
+  nodes. Do not substitute historical or guessed fallback hostnames.
 * Use `getaddednodeinfo true` and `getpeerinfo` to inspect connection state.
 
 ### RPC Works But Expiry RPC Fails

@@ -2,9 +2,13 @@
 name: Documentation confusion
 about: Report unclear, stale, contradictory, or hard-to-reproduce OBTC review documentation.
 title: "[docs]: "
-labels: ["documentation", "needs triage"]
+labels: ["documentation"]
 assignees: ""
 ---
+
+For security-sensitive findings, stop and use [SECURITY.md](https://github.com/organicbitcoin/obtcd/blob/master/SECURITY.md).
+Do not post exploit details, credentials, wallet material, private endpoints,
+or personal filesystem paths in a public report.
 
 ## Summary
 
