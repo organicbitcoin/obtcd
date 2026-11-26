@@ -64,11 +64,12 @@ testnet coins have no real-world value.
 ## Current status and boundaries
 
 `obtcd` is the OBTC node implementation, derived from
-[btcsuite/btcd](https://github.com/btcsuite/btcd). The current public target is
-[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1),
-and the code and public testnet are open for technical review.
+[btcsuite/btcd](https://github.com/btcsuite/btcd). The code and public testnet
+are open for technical review. The dated `mainnet-candidate-2026-07` milestone
+and prereleases are retained as historical review artifacts; current `master`
+has no announced mainnet launch date.
 
-- This is mainnet-candidate software, not a production financial system.
+- This is prerelease research software, not a production financial system.
 - The fork height, activation height, and other candidate parameters remain
   provisional until final release artifacts are published.
 - OBTC is not an investment project, an adoption request, or a promise of
@@ -270,12 +271,9 @@ There is no public faucet or open public test coin request queue:
 
 <https://github.com/organicbitcoin/obtcd/issues>
 
-For launch-tracking work, prefer the
-[`mainnet-candidate-2026-07`](https://github.com/organicbitcoin/obtcd/milestone/1)
-milestone and the labels `mainnet-blocker`, `evidence`, `comms`, and
-`post-launch`.
-
-Maintained by [Pengyu Zhao](https://github.com/zpengyu).
+The dated `mainnet-candidate-2026-07` milestone is closed and retained for
+historical context. Current work is tracked in the issue list without an
+announced launch date.
 
 ## Upstream attribution
 
