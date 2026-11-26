@@ -77,6 +77,9 @@ func clearExpiryIndexBuckets(dbTx database.Tx) error {
 	if err := dbPutTipHeightIndexed(dbTx, -1); err != nil {
 		return fmt.Errorf("failed to reset indexed tip height: %v", err)
 	}
+	if err := dbPutIndexStats(dbTx, persistedIndexStats{}); err != nil {
+		return fmt.Errorf("failed to reset index stats: %v", err)
+	}
 
 	return nil
 }

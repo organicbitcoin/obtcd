@@ -6,6 +6,7 @@ package expiryindex
 
 import (
 	"crypto/rand"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -268,6 +269,83 @@ func BenchmarkGetStats(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Failed to get stats: %v", err)
 		}
+	}
+}
+
+// BenchmarkGetStatsScaling compares the constant-time RPC path with the
+// explicitly requested full audit as the index grows.
+func BenchmarkGetStatsScaling(b *testing.B) {
+	for _, total := range []int{1, 1000, 100000} {
+		b.Run(fmt.Sprintf("UTXOs_%d", total), func(b *testing.B) {
+			db, teardown, err := createBenchDB()
+			if err != nil {
+				b.Fatalf("create database: %v", err)
+			}
+			defer teardown()
+			idx, err := NewExpiryIndex(db, &chaincfg.ObtcRegTestParams)
+			if err != nil {
+				b.Fatalf("create index: %v", err)
+			}
+			if err := db.Update(func(dbTx database.Tx) error {
+				return idx.Create(dbTx)
+			}); err != nil {
+				b.Fatalf("initialize index: %v", err)
+			}
+
+			const batchSize = 1000
+			for start := 0; start < total; start += batchSize {
+				end := start + batchSize
+				if end > total {
+					end = total
+				}
+				if err := db.Update(func(dbTx database.Tx) error {
+					for i := start; i < end; i++ {
+						op := wire.OutPoint{
+							Hash:  chainhash.DoubleHashH([]byte(fmt.Sprintf("stats-bench-%d", i))),
+							Index: uint32(i),
+						}
+						if err := putTxOutMappingWithoutStats(
+							dbTx, &op, uint64(i%100), int64(i+1),
+						); err != nil {
+
+							return err
+						}
+					}
+					return nil
+				}); err != nil {
+					b.Fatalf("seed index: %v", err)
+				}
+			}
+			distinct := total
+			if distinct > 100 {
+				distinct = 100
+			}
+			if err := db.Update(func(dbTx database.Tx) error {
+				return dbPutIndexStats(dbTx, persistedIndexStats{
+					totalUTXOs:      uint64(total),
+					totalExpiryKeys: uint64(distinct),
+				})
+			}); err != nil {
+				b.Fatalf("persist stats: %v", err)
+			}
+
+			b.Run("Persisted", func(b *testing.B) {
+				b.ReportMetric(float64(total), "indexed_utxos")
+				for i := 0; i < b.N; i++ {
+					if _, err := idx.GetStats(); err != nil {
+						b.Fatalf("get stats: %v", err)
+					}
+				}
+			})
+			b.Run("FullAudit", func(b *testing.B) {
+				b.ReportMetric(float64(total), "indexed_utxos")
+				for i := 0; i < b.N; i++ {
+					if _, err := idx.AuditStats(); err != nil {
+						b.Fatalf("audit stats: %v", err)
+					}
+				}
+			})
+		})
 	}
 }
 

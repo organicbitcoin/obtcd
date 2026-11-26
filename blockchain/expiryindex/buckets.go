@@ -61,6 +61,14 @@ var (
 	// keyAccumulatorTipHash stores the block hash corresponding to the
 	// accumulator/tip-height snapshot.
 	keyAccumulatorTipHash = []byte("accumulator-tip-hash")
+
+	// keyStatsTotalUTXOs stores the number of live UTXOs tracked by the
+	// index.  It is maintained atomically with the index mappings.
+	keyStatsTotalUTXOs = []byte("stats-total-utxos")
+
+	// keyStatsTotalExpiryKeys stores the number of distinct expiry heights
+	// represented by the live UTXOs in the index.
+	keyStatsTotalExpiryKeys = []byte("stats-total-expiry-keys")
 )
 
 // Index configuration constants
@@ -136,6 +144,83 @@ func dbGetIndexVersion(dbTx database.Tx) (uint16, error) {
 	}
 	version := binary.LittleEndian.Uint16(versionBytes)
 	return version, nil
+}
+
+type persistedIndexStats struct {
+	totalUTXOs      uint64
+	totalExpiryKeys uint64
+}
+
+func encodeStatsCounter(value uint64) []byte {
+	encoded := make([]byte, 8)
+	binary.LittleEndian.PutUint64(encoded, value)
+	return encoded
+}
+
+func decodeStatsCounter(name string, encoded []byte) (uint64, error) {
+	if len(encoded) != 8 {
+		return 0, fmt.Errorf("invalid %s encoding: got %d bytes", name, len(encoded))
+	}
+	return binary.LittleEndian.Uint64(encoded), nil
+}
+
+// dbPutIndexStats stores both counters in the same database transaction as
+// the index mutation they describe.
+func dbPutIndexStats(dbTx database.Tx, stats persistedIndexStats) error {
+	if stats.totalExpiryKeys > stats.totalUTXOs {
+		return fmt.Errorf("invalid expiry index stats: expiry keys %d exceed UTXOs %d",
+			stats.totalExpiryKeys, stats.totalUTXOs)
+	}
+	if err := dbPutIndexMeta(dbTx, keyStatsTotalUTXOs,
+		encodeStatsCounter(stats.totalUTXOs)); err != nil {
+
+		return fmt.Errorf("failed to store total UTXO count: %v", err)
+	}
+	if err := dbPutIndexMeta(dbTx, keyStatsTotalExpiryKeys,
+		encodeStatsCounter(stats.totalExpiryKeys)); err != nil {
+
+		return fmt.Errorf("failed to store total expiry key count: %v", err)
+	}
+	return nil
+}
+
+// dbGetIndexStats returns initialized=false only when both counters are
+// absent, which identifies a database created before persisted statistics
+// were introduced.  A partially present pair is treated as corruption.
+func dbGetIndexStats(dbTx database.Tx) (persistedIndexStats, bool, error) {
+	var stats persistedIndexStats
+	encodedUTXOs, err := dbGetIndexMeta(dbTx, keyStatsTotalUTXOs)
+	if err != nil {
+		return stats, false, err
+	}
+	encodedExpiryKeys, err := dbGetIndexMeta(dbTx, keyStatsTotalExpiryKeys)
+	if err != nil {
+		return stats, false, err
+	}
+
+	if encodedUTXOs == nil && encodedExpiryKeys == nil {
+		return stats, false, nil
+	}
+	if encodedUTXOs == nil || encodedExpiryKeys == nil {
+		return stats, false, fmt.Errorf("incomplete persisted expiry index stats")
+	}
+
+	stats.totalUTXOs, err = decodeStatsCounter("total UTXO count", encodedUTXOs)
+	if err != nil {
+		return stats, false, err
+	}
+	stats.totalExpiryKeys, err = decodeStatsCounter(
+		"total expiry key count", encodedExpiryKeys,
+	)
+	if err != nil {
+		return stats, false, err
+	}
+	if stats.totalExpiryKeys > stats.totalUTXOs {
+		return stats, false, fmt.Errorf("invalid persisted expiry index stats: expiry keys %d exceed UTXOs %d",
+			stats.totalExpiryKeys, stats.totalUTXOs)
+	}
+
+	return stats, true, nil
 }
 
 // createExpiryIndexBuckets creates all the buckets needed for the expiry index

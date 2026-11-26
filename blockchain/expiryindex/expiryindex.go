@@ -145,6 +145,19 @@ func (idx *ExpiryIndex) Create(dbTx database.Tx) error {
 	if err := dbPutIndexVersion(dbTx, CurrentIndexVersion); err != nil {
 		return fmt.Errorf("failed to store index version: %v", err)
 	}
+	_, statsInitialized, err := dbGetIndexStats(dbTx)
+	if err != nil {
+		return fmt.Errorf("failed to inspect index stats: %v", err)
+	}
+	if !statsInitialized {
+		stats, err := scanIndexStats(dbTx)
+		if err != nil {
+			return fmt.Errorf("failed to initialize index stats: %v", err)
+		}
+		if err := dbPutIndexStats(dbTx, stats); err != nil {
+			return fmt.Errorf("failed to initialize index stats: %v", err)
+		}
+	}
 
 	return nil
 }
@@ -202,6 +215,10 @@ func (idx *ExpiryIndex) Init() error {
 			return fmt.Errorf("failed to reset index for version upgrade: %v", err)
 		}
 		indexTipHeight = -1
+	}
+
+	if err := idx.ensurePersistedStats(); err != nil {
+		return fmt.Errorf("failed to initialize persisted index stats: %v", err)
 	}
 
 	// Set the current tip height
@@ -464,6 +481,19 @@ func (idx *ExpiryIndex) DisconnectBlock(dbTx database.Tx, block *btcutil.Block,
 
 func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64,
 	amounts ...int64) error {
+	return putTxOutMappingInternal(dbTx, outpoint, expiryKey, true, amounts...)
+}
+
+// putTxOutMappingWithoutStats is used only by bulk rebuilds, which calculate
+// final counters in memory and persist them once after all batches succeed.
+func putTxOutMappingWithoutStats(dbTx database.Tx, outpoint *wire.OutPoint,
+	expiryKey uint64, amounts ...int64) error {
+
+	return putTxOutMappingInternal(dbTx, outpoint, expiryKey, false, amounts...)
+}
+
+func putTxOutMappingInternal(dbTx database.Tx, outpoint *wire.OutPoint,
+	expiryKey uint64, updateStats bool, amounts ...int64) error {
 
 	amount := int64(0)
 	if len(amounts) > 0 {
@@ -489,20 +519,84 @@ func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64
 	if reapOutpointBucket == nil {
 		return fmt.Errorf("outpoint-to-REAP-strict bucket does not exist")
 	}
-
-	if err := outpointBucket.Put(encodeOutPoint(outpoint), encodeExpiryKey(expiryKey)); err != nil {
-		return fmt.Errorf("failed to store outpoint mapping: %v", err)
-	}
-
+	encodedOutpoint := encodeOutPoint(outpoint)
+	encodedExpiryKey := encodeExpiryKey(expiryKey)
 	compositeKey := encodeExpiryOutpointCompositeKey(expiryKey, outpoint)
-	if err := expiryBucket.Put(compositeKey, emptyIndexValue); err != nil {
-		return fmt.Errorf("failed to store expiry mapping: %v", err)
-	}
-
 	reapKey, err := encodeReapStrictCompositeKey(expiryKey, amount, outpoint)
 	if err != nil {
 		return err
 	}
+	var stats persistedIndexStats
+	if updateStats {
+		var initialized bool
+		stats, initialized, err = dbGetIndexStats(dbTx)
+		if err != nil {
+			return fmt.Errorf("failed to load index stats: %v", err)
+		}
+		if !initialized {
+			return fmt.Errorf("persisted expiry index stats are not initialized")
+		}
+	}
+	if existing := outpointBucket.Get(encodedOutpoint); existing != nil {
+		if !updateStats {
+			return fmt.Errorf("inconsistent rebuild source: outpoint %s is duplicated", outpoint)
+		}
+		oldExpiryKey, err := decodeExpiryKey(existing)
+		if err != nil {
+			return fmt.Errorf("inconsistent index: invalid expiry mapping for outpoint %s: %v",
+				outpoint, err)
+		}
+		oldCompositeKey := encodeExpiryOutpointCompositeKey(oldExpiryKey, outpoint)
+		if expiryBucket.Get(oldCompositeKey) == nil {
+			return fmt.Errorf("inconsistent index: expiry mapping for outpoint %s is missing", outpoint)
+		}
+		existingReapKey := reapOutpointBucket.Get(encodedOutpoint)
+		if existingReapKey == nil || reapBucket.Get(existingReapKey) == nil {
+			return fmt.Errorf("inconsistent index: REAP mapping for outpoint %s is missing", outpoint)
+		}
+		existingReapKey = append([]byte(nil), existingReapKey...)
+		if bytes.Equal(existing, encodedExpiryKey) &&
+			bytes.Equal(existingReapKey, reapKey) {
+
+			if stats.totalUTXOs == 0 || stats.totalExpiryKeys == 0 {
+				return fmt.Errorf("inconsistent index stats: indexed outpoint %s has zero counters", outpoint)
+			}
+			return nil
+		}
+		if stats.totalUTXOs == 0 {
+			return fmt.Errorf("inconsistent index stats: cannot replace UTXO from zero count")
+		}
+		if err := outpointBucket.Delete(encodedOutpoint); err != nil {
+			return fmt.Errorf("failed to replace outpoint mapping: %v", err)
+		}
+		if err := expiryBucket.Delete(oldCompositeKey); err != nil {
+			return fmt.Errorf("failed to replace expiry mapping: %v", err)
+		}
+		if err := reapOutpointBucket.Delete(encodedOutpoint); err != nil {
+			return fmt.Errorf("failed to replace outpoint REAP mapping: %v", err)
+		}
+		if err := reapBucket.Delete(existingReapKey); err != nil {
+			return fmt.Errorf("failed to replace REAP mapping: %v", err)
+		}
+		stats.totalUTXOs--
+		if !expiryPrefixExists(expiryBucket, oldExpiryKey) {
+			if stats.totalExpiryKeys == 0 {
+				return fmt.Errorf("inconsistent index stats: cannot replace expiry key from zero count")
+			}
+			stats.totalExpiryKeys--
+		}
+	}
+
+	newExpiryKey := updateStats && !expiryPrefixExists(expiryBucket, expiryKey)
+
+	if err := outpointBucket.Put(encodedOutpoint, encodedExpiryKey); err != nil {
+		return fmt.Errorf("failed to store outpoint mapping: %v", err)
+	}
+
+	if err := expiryBucket.Put(compositeKey, emptyIndexValue); err != nil {
+		return fmt.Errorf("failed to store expiry mapping: %v", err)
+	}
+
 	if err := reapBucket.Put(reapKey, emptyIndexValue); err != nil {
 		return fmt.Errorf("failed to store REAP strict mapping: %v", err)
 	}
@@ -510,7 +604,23 @@ func putTxOutMapping(dbTx database.Tx, outpoint *wire.OutPoint, expiryKey uint64
 		return fmt.Errorf("failed to store outpoint REAP strict mapping: %v", err)
 	}
 
+	if updateStats {
+		stats.totalUTXOs++
+		if newExpiryKey {
+			stats.totalExpiryKeys++
+		}
+		if err := dbPutIndexStats(dbTx, stats); err != nil {
+			return fmt.Errorf("failed to update index stats: %v", err)
+		}
+	}
+
 	return nil
+}
+
+func expiryPrefixExists(expiryBucket database.Bucket, expiryKey uint64) bool {
+	prefix := expiryCompositePrefix(expiryKey)
+	cursor := expiryBucket.Cursor()
+	return cursor.Seek(prefix) && bytes.HasPrefix(cursor.Key(), prefix)
 }
 
 // connectTxOut adds a new UTXO to the expiry index
@@ -582,6 +692,17 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 		return fmt.Errorf("inconsistent index: REAP strict composite key %x not found", reapKey)
 	}
 
+	stats, initialized, err := dbGetIndexStats(dbTx)
+	if err != nil {
+		return fmt.Errorf("failed to load index stats: %v", err)
+	}
+	if !initialized {
+		return fmt.Errorf("persisted expiry index stats are not initialized")
+	}
+	if stats.totalUTXOs == 0 {
+		return fmt.Errorf("inconsistent index stats: cannot remove UTXO from zero count")
+	}
+
 	if err := outpointBucket.Delete(encodedOutpoint); err != nil {
 		return fmt.Errorf("failed to delete outpoint mapping: %v", err)
 	}
@@ -593,6 +714,17 @@ func (idx *ExpiryIndex) disconnectTxOut(dbTx database.Tx, outpoint *wire.OutPoin
 	}
 	if err := reapBucket.Delete(reapKey); err != nil {
 		return fmt.Errorf("failed to delete REAP strict mapping: %v", err)
+	}
+
+	stats.totalUTXOs--
+	if !expiryPrefixExists(expiryBucket, expiryKey) {
+		if stats.totalExpiryKeys == 0 {
+			return fmt.Errorf("inconsistent index stats: cannot remove expiry key from zero count")
+		}
+		stats.totalExpiryKeys--
+	}
+	if err := dbPutIndexStats(dbTx, stats); err != nil {
+		return fmt.Errorf("failed to update index stats: %v", err)
 	}
 
 	return nil
@@ -886,7 +1018,8 @@ func findOutPointStartIndex(outpoints []*wire.OutPoint, startAfter *wire.OutPoin
 	return low
 }
 
-// GetStats returns statistics about the expiry index
+// GetStats returns statistics about the expiry index using persisted counters.
+// The read cost is constant regardless of the number of indexed UTXOs.
 func (idx *ExpiryIndex) GetStats() (*ExpiryIndexStats, error) {
 	if idx.disabled {
 		return &ExpiryIndexStats{Disabled: true}, nil
@@ -895,55 +1028,172 @@ func (idx *ExpiryIndex) GetStats() (*ExpiryIndexStats, error) {
 	var stats ExpiryIndexStats
 
 	err := idx.db.View(func(dbTx database.Tx) error {
-		// Get current tip height
 		tipHeight, err := dbGetTipHeightIndexed(dbTx)
 		if err != nil {
 			return err
 		}
-		stats.TipHeight = tipHeight
-
-		// Count entries in each bucket
-		outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
-		if outpointBucket != nil {
-			cursor := outpointBucket.Cursor()
-			found := cursor.First()
-			for found {
-				stats.TotalUTXOs++
-				found = cursor.Next()
-			}
+		persisted, initialized, err := dbGetIndexStats(dbTx)
+		if err != nil {
+			return err
 		}
-
-		expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
-		if expiryBucket != nil {
-			cursor := expiryBucket.Cursor()
-			found := cursor.First()
-			var (
-				lastExpiry uint64
-				haveExpiry bool
-			)
-			for found {
-				key := cursor.Key()
-				if len(key) != expiryOutpointCompositeKeySize {
-					return fmt.Errorf("invalid expiry composite key length: got %d, expected %d",
-						len(key), expiryOutpointCompositeKeySize)
-				}
-				expiryKey, err := decodeExpiryKey(key[:expiryKeyEncodedSize])
-				if err != nil {
-					return fmt.Errorf("failed to decode expiry key prefix: %v", err)
-				}
-				if !haveExpiry || expiryKey != lastExpiry {
-					stats.TotalExpiryKeys++
-					lastExpiry = expiryKey
-					haveExpiry = true
-				}
-				found = cursor.Next()
-			}
+		if !initialized {
+			return fmt.Errorf("persisted expiry index stats are not initialized")
 		}
-
-		return nil
+		stats, err = makeExpiryIndexStats(tipHeight, persisted)
+		return err
 	})
 
 	return &stats, err
+}
+
+// AuditStats performs a full scan of the index and verifies that the persisted
+// counters match its contents.  It is intentionally expensive and is meant for
+// startup migration, offline audits, and tests rather than routine RPC use.
+func (idx *ExpiryIndex) AuditStats() (*ExpiryIndexStats, error) {
+	if idx.disabled {
+		return &ExpiryIndexStats{Disabled: true}, nil
+	}
+
+	var audited ExpiryIndexStats
+	err := idx.db.View(func(dbTx database.Tx) error {
+		tipHeight, err := dbGetTipHeightIndexed(dbTx)
+		if err != nil {
+			return err
+		}
+		persisted, initialized, err := dbGetIndexStats(dbTx)
+		if err != nil {
+			return err
+		}
+		if !initialized {
+			return fmt.Errorf("persisted expiry index stats are not initialized")
+		}
+		scanned, err := scanIndexStats(dbTx)
+		if err != nil {
+			return err
+		}
+		if scanned != persisted {
+			return fmt.Errorf("expiry index stats mismatch: persisted=(utxos=%d expiry_keys=%d) scanned=(utxos=%d expiry_keys=%d)",
+				persisted.totalUTXOs, persisted.totalExpiryKeys,
+				scanned.totalUTXOs, scanned.totalExpiryKeys)
+		}
+		audited, err = makeExpiryIndexStats(tipHeight, scanned)
+		return err
+	})
+	return &audited, err
+}
+
+func makeExpiryIndexStats(tipHeight int32,
+	persisted persistedIndexStats) (ExpiryIndexStats, error) {
+
+	maxInt := uint64(^uint(0) >> 1)
+	if persisted.totalUTXOs > maxInt || persisted.totalExpiryKeys > maxInt {
+		return ExpiryIndexStats{}, fmt.Errorf("expiry index stats exceed platform int range")
+	}
+	return ExpiryIndexStats{
+		TipHeight:       tipHeight,
+		TotalUTXOs:      int(persisted.totalUTXOs),
+		TotalExpiryKeys: int(persisted.totalExpiryKeys),
+	}, nil
+}
+
+func scanIndexStats(dbTx database.Tx) (persistedIndexStats, error) {
+	const progressInterval = uint64(10_000_000)
+	started := time.Now()
+	var stats persistedIndexStats
+	outpointBucket := dbTx.Metadata().Bucket(bktOutpoint2Expiry)
+	if outpointBucket == nil {
+		return stats, fmt.Errorf("outpoint-to-expiry bucket does not exist")
+	}
+	cursor := outpointBucket.Cursor()
+	for found := cursor.First(); found; found = cursor.Next() {
+		if len(cursor.Key()) != outPointEncodedSize {
+			return stats, fmt.Errorf("invalid outpoint key length: got %d, expected %d",
+				len(cursor.Key()), outPointEncodedSize)
+		}
+		if len(cursor.Value()) != expiryKeyEncodedSize {
+			return stats, fmt.Errorf("invalid outpoint expiry value length: got %d, expected %d",
+				len(cursor.Value()), expiryKeyEncodedSize)
+		}
+		stats.totalUTXOs++
+		if stats.totalUTXOs%progressInterval == 0 {
+			log.Infof("ExpiryIndex: stats audit scanned %d outpoint mappings in %s",
+				stats.totalUTXOs, time.Since(started).Round(time.Second))
+		}
+	}
+
+	expiryBucket := dbTx.Metadata().Bucket(bktExpiry2Outpoints)
+	if expiryBucket == nil {
+		return stats, fmt.Errorf("expiry-to-outpoints bucket does not exist")
+	}
+	var (
+		expiryEntries uint64
+		lastExpiry    uint64
+		haveExpiry    bool
+	)
+	cursor = expiryBucket.Cursor()
+	for found := cursor.First(); found; found = cursor.Next() {
+		key := cursor.Key()
+		if len(key) != expiryOutpointCompositeKeySize {
+			return stats, fmt.Errorf("invalid expiry composite key length: got %d, expected %d",
+				len(key), expiryOutpointCompositeKeySize)
+		}
+		expiryKey, err := decodeExpiryKey(key[:expiryKeyEncodedSize])
+		if err != nil {
+			return stats, fmt.Errorf("failed to decode expiry key prefix: %v", err)
+		}
+		if !haveExpiry || expiryKey != lastExpiry {
+			stats.totalExpiryKeys++
+			lastExpiry = expiryKey
+			haveExpiry = true
+		}
+		expiryEntries++
+		if expiryEntries%progressInterval == 0 {
+			log.Infof("ExpiryIndex: stats audit scanned %d expiry mappings in %s",
+				expiryEntries, time.Since(started).Round(time.Second))
+		}
+	}
+	if expiryEntries != stats.totalUTXOs {
+		return stats, fmt.Errorf("inconsistent index entry counts: outpoint mappings=%d expiry mappings=%d",
+			stats.totalUTXOs, expiryEntries)
+	}
+	return stats, nil
+}
+
+func (idx *ExpiryIndex) ensurePersistedStats() error {
+	var initialized bool
+	if err := idx.db.View(func(dbTx database.Tx) error {
+		_, found, err := dbGetIndexStats(dbTx)
+		initialized = found
+		return err
+	}); err != nil {
+		return err
+	}
+	if initialized {
+		return nil
+	}
+
+	started := time.Now()
+	log.Infof("ExpiryIndex: migrating legacy statistics with a one-time full index audit")
+	err := idx.db.Update(func(dbTx database.Tx) error {
+		_, found, err := dbGetIndexStats(dbTx)
+		if err != nil {
+			return err
+		}
+		if found {
+			return nil
+		}
+		stats, err := scanIndexStats(dbTx)
+		if err != nil {
+			return err
+		}
+		return dbPutIndexStats(dbTx, stats)
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof("ExpiryIndex: persisted statistics migration completed in %s",
+		time.Since(started).Round(time.Millisecond))
+	return nil
 }
 
 // ExpiringUTXO represents a UTXO that is scheduled to expire
@@ -1015,6 +1265,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 	startTime := time.Now()
 	processed := 0
+	expiryKeys := make(map[uint64]struct{})
 
 	log.Infof("ExpiryIndex: Starting fast rebuild from UTXO set")
 
@@ -1057,7 +1308,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		if err := idx.db.Update(func(dbTx database.Tx) error {
 			for i := range batch {
 				entry := batch[i]
-				if err := putTxOutMapping(dbTx, &entry.outpoint, entry.expiryKey,
+				if err := putTxOutMappingWithoutStats(dbTx, &entry.outpoint, entry.expiryKey,
 					entry.amount); err != nil {
 					return fmt.Errorf("failed to add UTXO %v: %v", entry.outpoint, err)
 				}
@@ -1078,6 +1329,7 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 		}
 
 		expiryKey := idx.expiryParams.CalculateExpiryKey(createHeight)
+		expiryKeys[expiryKey] = struct{}{}
 		mh.Add(computeEntryData(&outpoint, expiryKey))
 		batch = append(batch, rebuildBatchEntry{
 			outpoint:  outpoint,
@@ -1122,6 +1374,12 @@ func (idx *ExpiryIndex) fastRebuildFromUTXO(chainTipHeight int32) error {
 
 	// Mark index as complete and store the accumulator.
 	err = idx.db.Update(func(dbTx database.Tx) error {
+		if err := dbPutIndexStats(dbTx, persistedIndexStats{
+			totalUTXOs:      uint64(processed),
+			totalExpiryKeys: uint64(len(expiryKeys)),
+		}); err != nil {
+			return fmt.Errorf("failed to store rebuilt index stats: %v", err)
+		}
 		if err := dbPutAccumulatorState(dbTx, mh); err != nil {
 			return fmt.Errorf("failed to store accumulator: %v", err)
 		}
